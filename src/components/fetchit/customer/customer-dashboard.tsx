@@ -575,8 +575,19 @@ function BookingForm({
   // Fare estimate
   const [estimate, setEstimate] = useState<{
     distanceKm: number;
+    straightLineKm?: number;
     surgeMultiplier: number;
-    fare: { baseFare: number; distanceFare: number; weightFare: number; surgeFare: number; totalFare: number; currency: string };
+    fare: {
+      baseFare: number;
+      distanceFare: number;
+      weightFare: number;
+      surgeFare: number;
+      minimumAdjustment: number;
+      totalFare: number;
+      billableKm: number;
+      chargeableKg: number;
+      currency: string;
+    };
     etaMinutes: number;
   } | null>(null);
   const [estimating, setEstimating] = useState(false);
@@ -906,7 +917,7 @@ function BookingForm({
                 <SelectContent>
                   {VEHICLE_LIST.map((v) => (
                     <SelectItem key={v.id} value={v.id}>
-                      {v.label} · {v.capacityKg} kg · ₱{v.baseFare.toFixed(2)} base
+                      {v.label} · {v.capacityKg} kg · ₱{v.baseFare} for the first {v.includedKm} km
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -968,7 +979,7 @@ function BookingForm({
                         <Calculator className="h-4 w-4 text-primary" /> Fare estimate
                       </div>
                       <div className="text-2xl font-bold">
-                        ₱{estimate.fare.totalFare.toFixed(2)}
+                        ₱{estimate.fare.totalFare.toLocaleString("en-PH")}
                         <span className="text-sm text-muted-foreground font-normal ml-1">
                           {estimate.fare.currency}
                         </span>
@@ -976,12 +987,29 @@ function BookingForm({
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                       <FareLine label="Distance" value={`${estimate.distanceKm} km`} />
-                      <FareLine label="Base" value={`₱${estimate.fare.baseFare.toFixed(2)}`} />
-                      <FareLine label="Per-km" value={`₱${estimate.fare.distanceFare.toFixed(2)}`} />
+                      <FareLine label="Base" value={`₱${estimate.fare.baseFare}`} />
+                      <FareLine
+                        label={`Distance charge (${estimate.fare.billableKm} km)`}
+                        value={`₱${estimate.fare.distanceFare}`}
+                      />
+                      <FareLine
+                        label={
+                          estimate.fare.chargeableKg > 0
+                            ? `Weight (${estimate.fare.chargeableKg} kg over free)`
+                            : `Weight (within free ${v!.freeWeightKg} kg)`
+                        }
+                        value={`₱${estimate.fare.weightFare}`}
+                      />
                       <FareLine
                         label="Surge"
-                        value={`×${estimate.surgeMultiplier.toFixed(1)} (+₱${estimate.fare.surgeFare.toFixed(2)})`}
+                        value={`×${estimate.surgeMultiplier.toFixed(2)} (+₱${estimate.fare.surgeFare})`}
                       />
+                      {estimate.fare.minimumAdjustment > 0 && (
+                        <FareLine
+                          label="Minimum fare top-up"
+                          value={`₱${estimate.fare.minimumAdjustment}`}
+                        />
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">

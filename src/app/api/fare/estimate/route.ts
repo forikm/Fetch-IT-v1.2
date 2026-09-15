@@ -9,12 +9,8 @@
 // Returns the FareBreakdown + distanceKm + etaMinutes.
 
 import { NextRequest, NextResponse } from "next/server";
-import { haversineKm, computeFare, etaMinutes } from "@/lib/fare";
-import {
-  VEHICLES,
-  computeSurgeMultiplier,
-  type VehicleClass,
-} from "@/lib/constants";
+import { quoteFare } from "@/lib/fare";
+import { VEHICLES, type VehicleClass } from "@/lib/constants";
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,11 +37,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const distanceKm = haversineKm(pickup, dropoff);
-    const surgeDate = scheduledAt ? new Date(scheduledAt) : new Date();
-    const surgeMultiplier = computeSurgeMultiplier(surgeDate);
-    const v = VEHICLES[vehicleClass];
+    if (cargoWeightKg < 0 || !Number.isFinite(cargoWeightKg)) {
+      return NextResponse.json(
+        { error: "Enter a valid cargo weight." },
+        { status: 400 },
+      );
+    }
 
+    const v = VEHICLES[vehicleClass];
     if (cargoWeightKg > v.capacityKg) {
       return NextResponse.json(
         {
@@ -55,26 +54,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const fare = computeFare({
-      distanceKm,
+    const quote = quoteFare({
+      pickup,
+      dropoff,
+      vehicleClass,
       cargoWeightKg,
-      surgeMultiplier,
-      vehicleBaseFare: v.baseFare,
-      vehiclePerKm: v.perKm,
-      vehicleCapacityKg: v.capacityKg,
+      when: scheduledAt ? new Date(scheduledAt) : new Date(),
     });
 
-    const eta = etaMinutes(distanceKm, v.speedKph);
-
     return NextResponse.json({
-      distanceKm: Math.round(distanceKm * 100) / 100,
-      surgeMultiplier,
-      fare,
-      etaMinutes: eta,
+      distanceKm: quote.distanceKm,
+      straightLineKm: quote.straightLineKm,
+      surgeMultiplier: quote.surgeMultiplier,
+      fare: quote.fare,
+      etaMinutes: quote.etaMinutes,
       vehicle: {
         id: v.id,
         label: v.label,
         capacityKg: v.capacityKg,
+        freeWeightKg: v.freeWeightKg,
+        includedKm: v.includedKm,
       },
     });
   } catch (err) {

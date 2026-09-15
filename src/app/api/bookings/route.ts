@@ -5,17 +5,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import {
-  VEHICLES,
-  computeSurgeMultiplier,
-  type VehicleClass,
-} from "@/lib/constants";
-import {
-  haversineKm,
-  computeFare,
-  etaMinutes,
-  generateRefCode,
-} from "@/lib/fare";
+import { VEHICLES, type VehicleClass } from "@/lib/constants";
+import { quoteFare, generateRefCode } from "@/lib/fare";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -119,19 +110,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const distanceKm = Math.round(haversineKm(pickup, dropoff) * 100) / 100;
-    const surgeDate = scheduledAt ? new Date(scheduledAt) : new Date();
-    const surgeMultiplier = computeSurgeMultiplier(surgeDate);
-    const v = VEHICLES[vehicleClass];
-    const fare = computeFare({
-      distanceKm,
+    const quote = quoteFare({
+      pickup,
+      dropoff,
+      vehicleClass,
       cargoWeightKg,
-      surgeMultiplier,
-      vehicleBaseFare: v.baseFare,
-      vehiclePerKm: v.perKm,
-      vehicleCapacityKg: v.capacityKg,
+      when: scheduledAt ? new Date(scheduledAt) : new Date(),
     });
-    const eta = etaMinutes(distanceKm, v.speedKph);
+    const { distanceKm, surgeMultiplier, fare } = quote;
+    const eta = quote.etaMinutes;
 
     const refCode = generateRefCode();
 
