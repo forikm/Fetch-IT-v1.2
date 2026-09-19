@@ -1,43 +1,66 @@
 // POST /api/fare/estimate
 // Body: {
+//   type:       "DELIVERY" | "RIDE"   (default DELIVERY)
 //   pickup:     { lat, lng, label? },
 //   dropoff:    { lat, lng, label? },
 //   vehicleClass,
-//   cargoWeightKg,
-//   scheduledAt?: ISO string (changes surge based on scheduled hour)
+//   cargoWeightKg,                    (DELIVERY only)
+//   passengers?,                      (RIDE only, 1–4, informational)
+//   scheduledAt?: ISO string          (changes surge based on scheduled hour)
 // }
 // Returns the FareBreakdown + distanceKm + etaMinutes.
 
 import { NextRequest, NextResponse } from "next/server";
-import { quoteFare } from "@/lib/fare";
+import { quoteFare, quoteRideFare } from "@/lib/fare";
 import { VEHICLES, type VehicleClass } from "@/lib/constants";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { pickup, dropoff, vehicleClass, cargoWeightKg, scheduledAt } =
-      body as {
-        pickup: { lat: number; lng: number; label?: string };
-        dropoff: { lat: number; lng: number; label?: string };
-        vehicleClass: VehicleClass;
-        cargoWeightKg: number;
-        scheduledAt?: string;
-      };
+    const {
+      type = "DELIVERY",
+      pickup,
+      dropoff,
+      vehicleClass,
+      cargoWeightKg,
+      scheduledAt,
+    } = body as {
+      type?: "DELIVERY" | "RIDE";
+      pickup: { lat: number; lng: number; label?: string };
+      dropoff: { lat: number; lng: number; label?: string };
+      vehicleClass: VehicleClass;
+      cargoWeightKg?: number;
+      passengers?: number;
+      scheduledAt?: string;
+    };
 
-    if (
-      !pickup ||
-      !dropoff ||
-      !vehicleClass ||
-      cargoWeightKg == null ||
-      !VEHICLES[vehicleClass]
-    ) {
+    if (!pickup || !dropoff || !vehicleClass || !VEHICLES[vehicleClass]) {
       return NextResponse.json(
         { error: "Missing required fields." },
         { status: 400 },
       );
     }
 
-    if (cargoWeightKg < 0 || !Number.isFinite(cargoWeightKg)) {
+    const when = scheduledAt ? new Date(scheduledAt) : new Date();
+
+    if (type === "RIDE") {
+      const quote = quoteRideFare({ pickup, dropoff, vehicleClass, when });
+      return NextResponse.json({
+        distanceKm: quote.distanceKm,
+        straightLineKm: quote.straightLineKm,
+        surgeMultiplier: quote.surgeMultiplier,
+        fare: quote.fare,
+        etaMinutes: quote.etaMinutes,
+        vehicle: {
+          id: quote.vehicle.id,
+          label: quote.vehicle.label,
+          includedKm: quote.vehicle.includedKm,
+        },
+      });
+    }
+
+    const weight = Number(cargoWeightKg ?? 1);
+    if (cargoWeightKg == null || !Number.isFinite(weight) || weight < 0) {
       return NextResponse.json(
         { error: "Enter a valid cargo weight." },
         { status: 400 },
@@ -45,7 +68,7 @@ export async function POST(req: NextRequest) {
     }
 
     const v = VEHICLES[vehicleClass];
-    if (cargoWeightKg > v.capacityKg) {
+    if (weight > v.capacityKg) {
       return NextResponse.json(
         {
           error: `Cargo weight exceeds ${v.label} capacity (${v.capacityKg} kg). Choose a larger vehicle.`,
@@ -58,8 +81,8 @@ export async function POST(req: NextRequest) {
       pickup,
       dropoff,
       vehicleClass,
-      cargoWeightKg,
-      when: scheduledAt ? new Date(scheduledAt) : new Date(),
+      cargoWeightKg: weight,
+      when,
     });
 
     return NextResponse.json({

@@ -2,6 +2,7 @@
 
 // Landing page — the public storefront for the Fetch-It CUSTOMER app.
 // Hero, features grid, a customer CTA card, demo callouts, and a footer.
+// Fetch-It now offers two products: Delivery (cargo) and Ride (passenger).
 // Riders are not part of this app — they use the separate Fetch-It Rider app.
 
 import { useEffect, useState } from "react";
@@ -19,6 +20,7 @@ import {
   ArrowRight,
   Smartphone,
   Play,
+  Car,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,14 +37,14 @@ import { cn } from "@/lib/utils";
 
 const FEATURES = [
   {
-    icon: MapPin,
-    title: "Instant & Scheduled Booking",
-    desc: "Drop location pins, choose cargo vehicle classes, and set immediate or scheduled pickup times.",
+    icon: Car,
+    title: "Deliveries & Rides",
+    desc: "One app for both: send parcels with motorcycles to vans, or hail a motorcycle, tricycle or sedan for yourself.",
   },
   {
     icon: Calculator,
-    title: "Upfront Dynamic Fare Estimator",
-    desc: "Calculates delivery costs instantly based on distance, vehicle capacity, cargo weight, and peak demand multipliers.",
+    title: "Upfront Dynamic Fares",
+    desc: "Every quote is computed before you book — distance, vehicle class, cargo weight, passengers and peak demand multipliers.",
   },
   {
     icon: Navigation,
@@ -50,9 +52,9 @@ const FEATURES = [
     desc: "Live driver movement along the route with dynamic Estimated Time of Arrival (ETA) updates.",
   },
   {
-    icon: Truck,
-    title: "Turn-by-Turn Route Optimization",
-    desc: "Built-in map navigation that calculates optimal multi-stop paths to avoid traffic bottlenecks.",
+    icon: MapPin,
+    title: "Instant & Scheduled Booking",
+    desc: "Drop location pins and book immediately or schedule a pickup ahead of time.",
   },
   {
     icon: PenTool,
@@ -76,11 +78,12 @@ const PERSONAS: {
   ctaSignup: string;
 }[] = [
   {
-    role: "CUSTOMER",
+    role: "CUSTOMER" as Role,
     title: "I'm a Customer",
-    tagline: "Book a delivery and track it live.",
+    tagline: "Book deliveries and rides, and track them live.",
     bullets: [
-      "Instant booking with upfront fare",
+      "Delivery: motorcycles to refrigerated vans",
+      "Ride: motorcycle, tricycle or sedan — upfront fare",
       "Live GPS tracking + ETA",
       "Sign-off proof of delivery",
     ],
@@ -160,23 +163,32 @@ export function LandingView() {
                 </span>
               </Badge>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.05]">
-                Ship anything.
+                Deliver anything.
                 <br />
-                <span className="text-primary">Track it live.</span>
+                <span className="text-primary">Ride anywhere.</span>
               </h1>
               <p className="text-lg text-muted-foreground max-w-xl">
-                Fetch-It is an automated logistics platform that connects senders
-                and commercial clients with available freight drivers — from
-                motorcycles to flatbeds. Eliminate manual dispatching with
-                instant booking, dynamic fares, and verifiable proof of delivery.
+                Fetch-It is an on-demand logistics and mobility platform.
+                Send packages with the right vehicle for the job — or book a
+                ride for yourself — with upfront fares, live tracking, and
+                verifiable proof of delivery.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Button size="lg" onClick={() => pickRole("CUSTOMER", "signup")}>
-                  Book a delivery <ArrowRight className="h-4 w-4" />
+                  Get started <ArrowRight className="h-4 w-4" />
                 </Button>
                 <Button size="lg" variant="outline" onClick={() => pickRole("CUSTOMER", "login")}>
                   Customer login
                 </Button>
+              </div>
+              {/* Product chips */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium">
+                  <Package className="h-3.5 w-3.5 text-primary" /> Delivery: moto → van → reefer
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium">
+                  <Car className="h-3.5 w-3.5 text-emerald-600" /> Ride: moto · tricycle · sedan
+                </span>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground pt-2">
                 <div className="flex items-center gap-1.5">
@@ -203,9 +215,10 @@ export function LandingView() {
       {/* Persona CTAs */}
       <section id="personas" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 w-full">
         <div className="text-center mb-10 max-w-2xl mx-auto">
-          <h2 className="text-3xl font-bold tracking-tight">Everything you need to ship</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Two services, one app</h2>
           <p className="text-muted-foreground mt-3">
-            Book in seconds, watch your delivery move on the map, and confirm receipt with a digital signature.
+            After logging in, choose Delivery to ship cargo or Ride to get a
+            driver for yourself — fares are always shown upfront.
           </p>
         </div>
         <div className="max-w-2xl mx-auto">

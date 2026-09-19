@@ -1,12 +1,21 @@
 // /api/bookings
-// GET — list bookings for the current user (as customer or rider).
-// POST — create a new booking (customer only), auto-runs the matching engine.
+// GET — list bookings for the current user (as customer or rider), optionally
+//       filtered by product type (?type=DELIVERY|RIDE).
+// POST — create a new booking (customer only):
+//        • type=DELIVERY (default) — cargo booking with weight-based fare
+//        • type=RIDE               — passenger booking with upfront fare
+//        Newly created bookings sit on the open jobs board
+//        (/api/rider/available) until a rider claims them.
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { VEHICLES, type VehicleClass } from "@/lib/constants";
-import { quoteFare, generateRefCode } from "@/lib/fare";
+import {
+  VEHICLES,
+  RIDE_VEHICLE_CLASSES,
+  type VehicleClass,
+} from "@/lib/constants";
+import { quoteFare, quoteRideFare, generateRefCode } from "@/lib/fare";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -14,6 +23,7 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const filter = url.searchParams.get("filter") || "active"; // active | history | all
+  const type = url.searchParams.get("type"); // DELIVERY | RIDE | undefined
 
   const where =
     session.role === "CUSTOMER"
@@ -30,7 +40,11 @@ export async function GET(req: NextRequest) {
         : {};
 
   const bookings = await db.booking.findMany({
-    where: { ...where, ...statusFilter },
+    where: {
+      ...where,
+      ...statusFilter,
+      ...(type === "DELIVERY" || type === "RIDE" ? { type } : {}),
+    },
     orderBy: { createdAt: "desc" },
     include: {
       customer: { select: { id: true, name: true, phone: true } },
@@ -76,34 +90,106 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const {
+      type = "DELIVERY",
       pickup,
       dropoff,
       vehicleClass,
       cargoWeightKg,
       cargoNotes,
       scheduledAt,
+      passengers,
     } = body as {
+      type?: "DELIVERY" | "RIDE";
       pickup: { lat: number; lng: number; label: string };
       dropoff: { lat: number; lng: number; label: string };
       vehicleClass: VehicleClass;
-      cargoWeightKg: number;
+      cargoWeightKg?: number;
       cargoNotes?: string;
       scheduledAt?: string;
+      passengers?: number;
     };
 
-    if (
-      !pickup ||
-      !dropoff ||
-      !vehicleClass ||
-      !VEHICLES[vehicleClass] ||
-      cargoWeightKg == null
-    ) {
+    if (!pickup || !dropoff || !vehicleClass || !VEHICLES[vehicleClass]) {
       return NextResponse.json(
         { error: "Missing required fields." },
         { status: 400 },
       );
     }
-    if (cargoWeightKg > VEHICLES[vehicleClass].capacityKg) {
+    if (!pickup.label || !dropoff.label) {
+      return NextResponse.json(
+        { error: "Pickup and drop-off addresses are required." },
+        { status: 400 },
+      );
+    }
+
+    const isRide = type === "RIDE";
+
+    if (isRide) {
+      // ---------- RIDE ----------
+      if (!RIDE_VEHICLE_CLASSES.includes(vehicleClass)) {
+        return NextResponse.json(
+          { error: "Invalid ride class. Choose motorcycle, tricycle or sedan." },
+          { status: 400 },
+        );
+      }
+      const pax = Number(passengers ?? 1);
+      if (!Number.isInteger(pax) || pax < 1 || pax > 4) {
+        return NextResponse.json(
+          { error: "Passengers must be between 1 and 4." },
+          { status: 400 },
+        );
+      }
+
+      const quote = quoteRideFare({
+        pickup,
+        dropoff,
+        vehicleClass,
+        when: scheduledAt ? new Date(scheduledAt) : new Date(),
+      });
+
+      const booking = await db.booking.create({
+        data: {
+          refCode: generateRefCode("RIDE"),
+          type: "RIDE",
+          customerId: session.uid,
+          pickupLabel: pickup.label,
+          pickupLat: pickup.lat,
+          pickupLng: pickup.lng,
+          dropoffLabel: dropoff.label,
+          dropoffLat: dropoff.lat,
+          dropoffLng: dropoff.lng,
+          vehicleClass,
+          cargoWeightKg: 0,
+          passengers: pax,
+          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+          distanceKm: quote.distanceKm,
+          baseFare: quote.fare.baseFare,
+          surgeMultiplier: quote.surgeMultiplier,
+          totalFare: quote.fare.totalFare,
+          currency: quote.fare.currency,
+          status: "PENDING",
+          etaMinutes: quote.etaMinutes,
+        },
+        include: {
+          customer: { select: { id: true, name: true, phone: true } },
+          rider: true,
+        },
+      });
+
+      return NextResponse.json({ booking });
+    }
+
+    // ---------- DELIVERY ----------
+    // Motorcycles and tricycles carry parcels too, so every class is fair
+    // game here — the weight validation below keeps classes honest.
+    const weight = Number(cargoWeightKg ?? 1);
+    if (!Number.isFinite(weight) || weight <= 0) {
+      return NextResponse.json(
+        { error: "Enter a valid cargo weight." },
+        { status: 400 },
+      );
+    }
+    if (weight > VEHICLES[vehicleClass].capacityKg) {
       return NextResponse.json(
         { error: "Cargo exceeds vehicle capacity." },
         { status: 400 },
@@ -114,20 +200,16 @@ export async function POST(req: NextRequest) {
       pickup,
       dropoff,
       vehicleClass,
-      cargoWeightKg,
+      cargoWeightKg: weight,
       when: scheduledAt ? new Date(scheduledAt) : new Date(),
     });
     const { distanceKm, surgeMultiplier, fare } = quote;
     const eta = quote.etaMinutes;
 
-    const refCode = generateRefCode();
-
-    // Create the booking as PENDING and leave it unassigned. It now sits on
-    // the open jobs board (see /api/rider/available) until a real rider
-    // claims it via PATCH /api/bookings/[id] — no auto-matching here.
     const booking = await db.booking.create({
       data: {
-        refCode,
+        refCode: generateRefCode("FIT"),
+        type: "DELIVERY",
         customerId: session.uid,
         pickupLabel: pickup.label,
         pickupLat: pickup.lat,
@@ -136,7 +218,7 @@ export async function POST(req: NextRequest) {
         dropoffLat: dropoff.lat,
         dropoffLng: dropoff.lng,
         vehicleClass,
-        cargoWeightKg,
+        cargoWeightKg: weight,
         cargoNotes: cargoNotes ?? null,
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         distanceKm,

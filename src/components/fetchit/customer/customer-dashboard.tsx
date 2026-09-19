@@ -25,6 +25,8 @@ import {
   Phone,
   CheckCircle2,
   AlertCircle,
+  ArrowUpDown,
+  CircleDot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +82,7 @@ import { loadGoogleMaps } from "@/lib/google-maps-loader";
 interface Booking {
   id: string;
   refCode: string;
+  type: string;
   customerId: string;
   riderId: string | null;
   pickupLabel: string;
@@ -90,6 +93,7 @@ interface Booking {
   dropoffLng: number;
   vehicleClass: VehicleClass;
   cargoWeightKg: number;
+  passengers: number;
   cargoNotes: string | null;
   scheduledAt: string | null;
   distanceKm: number;
@@ -127,6 +131,7 @@ interface Booking {
 export function CustomerDashboard() {
   const user = useAppStore((s) => s.user) as AuthUser | null;
   const logout = useAppStore((s) => s.logout);
+  const setView = useAppStore((s) => s.setView);
   const { toast } = useToast();
 
   const [tab, setTab] = useState<"active" | "history">("active");
@@ -149,7 +154,7 @@ export function CustomerDashboard() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/bookings?filter=${tab}`, { cache: "no-store" });
+      const res = await fetch(`/api/bookings?filter=${tab}&type=DELIVERY`, { cache: "no-store" });
       const data = await res.json();
       setBookings(data.bookings ?? []);
     } finally {
@@ -199,6 +204,15 @@ export function CustomerDashboard() {
             <FetchItLogo />
           </button>
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setView("mode-select")}
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Switch mode</span>
+            </Button>
             <div className="hidden sm:flex flex-col items-end text-sm leading-tight">
               <span className="font-medium">{user?.name}</span>
               <span className="text-xs text-muted-foreground">{user?.email}</span>
@@ -206,7 +220,7 @@ export function CustomerDashboard() {
             <ProfileMenu
               name={user?.name}
               email={user?.email}
-              roleLabel="Customer"
+              roleLabel="Customer · Delivery"
               onLogout={handleLogout}
             />
           </div>
@@ -724,6 +738,7 @@ function BookingForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          type: "DELIVERY",
           pickup: { lat: Number(pickupLat), lng: Number(pickupLng), label: pickupLabel },
           dropoff: { lat: Number(dropoffLat), lng: Number(dropoffLng), label: dropoffLabel },
           vehicleClass,
@@ -1097,13 +1112,17 @@ function TrackingView({
   const dropoff = { lat: booking.dropoffLat, lng: booking.dropoffLng };
   const bounds = computeBounds([pickup, dropoff, riderLat && riderLng ? { lat: riderLat, lng: riderLng } : null].filter(Boolean) as { lat: number; lng: number }[]);
 
-  // Subscribe to socket events
+  // Subscribe to socket events (only active when a tracking service is
+  // configured via NEXT_PUBLIC_TRACKING_SOCKET_URL — otherwise polling below
+  // handles all live updates).
   useEffect(() => {
     if (!booking.riderId) return;
     let cancelled = false;
+    let cleanup: (() => void) | null = null;
     (async () => {
       const { getTrackingSocket } = await import("@/lib/socket");
       const socket = getTrackingSocket();
+      if (!socket) return;
       socket.emit("subscribe", { bookingId: booking.id });
       const onLoc = (data: { bookingId: string; lat: number; lng: number; etaMinutes?: number }) => {
         if (data.bookingId !== booking.id) return;
@@ -1118,7 +1137,7 @@ function TrackingView({
       };
       socket.on("rider:location", onLoc);
       socket.on("status:change", onStatus);
-      return () => {
+      cleanup = () => {
         if (cancelled) return;
         socket.off("rider:location", onLoc);
         socket.off("status:change", onStatus);
@@ -1126,6 +1145,7 @@ function TrackingView({
     })();
     return () => {
       cancelled = true;
+      cleanup?.();
     };
   }, [booking.id, booking.riderId, onUpdated]);
 
@@ -1475,6 +1495,8 @@ function useVehicleIcon(vc: VehicleClass) {
   switch (vc) {
     case "MOTORCYCLE":
       return <Bike className="h-5 w-5" />;
+    case "TRICYCLE":
+      return <CircleDot className="h-5 w-5" />;
     case "SEDAN":
       return <Car className="h-5 w-5" />;
     case "CLOSED_VAN":
