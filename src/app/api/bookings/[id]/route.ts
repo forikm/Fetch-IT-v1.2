@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { omitTicket } from "@/lib/ticket";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -54,5 +55,5 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({ booking });
+  return NextResponse.json({ booking: omitTicket(booking) });
 }

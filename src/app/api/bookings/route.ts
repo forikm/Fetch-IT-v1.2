@@ -16,6 +16,7 @@ import {
   type VehicleClass,
 } from "@/lib/constants";
 import { quoteFare, quoteRideFare, generateRefCode } from "@/lib/fare";
+import { generateTicketId, omitTicket } from "@/lib/ticket";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -65,7 +66,10 @@ export async function GET(req: NextRequest) {
     take: 100,
   });
 
-  return NextResponse.json({ bookings });
+  // This is the customer app — the R0001/D0001 tracking ticket is a
+  // rider-only artifact (see src/lib/ticket.ts) and never leaves the server
+  // here.
+  return NextResponse.json({ bookings: bookings.map(omitTicket) });
 }
 
 export async function POST(req: NextRequest) {
@@ -147,36 +151,40 @@ export async function POST(req: NextRequest) {
         when: scheduledAt ? new Date(scheduledAt) : new Date(),
       });
 
-      const booking = await db.booking.create({
-        data: {
-          refCode: generateRefCode("RIDE"),
-          type: "RIDE",
-          customerId: session.uid,
-          pickupLabel: pickup.label,
-          pickupLat: pickup.lat,
-          pickupLng: pickup.lng,
-          dropoffLabel: dropoff.label,
-          dropoffLat: dropoff.lat,
-          dropoffLng: dropoff.lng,
-          vehicleClass,
-          cargoWeightKg: 0,
-          passengers: pax,
-          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-          distanceKm: quote.distanceKm,
-          baseFare: quote.fare.baseFare,
-          surgeMultiplier: quote.surgeMultiplier,
-          totalFare: quote.fare.totalFare,
-          currency: quote.fare.currency,
-          status: "PENDING",
-          etaMinutes: quote.etaMinutes,
-        },
-        include: {
-          customer: { select: { id: true, name: true, phone: true } },
-          rider: true,
-        },
+      const booking = await db.$transaction(async (tx) => {
+        const ticketId = await generateTicketId(tx, "RIDE");
+        return tx.booking.create({
+          data: {
+            refCode: generateRefCode("RIDE"),
+            ticketId,
+            type: "RIDE",
+            customerId: session.uid,
+            pickupLabel: pickup.label,
+            pickupLat: pickup.lat,
+            pickupLng: pickup.lng,
+            dropoffLabel: dropoff.label,
+            dropoffLat: dropoff.lat,
+            dropoffLng: dropoff.lng,
+            vehicleClass,
+            cargoWeightKg: 0,
+            passengers: pax,
+            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+            distanceKm: quote.distanceKm,
+            baseFare: quote.fare.baseFare,
+            surgeMultiplier: quote.surgeMultiplier,
+            totalFare: quote.fare.totalFare,
+            currency: quote.fare.currency,
+            status: "PENDING",
+            etaMinutes: quote.etaMinutes,
+          },
+          include: {
+            customer: { select: { id: true, name: true, phone: true } },
+            rider: true,
+          },
+        });
       });
 
-      return NextResponse.json({ booking });
+      return NextResponse.json({ booking: omitTicket(booking) });
     }
 
     // ---------- DELIVERY ----------
@@ -206,36 +214,40 @@ export async function POST(req: NextRequest) {
     const { distanceKm, surgeMultiplier, fare } = quote;
     const eta = quote.etaMinutes;
 
-    const booking = await db.booking.create({
-      data: {
-        refCode: generateRefCode("FIT"),
-        type: "DELIVERY",
-        customerId: session.uid,
-        pickupLabel: pickup.label,
-        pickupLat: pickup.lat,
-        pickupLng: pickup.lng,
-        dropoffLabel: dropoff.label,
-        dropoffLat: dropoff.lat,
-        dropoffLng: dropoff.lng,
-        vehicleClass,
-        cargoWeightKg: weight,
-        cargoNotes: cargoNotes ?? null,
-        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-        distanceKm,
-        baseFare: fare.baseFare,
-        surgeMultiplier,
-        totalFare: fare.totalFare,
-        currency: fare.currency,
-        status: "PENDING",
-        etaMinutes: eta,
-      },
-      include: {
-        customer: { select: { id: true, name: true, phone: true } },
-        rider: true,
-      },
+    const booking = await db.$transaction(async (tx) => {
+      const ticketId = await generateTicketId(tx, "DELIVERY");
+      return tx.booking.create({
+        data: {
+          refCode: generateRefCode("FIT"),
+          ticketId,
+          type: "DELIVERY",
+          customerId: session.uid,
+          pickupLabel: pickup.label,
+          pickupLat: pickup.lat,
+          pickupLng: pickup.lng,
+          dropoffLabel: dropoff.label,
+          dropoffLat: dropoff.lat,
+          dropoffLng: dropoff.lng,
+          vehicleClass,
+          cargoWeightKg: weight,
+          cargoNotes: cargoNotes ?? null,
+          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+          distanceKm,
+          baseFare: fare.baseFare,
+          surgeMultiplier,
+          totalFare: fare.totalFare,
+          currency: fare.currency,
+          status: "PENDING",
+          etaMinutes: eta,
+        },
+        include: {
+          customer: { select: { id: true, name: true, phone: true } },
+          rider: true,
+        },
+      });
     });
 
-    return NextResponse.json({ booking });
+    return NextResponse.json({ booking: omitTicket(booking) });
   } catch (err) {
     console.error("[bookings POST] error", err);
     return NextResponse.json(

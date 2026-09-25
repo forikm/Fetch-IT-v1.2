@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { omitTicket } from "@/lib/ticket";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -35,7 +36,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       where: { id },
       data: { status: "CANCELLED", cancelledAt: new Date() },
     });
-    return NextResponse.json({ booking: updated });
+    return NextResponse.json({ booking: omitTicket(updated) });
   } catch (err) {
     console.error("[cancel] error", err);
     return NextResponse.json(
