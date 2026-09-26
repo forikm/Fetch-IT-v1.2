@@ -34,7 +34,7 @@ import {
   TabsContent,
 } from "@/components/ui/tabs";
 import { FetchItLogo } from "./logo";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, type AuthUser } from "@/lib/store";
 import { getCustomerAuth } from "@/lib/firebase-client";
 
 const DEMO_EMAIL = "customer@fetchit.app";
@@ -87,8 +87,22 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken, phone: phone.trim() || undefined }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not complete sign in.");
+    // Vercel can return an empty body when a function fails before its
+    // handler runs. Keep the HTTP status visible instead of showing a JSON
+    // parsing error that hides the real failure.
+    const body = await res.text();
+    let data: { error?: string; user?: AuthUser } | null = null;
+    if (body) {
+      try {
+        data = JSON.parse(body) as { error?: string; user?: AuthUser };
+      } catch {
+        // An HTML error page is also possible when the function crashes.
+      }
+    }
+    if (!res.ok) {
+      throw new Error(data?.error || `Sign-in service failed (HTTP ${res.status}). Please try again later.`);
+    }
+    if (!data?.user) throw new Error("Sign-in service returned an invalid response.");
     setUser(data.user);
   }
 
