@@ -22,12 +22,19 @@ export async function POST(req: NextRequest) {
         vehiclePlate?: string;
       };
 
+    if (role === "CUSTOMER") {
+      return NextResponse.json(
+        { error: "Customer sign-up now uses Firebase email verification." },
+        { status: 410 },
+      );
+    }
+
     if (
       !name ||
       !email ||
       !password ||
       !role ||
-      (role !== "CUSTOMER" && role !== "RIDER")
+      role !== "RIDER"
     ) {
       return NextResponse.json(
         { error: "Missing or invalid fields." },

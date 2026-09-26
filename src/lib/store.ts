@@ -102,6 +102,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   logout: async () => {
     await fetch("/api/auth/logout", { method: "POST" });
+    try {
+      const { signOut } = await import("firebase/auth");
+      const { getCustomerAuth } = await import("@/lib/firebase-client");
+      await signOut(getCustomerAuth());
+    } catch {
+      // Demo and legacy accounts may not have Firebase configured or signed in.
+    }
     set({ user: null, view: "landing", pendingRole: null, mode: null });
   },
   refreshUser: async () => {

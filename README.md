@@ -9,7 +9,20 @@ Next.js 16 · App Router · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma 
 - **Mode selector** — after logging in, the customer picks **Delivery** or **Ride**; the chosen experience opens (switchable anytime via "Switch mode").
 - **Delivery dashboard** — 3-step cargo booking wizard (pickup → drop-off → details), vehicle classes from motorcycle to refrigerated van, weight-based dynamic fares with surge, live tracking with OTP / signature / photo e-POD.
 - **Ride dashboard** — Grab-style "Where to?" panel, ride classes (motorcycle / tricycle / sedan) with upfront fares per class, passengers stepper, live driver tracking and trip history.
+- Firebase email/password sign-up with email verification for new customers. Existing accounts and the demo account retain their legacy sign-in.
 - Demo seed accounts (`/api/auth/seed`) for instant trials.
+
+## Firebase Spark setup (customer app only)
+
+1. Create a project at [Firebase Console](https://console.firebase.google.com/) and keep it on the **Spark** plan. No billing account is needed for email/password authentication within Spark quotas. Do not enable Phone Authentication.
+2. Open **Build → Authentication → Sign-in method** and enable **Email/Password**. In **Authentication → Settings → Authorized domains**, add your deployed customer PWA domain. Add `localhost` if it is absent for local testing.
+3. In **Project settings → General**, add a **Web app**. Copy its `apiKey`, `authDomain`, `projectId`, and `appId` into the matching `NEXT_PUBLIC_FIREBASE_*` variables in `.env` and in your deployment environment.
+4. In **Project settings → Service accounts**, generate a private key. Copy `project_id`, `client_email`, and `private_key` from the downloaded JSON into `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`. These are server-only secrets; never put them in `NEXT_PUBLIC_*`, Git, or the browser. Set a long `SESSION_SECRET` too.
+5. Restart the app after editing `.env`. Sign up with a new email, open Firebase's verification message, return to the app, and click **I've verified my email**. The customer database record and booking session are created only after Firebase confirms the address.
+
+Firebase's default verification email is handled by Firebase. The customer app does not need a separate email service, SMS service, Firebase database, or database schema migration. Firebase credentials and the shared booking database are separate: Firebase proves the email/password identity; the existing PostgreSQL `User` record and cookie session continue to power bookings.
+
+The legacy demo account still uses **Try the demo customer account**. Existing customer accounts can use **Have a pre-Firebase Fetch-It account?** on sign-in. New Firebase sign-ups cannot reuse an email already present in the shared database; existing accounts need an explicit migration if you want to move them to Firebase later.
 
 ## Run locally
 

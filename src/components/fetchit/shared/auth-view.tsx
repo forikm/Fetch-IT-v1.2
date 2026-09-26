@@ -3,7 +3,18 @@
 // Auth view for the Fetch-It CUSTOMER app.
 // Customers only — riders sign in from the separate Fetch-It Rider app.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  reload,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signOut,
+  signInWithEmailAndPassword,
+  updateProfile,
+  type User,
+} from "firebase/auth";
 import { ArrowLeft, Loader2, LogIn, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +35,7 @@ import {
 } from "@/components/ui/tabs";
 import { FetchItLogo } from "./logo";
 import { useAppStore } from "@/lib/store";
+import { getCustomerAuth } from "@/lib/firebase-client";
 
 const DEMO_EMAIL = "customer@fetchit.app";
 const DEMO_PASSWORD = "demo1234";
@@ -42,33 +54,148 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [legacyLogin, setLegacyLogin] = useState(false);
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+    if (legacyLogin) return;
+    try {
+      unsubscribe = onAuthStateChanged(getCustomerAuth(), (user) => {
+        if (user && !user.emailVerified) {
+          setEmail(user.email || "");
+          setPendingVerification(true);
+        }
+      });
+    } catch {
+      // The submit action shows the missing-configuration message.
+    }
+    return () => unsubscribe();
+  }, [legacyLogin]);
+
+  async function finishSignIn(user: User) {
+    await reload(user);
+    if (!user.emailVerified) {
+      setPendingVerification(true);
+      setNotice("Check your inbox for the verification link.");
+      return;
+    }
+    const idToken = await user.getIdToken(true);
+    const res = await fetch("/api/auth/firebase-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, phone: phone.trim() || undefined }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not complete sign in.");
+    setUser(data.user);
+  }
+
+  function authMessage(err: unknown): string {
+    const code = typeof err === "object" && err !== null && "code" in err ? String(err.code) : "";
+    if (code === "auth/email-already-in-use") return "This email is already registered. Try signing in.";
+    if (code === "auth/invalid-credential") return "Invalid email or password.";
+    if (code === "auth/weak-password") return "Choose a stronger password.";
+    if (code === "auth/too-many-requests") return "Too many attempts. Please try again later.";
+    return err instanceof Error ? err.message : "Something went wrong.";
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setLoading(true);
     try {
       if (mode === "login") {
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, role: "CUSTOMER" }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Login failed");
-        setUser(data.user);
+        if (legacyLogin) {
+          const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email.trim(), password, role: "CUSTOMER" }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Login failed.");
+          setUser(data.user);
+        } else {
+          const credential = await signInWithEmailAndPassword(getCustomerAuth(), email.trim(), password);
+          await finishSignIn(credential.user);
+        }
       } else {
-        const res = await fetch("/api/auth/signup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, password, role: "CUSTOMER", phone }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Sign up failed");
-        setUser(data.user);
+        const credential = await createUserWithEmailAndPassword(getCustomerAuth(), email.trim(), password);
+        await updateProfile(credential.user, { displayName: name.trim() });
+        setPendingVerification(true);
+        await sendEmailVerification(credential.user);
+        setNotice("Verification email sent. Open the link, then return here.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(authMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function useDifferentAccount() {
+    try {
+      await signOut(getCustomerAuth());
+    } catch {
+      // Still allow the user to return to sign-in when Firebase is unavailable.
+    }
+    setPendingVerification(false);
+    setMode("login");
+    setNotice(null);
+    setError(null);
+  }
+
+  async function checkVerification() {
+    setError(null);
+    setNotice(null);
+    setLoading(true);
+    try {
+      const user = getCustomerAuth().currentUser;
+      if (!user) {
+        setPendingVerification(false);
+        setMode("login");
+        setNotice("Sign in again after verifying your email.");
+        return;
+      }
+      await finishSignIn(user);
+    } catch (err) {
+      setError(authMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendVerification() {
+    setError(null);
+    setNotice(null);
+    setLoading(true);
+    try {
+      const user = getCustomerAuth().currentUser;
+      if (!user) throw new Error("Sign in again to resend verification.");
+      await sendEmailVerification(user);
+      setNotice("A new verification email has been sent.");
+    } catch (err) {
+      setError(authMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resetPassword() {
+    if (!email.trim()) {
+      setError("Enter your email first, then select Forgot password.");
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(getCustomerAuth(), email.trim());
+      setNotice("If this email has an account, check your inbox for a reset link.");
+    } catch (err) {
+      setError(authMessage(err));
     } finally {
       setLoading(false);
     }
@@ -117,10 +244,12 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                 </div>
                 <div>
                   <CardTitle className="text-xl">
-                    {mode === "login" ? "Welcome back" : "Create your customer account"}
+                    {pendingVerification ? "Verify your email" : mode === "login" ? "Welcome back" : "Create your customer account"}
                   </CardTitle>
                   <CardDescription>
-                    {mode === "login"
+                    {pendingVerification
+                      ? `We sent a link to ${email || "your inbox"}.`
+                      : mode === "login"
                       ? "Sign in to book deliveries and track them live."
                       : "It only takes a minute. No credit card required."}
                   </CardDescription>
@@ -128,9 +257,20 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
               </div>
             </CardHeader>
             <CardContent>
-              <Tabs
+              {pendingVerification ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Open the email link, then come back to continue. You can sign in on another device after verifying.</p>
+                  {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+                  {notice && <p className="text-sm text-muted-foreground" role="status">{notice}</p>}
+                  <Button className="w-full" onClick={checkVerification} disabled={loading}>
+                    {loading && <Loader2 className="h-4 w-4 animate-spin" />} I&apos;ve verified my email
+                  </Button>
+                  <Button variant="outline" className="w-full" onClick={resendVerification} disabled={loading}>Resend email</Button>
+                  <Button variant="ghost" className="w-full" onClick={useDifferentAccount} disabled={loading}>Use a different account</Button>
+                </div>
+              ) : <Tabs
                 value={mode}
-                onValueChange={(v) => setMode(v as "login" | "signup")}
+                onValueChange={(v) => { setMode(v as "login" | "signup"); setError(null); setNotice(null); }}
               >
                 <TabsList className="grid grid-cols-2 w-full mb-4">
                   <TabsTrigger value="login">Login</TabsTrigger>
@@ -158,20 +298,30 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                         type="password"
                         autoComplete="current-password"
                         required
-                        minLength={4}
+                        minLength={6}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="At least 4 characters"
+                        placeholder="Your password"
                       />
                     </div>
                     {error && (
-                      <p className="text-sm text-destructive">{error}</p>
+                      <p className="text-sm text-destructive" role="alert">{error}</p>
                     )}
+                    {notice && <p className="text-sm text-muted-foreground" role="status">{notice}</p>}
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                       Sign in
                     </Button>
                   </form>
+                  {!legacyLogin && <Button variant="link" className="w-full" onClick={resetPassword} disabled={loading}>Forgot password?</Button>}
+                  <Button
+                    variant="ghost"
+                    className="w-full text-xs"
+                    onClick={() => { setLegacyLogin(!legacyLogin); setError(null); setNotice(null); }}
+                    disabled={loading}
+                  >
+                    {legacyLogin ? "Use Firebase sign-in" : "Have a pre-Firebase Fetch-It account?"}
+                  </Button>
                   <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5 font-medium text-foreground mb-1.5">
                       <ShieldCheck className="h-3.5 w-3.5 text-primary" />
@@ -243,17 +393,18 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                           type="password"
                           autoComplete="new-password"
                           required
-                          minLength={4}
+                          minLength={6}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="At least 4 characters"
+                          placeholder="At least 6 characters"
                         />
                       </div>
                     </div>
 
                     {error && (
-                      <p className="text-sm text-destructive">{error}</p>
+                      <p className="text-sm text-destructive" role="alert">{error}</p>
                     )}
+                    {notice && <p className="text-sm text-muted-foreground" role="status">{notice}</p>}
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -264,7 +415,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                     </Button>
                   </form>
                 </TabsContent>
-              </Tabs>
+              </Tabs>}
             </CardContent>
             <CardFooter className="text-xs text-muted-foreground justify-center">
               By continuing, you agree to Fetch-It's Terms of Service and Privacy Policy.
