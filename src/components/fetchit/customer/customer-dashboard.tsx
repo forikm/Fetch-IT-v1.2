@@ -77,6 +77,7 @@ import { PlaceAutocompleteInput } from "../shared/place-autocomplete-input";
 import { LocationMap } from "../shared/location-map";
 import { ProfileMenu } from "../shared/profile-menu";
 import { BookingRouteMap } from "../shared/booking-route-map";
+import { LiveTrackingMap } from "../shared/live-tracking-map";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
 interface Booking {
@@ -1107,10 +1108,8 @@ function TrackingView({
   const [otp, setOtp] = useState<string | null>(null);
   const [loadingOtp, setLoadingOtp] = useState(false);
 
-  // Compute route bounds for the SVG map
   const pickup = { lat: booking.pickupLat, lng: booking.pickupLng };
   const dropoff = { lat: booking.dropoffLat, lng: booking.dropoffLng };
-  const bounds = computeBounds([pickup, dropoff, riderLat && riderLng ? { lat: riderLat, lng: riderLng } : null].filter(Boolean) as { lat: number; lng: number }[]);
 
   // Subscribe to socket events (only active when a tracking service is
   // configured via NEXT_PUBLIC_TRACKING_SOCKET_URL — otherwise polling below
@@ -1199,14 +1198,12 @@ function TrackingView({
     <div className="space-y-4">
       {/* Map */}
       <div className="relative rounded-xl overflow-hidden border bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:from-amber-950/30 dark:via-orange-950/30 dark:to-amber-900/30 aspect-[16/10]">
-        <MiniMap
+        <LiveTrackingMap
           pickup={pickup}
           dropoff={dropoff}
           rider={
             riderLat != null && riderLng != null ? { lat: riderLat, lng: riderLng } : null
           }
-          bounds={bounds}
-          status={status}
         />
         <div className="absolute top-2 left-2 bg-card/95 backdrop-blur rounded-full px-2.5 py-1 text-xs font-medium border shadow-sm flex items-center gap-1.5">
           <span
@@ -1375,118 +1372,6 @@ function ProofChip({
       <span className="font-medium">{label}</span>
       <span>{ok ? "Verified" : "—"}</span>
     </div>
-  );
-}
-
-// ------------------------------ Mini SVG map ------------------------------
-interface Bounds {
-  minLat: number;
-  maxLat: number;
-  minLng: number;
-  maxLng: number;
-}
-function computeBounds(points: { lat: number; lng: number }[]): Bounds {
-  if (points.length === 0) {
-    return { minLat: 0, maxLat: 1, minLng: 0, maxLng: 1 };
-  }
-  let minLat = points[0].lat, maxLat = points[0].lat;
-  let minLng = points[0].lng, maxLng = points[0].lng;
-  for (const p of points) {
-    if (p.lat < minLat) minLat = p.lat;
-    if (p.lat > maxLat) maxLat = p.lat;
-    if (p.lng < minLng) minLng = p.lng;
-    if (p.lng > maxLng) maxLng = p.lng;
-  }
-  // Pad so pins aren't on the very edge
-  const padLat = Math.max(0.001, (maxLat - minLat) * 0.15);
-  const padLng = Math.max(0.001, (maxLng - minLng) * 0.15);
-  return {
-    minLat: minLat - padLat,
-    maxLat: maxLat + padLat,
-    minLng: minLng - padLng,
-    maxLng: maxLng + padLng,
-  };
-}
-
-function project(p: { lat: number; lng: number }, b: Bounds, w: number, h: number) {
-  const x = ((p.lng - b.minLng) / (b.maxLng - b.minLng)) * w;
-  // y is inverted because SVG y grows downward
-  const y = h - ((p.lat - b.minLat) / (b.maxLat - b.minLat)) * h;
-  return { x, y };
-}
-
-function MiniMap({
-  pickup,
-  dropoff,
-  rider,
-  bounds,
-  status,
-}: {
-  pickup: { lat: number; lng: number };
-  dropoff: { lat: number; lng: number };
-  rider: { lat: number; lng: number } | null;
-  bounds: Bounds;
-  status: BookingStatus;
-}) {
-  const W = 400, H = 250;
-  const p = project(pickup, bounds, W, H);
-  const d = project(dropoff, bounds, W, H);
-  const r = rider ? project(rider, bounds, W, H) : null;
-
-  // Quadratic curve through pickup → dropoff
-  const midX = (p.x + d.x) / 2;
-  const midY = (p.y + d.y) / 2 - 30;
-  const path = `M ${p.x} ${p.y} Q ${midX} ${midY} ${d.x} ${d.y}`;
-
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="absolute inset-0 h-full w-full"
-      preserveAspectRatio="xMidYMid slice"
-    >
-      <defs>
-        <pattern id="streets2" width="30" height="30" patternUnits="userSpaceOnUse">
-          <path d="M 30 0 L 0 0 0 30" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="1" />
-        </pattern>
-        <linearGradient id="routeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#10b981" />
-          <stop offset="100%" stopColor="#ef4444" />
-        </linearGradient>
-      </defs>
-      <rect width={W} height={H} fill="url(#streets2)" />
-      <path d={path} fill="none" stroke="url(#routeGrad)" strokeWidth="3.5" strokeLinecap="round" />
-      {/* dashed progress overlay */}
-      {rider && status !== "DELIVERED" && (
-        <path
-          d={path}
-          fill="none"
-          stroke="white"
-          strokeWidth="2"
-          strokeDasharray="6 6"
-          className="animate-route-dash"
-          opacity="0.9"
-        />
-      )}
-
-      {/* Pickup */}
-      <g transform={`translate(${p.x}, ${p.y})`}>
-        <circle r="10" fill="#10b981" opacity="0.2" />
-        <circle r="6" fill="#10b981" />
-      </g>
-      {/* Dropoff */}
-      <g transform={`translate(${d.x}, ${d.y})`}>
-        <circle r="10" fill="#ef4444" opacity="0.2" />
-        <circle r="6" fill="#ef4444" />
-      </g>
-      {/* Rider */}
-      {r && (
-        <g transform={`translate(${r.x}, ${r.y})`}>
-          <circle r="14" fill="var(--primary)" opacity="0.2" className="animate-fit-pulse" />
-          <circle r="9" fill="var(--primary)" />
-          <path d="M -3 -1 L 0 -4 L 3 -1 L 1 -1 L 1 3 L -1 3 L -1 -1 Z" fill="white" />
-        </g>
-      )}
-    </svg>
   );
 }
 

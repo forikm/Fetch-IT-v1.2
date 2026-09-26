@@ -24,6 +24,9 @@ declare namespace google.maps {
     zoom?: number;
     disableDefaultUI?: boolean;
     zoomControl?: boolean;
+    fullscreenControl?: boolean;
+    mapTypeControl?: boolean;
+    streetViewControl?: boolean;
     gestureHandling?: string;
   }
 
@@ -32,12 +35,14 @@ declare namespace google.maps {
     panTo(latLng: LatLngLiteral): void;
     setZoom(zoom: number): void;
     getCenter(): LatLng;
+    getBounds(): LatLngBounds | undefined;
     fitBounds(bounds: LatLngBounds, padding?: number): void;
   }
 
   class LatLngBounds {
     constructor();
     extend(point: LatLngLiteral): LatLngBounds;
+    contains(point: LatLngLiteral): boolean;
   }
 
   interface MarkerLabel {
@@ -53,6 +58,9 @@ declare namespace google.maps {
     draggable?: boolean;
     visible?: boolean;
     label?: string | MarkerLabel;
+    title?: string;
+    zIndex?: number;
+    icon?: Symbol;
   }
 
   class Marker {
@@ -61,6 +69,33 @@ declare namespace google.maps {
     getPosition(): LatLng | null | undefined;
     setPosition(pos: LatLngLiteral): void;
     setVisible(visible: boolean): void;
+    setMap(map: Map | null): void;
+  }
+
+  enum SymbolPath {
+    FORWARD_CLOSED_ARROW,
+  }
+
+  interface Symbol {
+    path: SymbolPath;
+    fillColor?: string;
+    fillOpacity?: number;
+    strokeColor?: string;
+    strokeWeight?: number;
+    scale?: number;
+  }
+
+  interface PolylineOptions {
+    path?: LatLngLiteral[];
+    map?: Map;
+    strokeColor?: string;
+    strokeOpacity?: number;
+    strokeWeight?: number;
+  }
+
+  class Polyline {
+    constructor(opts?: PolylineOptions);
+    setMap(map: Map | null): void;
   }
 
   namespace places {
