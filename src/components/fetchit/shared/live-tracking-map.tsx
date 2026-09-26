@@ -84,12 +84,16 @@ export function LiveTrackingMap({
       mapRef.current = null;
     };
     // Pickup/drop-off belong to one booking and do not change while mounted.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickup.lat, pickup.lng, dropoff.lat, dropoff.lng]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!ready || !map || !rider) return;
+    if (!ready || !map) return;
+    if (!rider) {
+      riderMarkerRef.current?.setMap(null);
+      riderMarkerRef.current = null;
+      return;
+    }
 
     if (!riderMarkerRef.current) {
       riderMarkerRef.current = new window.google.maps.Marker({
@@ -134,7 +138,7 @@ export function LiveTrackingMap({
       )}
       {ready && !rider && (
         <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border bg-card/95 px-3 py-1.5 text-xs font-medium shadow-sm">
-          Waiting for the rider&apos;s first GPS update…
+          Waiting for GPS from the rider&apos;s phone app…
         </div>
       )}
     </div>

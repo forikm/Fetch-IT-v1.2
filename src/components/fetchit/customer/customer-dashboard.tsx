@@ -113,10 +113,9 @@ interface Booking {
     phone: string | null;
     vehicleClass: string | null;
     vehiclePlate: string | null;
-    lat: number | null;
-    lng: number | null;
     rating: number;
   } | null;
+  trackingUpdates?: { lat: number; lng: number; createdAt: string }[];
   deliveryProofs: {
     id: string;
     proofType: "SIGNATURE" | "OTP" | "PHOTO";
@@ -370,7 +369,7 @@ export function CustomerDashboard() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Navigation className="h-5 w-5 text-primary" />
-                  Live tracking · {trackingBooking.refCode}
+                  Track delivery · {trackingBooking.refCode}
                 </DialogTitle>
                 <DialogDescription>
                   Status: {BOOKING_STATUS_LABEL[trackingBooking.status]}
@@ -1102,8 +1101,9 @@ function TrackingView({
 }) {
   // Live state for status / location
   const [status, setStatus] = useState<BookingStatus>(booking.status);
-  const [riderLat, setRiderLat] = useState<number | null>(booking.rider?.lat ?? null);
-  const [riderLng, setRiderLng] = useState<number | null>(booking.rider?.lng ?? null);
+  const [riderLat, setRiderLat] = useState<number | null>(booking.trackingUpdates?.[0]?.lat ?? null);
+  const [riderLng, setRiderLng] = useState<number | null>(booking.trackingUpdates?.[0]?.lng ?? null);
+  const [lastGpsAt, setLastGpsAt] = useState<string | null>(booking.trackingUpdates?.[0]?.createdAt ?? null);
   const [eta, setEta] = useState<number | null>(booking.etaMinutes);
   const [otp, setOtp] = useState<string | null>(null);
   const [loadingOtp, setLoadingOtp] = useState(false);
@@ -1111,9 +1111,8 @@ function TrackingView({
   const pickup = { lat: booking.pickupLat, lng: booking.pickupLng };
   const dropoff = { lat: booking.dropoffLat, lng: booking.dropoffLng };
 
-  // Subscribe to socket events (only active when a tracking service is
-  // configured via NEXT_PUBLIC_TRACKING_SOCKET_URL — otherwise polling below
-  // handles all live updates).
+  // Socket events update status only. Location comes from native ticket
+  // updates returned by the authenticated booking API below.
   useEffect(() => {
     if (!booking.riderId) return;
     let cancelled = false;
@@ -1123,22 +1122,14 @@ function TrackingView({
       const socket = getTrackingSocket();
       if (!socket) return;
       socket.emit("subscribe", { bookingId: booking.id });
-      const onLoc = (data: { bookingId: string; lat: number; lng: number; etaMinutes?: number }) => {
-        if (data.bookingId !== booking.id) return;
-        setRiderLat(data.lat);
-        setRiderLng(data.lng);
-        if (data.etaMinutes != null) setEta(data.etaMinutes);
-      };
       const onStatus = (data: { bookingId: string; status: BookingStatus }) => {
         if (data.bookingId !== booking.id) return;
         setStatus(data.status);
         onUpdated({ status: data.status });
       };
-      socket.on("rider:location", onLoc);
       socket.on("status:change", onStatus);
       cleanup = () => {
         if (cancelled) return;
-        socket.off("rider:location", onLoc);
         socket.off("status:change", onStatus);
       };
     })();
@@ -1157,14 +1148,15 @@ function TrackingView({
         if (data?.booking) {
           setStatus(data.booking.status);
           setEta(data.booking.etaMinutes ?? eta);
-          if (data.booking.rider) {
-            setRiderLat(data.booking.rider.lat);
-            setRiderLng(data.booking.rider.lng);
-          }
+          setRiderLat(data.booking.trackingUpdates?.[0]?.lat ?? null);
+          setRiderLng(data.booking.trackingUpdates?.[0]?.lng ?? null);
+          setLastGpsAt(data.booking.trackingUpdates?.[0]?.createdAt ?? null);
           onUpdated({
             status: data.booking.status,
             etaMinutes: data.booking.etaMinutes,
+            riderId: data.booking.riderId,
             rider: data.booking.rider,
+            trackingUpdates: data.booking.trackingUpdates,
             deliveryProofs: data.booking.deliveryProofs,
           });
         }
@@ -1214,10 +1206,15 @@ function TrackingView({
           />
           {BOOKING_STATUS_LABEL[status]}
           {eta != null && !isDelivered && (
-            <span className="text-muted-foreground">· ETA {eta} min</span>
+            <span className="text-muted-foreground">· Estimated arrival {eta} min</span>
           )}
         </div>
       </div>
+      {lastGpsAt && (
+        <p className="text-xs text-muted-foreground">
+          Last phone GPS update: {new Date(lastGpsAt).toLocaleString()}
+        </p>
+      )}
 
       {/* Rider card */}
       {booking.rider && (

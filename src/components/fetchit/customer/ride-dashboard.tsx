@@ -92,8 +92,6 @@ interface Ride {
     phone: string | null;
     vehicleClass: string | null;
     vehiclePlate: string | null;
-    lat: number | null;
-    lng: number | null;
     rating: number;
   } | null;
 }
@@ -683,15 +681,12 @@ function RideTrackingView({
   onUpdated: (u: Partial<Ride>) => void;
 }) {
   const [status, setStatus] = useState<BookingStatus>(ride.status);
-  const [riderLat, setRiderLat] = useState<number | null>(ride.rider?.lat ?? null);
-  const [riderLng, setRiderLng] = useState<number | null>(ride.rider?.lng ?? null);
   const [eta, setEta] = useState<number | null>(ride.etaMinutes);
 
   const pickup = { lat: ride.pickupLat, lng: ride.pickupLng };
   const dropoff = { lat: ride.dropoffLat, lng: ride.dropoffLng };
 
-  // Poll for status / driver location. (Socket updates degrade gracefully to
-  // this poll on serverless deployments.)
+  // Poll for status. The route map does not display rider coordinates.
   useEffect(() => {
     const t = setInterval(async () => {
       try {
@@ -700,10 +695,6 @@ function RideTrackingView({
         if (data?.booking) {
           setStatus(data.booking.status);
           setEta(data.booking.etaMinutes ?? eta);
-          if (data.booking.rider) {
-            setRiderLat(data.booking.rider.lat);
-            setRiderLng(data.booking.rider.lng);
-          }
           onUpdated({
             status: data.booking.status,
             etaMinutes: data.booking.etaMinutes,

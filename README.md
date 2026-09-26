@@ -44,6 +44,21 @@ npm run dev                   # http://localhost:3000
 
 Shared with the Fetch-It **Rider** and **Admin** apps — one PostgreSQL schema (`prisma/schema.prisma`), one `DATABASE_URL`. Bookings carry a `type` field (`DELIVERY` | `RIDE`) so a ride booked here appears in the rider job feed and the admin dashboard instantly.
 
+### Phone-only tracking location
+
+Before deploying the customer and rider tracking changes, run
+[`prisma/add-tracking-source.sql`](prisma/add-tracking-source.sql) once in the
+Neon SQL Editor for the shared database. It adds a non-destructive `source`
+column with a `LEGACY` default, so older simulated updates cannot appear as
+phone GPS. The rider's ticket-based native location endpoint writes `NATIVE`;
+the customer map shows only those updates. Accepting a job changes its status
+but no longer creates or displays a pretend rider position. Until the phone
+tracking app sends a location, the map says it is waiting for GPS.
+
+Do not deploy the updated customer and rider apps before this SQL change: their
+tracking queries expect the new column. The native phone app still needs to
+use the ticket-based endpoint to provide real location updates.
+
 To sync the schema after changing `prisma/schema.prisma`:
 
 ```bash
