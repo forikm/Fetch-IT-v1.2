@@ -191,10 +191,10 @@ export function CustomerDashboard() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen w-full min-w-0 overflow-x-clip flex flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="mx-auto w-full max-w-7xl min-w-0 px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={goHome}
@@ -203,7 +203,7 @@ export function CustomerDashboard() {
           >
             <FetchItLogo />
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <Button
               variant="outline"
               size="sm"
@@ -227,7 +227,7 @@ export function CustomerDashboard() {
         </div>
       </header>
 
-      <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+      <main className="flex-1 mx-auto w-full min-w-0 max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
         {/* Welcome */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
@@ -246,8 +246,8 @@ export function CustomerDashboard() {
 
         {/* Recent booking map preview */}
         {bookings.length > 0 && (
-          <Card>
-            <CardContent className="py-4 space-y-3">
+          <Card className="min-w-0">
+            <CardContent className="min-w-0 py-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium">
                   <MapPin className="h-4 w-4 shrink-0 text-primary" /> Most recent booking
@@ -262,14 +262,14 @@ export function CustomerDashboard() {
                 dropoff={{ lat: bookings[0].dropoffLat, lng: bookings[0].dropoffLng }}
                 className="h-48"
               />
-              <div className="grid sm:grid-cols-2 gap-1 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5 min-w-0">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-1 text-xs text-muted-foreground">
+                <span className="flex min-w-0 items-start gap-1.5">
                   <span className="h-4 w-4 shrink-0 rounded-full bg-emerald-600 text-white text-[9px] font-bold grid place-items-center">A</span>
-                  <span className="truncate">{bookings[0].pickupLabel}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{bookings[0].pickupLabel}</span>
                 </span>
-                <span className="flex items-center gap-1.5 min-w-0">
+                <span className="flex min-w-0 items-start gap-1.5">
                   <span className="h-4 w-4 shrink-0 rounded-full bg-rose-600 text-white text-[9px] font-bold grid place-items-center">B</span>
-                  <span className="truncate">{bookings[0].dropoffLabel}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{bookings[0].dropoffLabel}</span>
                 </span>
               </div>
             </CardContent>
@@ -295,7 +295,7 @@ export function CustomerDashboard() {
 
         {/* List */}
         {loading ? (
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4">
             {[0, 1, 2, 3].map((i) => (
               <Card key={i} className="border">
                 <CardHeader><Skeleton className="h-6 w-40" /></CardHeader>
@@ -309,7 +309,7 @@ export function CustomerDashboard() {
         ) : bookings.length === 0 ? (
           <EmptyState onNew={() => setShowNew(true)} />
         ) : (
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4">
             {bookings.map((b) => (
               <BookingCard
                 key={b.id}
@@ -457,7 +457,7 @@ function BookingCard({
 
   return (
     <Card className="min-w-0 border hover:shadow-md transition flex flex-col">
-      <CardHeader className="pb-3">
+      <CardHeader className="min-w-0 grid-cols-[minmax(0,1fr)] pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -466,11 +466,11 @@ function BookingCard({
               </span>
               <StatusBadge status={booking.status} />
             </div>
-            <CardTitle className="text-base mt-1.5 truncate">
+            <CardTitle className="text-base mt-1.5 [overflow-wrap:anywhere]">
               {booking.dropoffLabel}
             </CardTitle>
-            <CardDescription className="flex min-w-0 items-center gap-1 mt-0.5">
-              <MapPin className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">from {booking.pickupLabel}</span>
+            <CardDescription className="flex w-full min-w-0 items-start gap-1 mt-0.5">
+              <MapPin className="h-3.5 w-3.5 shrink-0" /> <span className="min-w-0 [overflow-wrap:anywhere]">from {booking.pickupLabel}</span>
             </CardDescription>
           </div>
           <div className="grid place-items-center h-10 w-10 rounded-lg bg-primary/10 text-primary shrink-0">
@@ -478,7 +478,7 @@ function BookingCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 flex-1">
+      <CardContent className="min-w-0 space-y-3 flex-1">
         <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
           <Stat label="Vehicle" value={v?.label ?? booking.vehicleClass} icon={vIcon} />
           <Stat label="Distance" value={`${booking.distanceKm} km`} icon={<Navigation className="h-4 w-4" />} />

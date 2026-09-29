@@ -59,7 +59,7 @@ export function BookingRouteMap({
   if (failed) return null;
 
   return (
-    <div className={`relative rounded-md overflow-hidden border ${className ?? "h-40"}`}>
+    <div className={`relative w-full min-w-0 rounded-md overflow-hidden border ${className ?? "h-40"}`}>
       <div ref={containerRef} className="absolute inset-0" />
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center bg-muted/40">
