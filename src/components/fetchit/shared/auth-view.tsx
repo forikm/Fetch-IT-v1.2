@@ -15,7 +15,7 @@ import {
   updateProfile,
   type User,
 } from "firebase/auth";
-import { ArrowLeft, Loader2, LogIn, ShieldCheck, UserPlus } from "lucide-react";
+import { ArrowLeft, Loader2, LogIn, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +23,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -235,7 +234,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen min-w-0 flex flex-col bg-background">
       <header className="border-b">
         <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between">
           <button
@@ -244,38 +243,29 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
-          <FetchItLogo showWordmark={false} size={28} />
+          <FetchItLogo size={28} />
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md">
-          <Card className="border-2 shadow-sm">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="grid place-items-center h-10 w-10 rounded-lg bg-primary/10 text-primary">
-                  {mode === "login" ? <LogIn className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
-                </div>
-                <div>
-                  <CardTitle className="text-xl">
-                    {pendingVerification ? "Verify your email" : mode === "login" ? "Welcome back" : "Create your customer account"}
-                  </CardTitle>
-                  <CardDescription>
-                    {pendingVerification
-                      ? `We sent a link to ${email || "your inbox"}.`
-                      : mode === "login"
-                      ? "Sign in to book deliveries and track them live."
-                      : "It only takes a minute. No credit card required."}
-                  </CardDescription>
-                </div>
-              </div>
+      <main className="flex-1 flex items-center justify-center px-4 py-6 sm:py-8">
+        <div className="w-full min-w-0 max-w-md">
+          <Card className="min-w-0 gap-5 border-2 shadow-sm">
+            <CardHeader className="min-w-0 px-4 sm:px-6">
+              <CardTitle className="text-xl">
+                {pendingVerification ? "Verify your email" : mode === "login" ? "Sign in" : "Create an account"}
+              </CardTitle>
+              {pendingVerification && (
+                <CardDescription className="break-words [overflow-wrap:anywhere]">
+                  Check the link sent to {email || "your inbox"}.
+                </CardDescription>
+              )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0 px-4 sm:px-6">
               {pendingVerification ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">Open the email link, then come back to continue. You can sign in on another device after verifying.</p>
-                  {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-                  {notice && <p className="text-sm text-muted-foreground" role="status">{notice}</p>}
+                  <p className="text-sm text-muted-foreground">Open the email link, then return here.</p>
+                  {error && <p className="text-sm text-destructive [overflow-wrap:anywhere]" role="alert">{error}</p>}
+                  {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
                   <Button className="w-full" onClick={checkVerification} disabled={loading}>
                     {loading && <Loader2 className="h-4 w-4 animate-spin" />} I&apos;ve verified my email
                   </Button>
@@ -319,9 +309,9 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                       />
                     </div>
                     {error && (
-                      <p className="text-sm text-destructive" role="alert">{error}</p>
+                      <p className="text-sm text-destructive [overflow-wrap:anywhere]" role="alert">{error}</p>
                     )}
-                    {notice && <p className="text-sm text-muted-foreground" role="status">{notice}</p>}
+                    {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                       Sign in
@@ -334,21 +324,14 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                     onClick={() => { setLegacyLogin(!legacyLogin); setError(null); setNotice(null); }}
                     disabled={loading}
                   >
-                    {legacyLogin ? "Use Firebase sign-in" : "Have a pre-Firebase Fetch-It account?"}
+                    {legacyLogin ? "Back to sign in" : "Use an older account"}
                   </Button>
-                  <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5 font-medium text-foreground mb-1.5">
-                      <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                      Demo account
-                    </div>
-                    <div className="space-y-1 font-mono">
-                      <div>customer@fetchit.app · demo1234</div>
-                    </div>
+                  <div className="border-t pt-3">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="mt-2 w-full"
+                      className="w-full"
                       disabled={loading}
                       onClick={() => tryDemo()}
                     >
@@ -357,12 +340,9 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                       ) : (
                         <LogIn className="h-3.5 w-3.5" />
                       )}
-                      Try the demo customer account
+                      Try demo
                     </Button>
                   </div>
-                  <p className="text-center text-xs text-muted-foreground">
-                    Are you a driver? Use the Fetch-It Rider app to accept jobs.
-                  </p>
                 </TabsContent>
 
                 <TabsContent value="signup" className="space-y-4">
@@ -389,7 +369,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                         placeholder="you@example.com"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
                       <div className="space-y-2">
                         <Label htmlFor="phone">Phone (optional)</Label>
                         <Input
@@ -416,24 +396,21 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                     </div>
 
                     {error && (
-                      <p className="text-sm text-destructive" role="alert">{error}</p>
+                      <p className="text-sm text-destructive [overflow-wrap:anywhere]" role="alert">{error}</p>
                     )}
-                    {notice && <p className="text-sm text-muted-foreground" role="status">{notice}</p>}
+                    {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <UserPlus className="h-4 w-4" />
                       )}
-                      Create customer account
+                      Create account
                     </Button>
                   </form>
                 </TabsContent>
               </Tabs>}
             </CardContent>
-            <CardFooter className="text-xs text-muted-foreground justify-center">
-              By continuing, you agree to Fetch-It's Terms of Service and Privacy Policy.
-            </CardFooter>
           </Card>
         </div>
       </main>

@@ -248,10 +248,10 @@ export function CustomerDashboard() {
         {bookings.length > 0 && (
           <Card>
             <CardContent className="py-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <MapPin className="h-4 w-4 text-primary" /> Most recent booking
-                  <span className="text-muted-foreground font-normal">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium">
+                  <MapPin className="h-4 w-4 shrink-0 text-primary" /> Most recent booking
+                  <span className="min-w-0 text-muted-foreground font-normal [overflow-wrap:anywhere]">
                     · {bookings[0].refCode}
                   </span>
                 </div>
@@ -388,7 +388,7 @@ export function CustomerDashboard() {
       </Dialog>
 
       <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">
-        Fetch-It · Customer dashboard · Built with Next.js 16
+        Fetch-It · Deliveries &amp; Rides
       </footer>
     </div>
   );
@@ -456,10 +456,10 @@ function BookingCard({
   const isDelivered = booking.status === "DELIVERED";
 
   return (
-    <Card className="border hover:shadow-md transition flex flex-col">
+    <Card className="min-w-0 border hover:shadow-md transition flex flex-col">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-sm text-muted-foreground">
                 {booking.refCode}
@@ -469,8 +469,8 @@ function BookingCard({
             <CardTitle className="text-base mt-1.5 truncate">
               {booking.dropoffLabel}
             </CardTitle>
-            <CardDescription className="flex items-center gap-1 mt-0.5">
-              <MapPin className="h-3.5 w-3.5" /> from {booking.pickupLabel}
+            <CardDescription className="flex min-w-0 items-center gap-1 mt-0.5">
+              <MapPin className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">from {booking.pickupLabel}</span>
             </CardDescription>
           </div>
           <div className="grid place-items-center h-10 w-10 rounded-lg bg-primary/10 text-primary shrink-0">
@@ -479,7 +479,7 @@ function BookingCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3 flex-1">
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
           <Stat label="Vehicle" value={v?.label ?? booking.vehicleClass} icon={vIcon} />
           <Stat label="Distance" value={`${booking.distanceKm} km`} icon={<Navigation className="h-4 w-4" />} />
           <Stat label="Fare" value={`₱${booking.totalFare.toFixed(2)}`} icon={<Calculator className="h-4 w-4" />} />
@@ -559,7 +559,7 @@ function Stat({
       <div className="text-xs text-muted-foreground flex items-center gap-1">
         {icon} {label}
       </div>
-      <div className="font-medium text-sm">{value}</div>
+      <div className="font-medium text-sm [overflow-wrap:anywhere]">{value}</div>
     </div>
   );
 }
@@ -776,9 +776,9 @@ function BookingForm({
       className="space-y-4"
     >
       {/* Step indicator */}
-      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-muted-foreground">
         {stepLabels.map((label, i) => (
-          <div key={label} className="flex items-center gap-2">
+          <div key={label} className="flex items-center gap-1 sm:gap-2">
             <span
               className={`flex items-center gap-1.5 ${i === step ? "text-foreground" : ""}`}
             >
@@ -795,7 +795,7 @@ function BookingForm({
               </span>
               {label}
             </span>
-            {i < stepLabels.length - 1 && <span className="w-4 h-px bg-border" />}
+            {i < stepLabels.length - 1 && <span className="hidden w-4 h-px bg-border sm:block" />}
           </div>
         ))}
       </div>
@@ -914,13 +914,13 @@ function BookingForm({
       {step === 2 && (
         <div className="space-y-4">
           <div className="rounded-md border bg-muted/20 p-3 text-xs space-y-1">
-            <div className="flex items-center gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-              <span className="truncate">{pickupLabel}</span>
+              <span className="min-w-0 truncate">{pickupLabel}</span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-              <span className="truncate">{dropoffLabel}</span>
+              <span className="min-w-0 truncate">{dropoffLabel}</span>
             </div>
           </div>
 
@@ -989,7 +989,7 @@ function BookingForm({
                   </div>
                 ) : estimate ? (
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Calculator className="h-4 w-4 text-primary" /> Fare estimate
                       </div>
@@ -1026,7 +1026,7 @@ function BookingForm({
                         />
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" /> ETA ~{estimate.etaMinutes} min
                       </span>
@@ -1197,7 +1197,7 @@ function TrackingView({
             riderLat != null && riderLng != null ? { lat: riderLat, lng: riderLng } : null
           }
         />
-        <div className="absolute top-2 left-2 bg-card/95 backdrop-blur rounded-full px-2.5 py-1 text-xs font-medium border shadow-sm flex items-center gap-1.5">
+        <div className="absolute top-2 left-2 right-2 w-fit max-w-[calc(100%-1rem)] bg-card/95 backdrop-blur rounded-lg px-2.5 py-1 text-xs font-medium border shadow-sm flex flex-wrap items-center gap-1.5">
           <span
             className={cn(
               "h-1.5 w-1.5 rounded-full",
@@ -1246,9 +1246,9 @@ function TrackingView({
           <div className="grid place-items-center h-6 w-6 rounded-full bg-emerald-100 text-emerald-700 mt-0.5">
             <span className="h-2 w-2 rounded-full bg-emerald-600" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground">Pickup</p>
-            <p className="font-medium">{booking.pickupLabel}</p>
+            <p className="font-medium [overflow-wrap:anywhere]">{booking.pickupLabel}</p>
           </div>
         </div>
         <div className="ml-3 border-l-2 border-dashed border-border h-3" />
@@ -1256,9 +1256,9 @@ function TrackingView({
           <div className="grid place-items-center h-6 w-6 rounded-full bg-rose-100 text-rose-700 mt-0.5">
             <span className="h-2 w-2 rounded-full bg-rose-600" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground">Drop-off</p>
-            <p className="font-medium">{booking.dropoffLabel}</p>
+            <p className="font-medium [overflow-wrap:anywhere]">{booking.dropoffLabel}</p>
           </div>
         </div>
       </div>
@@ -1275,7 +1275,7 @@ function TrackingView({
               can't complete the delivery without it.
             </p>
             {otp ? (
-              <div className="font-mono text-3xl tracking-[0.3em] text-center py-3 bg-card rounded-lg border">
+              <div className="font-mono text-2xl sm:text-3xl tracking-[0.15em] sm:tracking-[0.3em] text-center py-3 bg-card rounded-lg border">
                 {otp}
               </div>
             ) : (

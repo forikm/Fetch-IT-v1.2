@@ -542,7 +542,7 @@ export function RideDashboard() {
       </Dialog>
 
       <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">
-        Fetch-It · Ride dashboard · Built with Next.js 16
+        Fetch-It · Deliveries &amp; Rides
       </footer>
     </div>
   );
@@ -580,19 +580,19 @@ function RideCard({
   const canCancel = ["PENDING", "MATCHED"].includes(ride.status);
 
   return (
-    <Card className="border hover:shadow-md transition">
+    <Card className="min-w-0 border hover:shadow-md transition">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-sm text-muted-foreground">{ride.refCode}</span>
               <RideStatusChip status={ride.status} />
             </div>
-            <CardTitle className="text-base mt-1.5 truncate flex items-center gap-1.5">
+            <CardTitle className="text-base mt-1.5 min-w-0 flex items-center gap-1.5">
               <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
-              {ride.dropoffLabel}
+              <span className="truncate">{ride.dropoffLabel}</span>
             </CardTitle>
-            <CardDescription className="flex items-center gap-1 mt-0.5 truncate">
+            <CardDescription className="min-w-0 mt-0.5 truncate">
               from {ride.pickupLabel}
             </CardDescription>
           </div>
@@ -602,7 +602,7 @@ function RideCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid grid-cols-3 gap-3 text-sm">
+        <div className="grid min-w-0 grid-cols-3 gap-2 sm:gap-3 text-sm">
           <Stat label="Class" value={VEHICLES[ride.vehicleClass]?.label ?? ride.vehicleClass} />
           <Stat label="Distance" value={`${ride.distanceKm.toFixed(1)} km`} />
           <Stat label="Fare" value={`₱${ride.totalFare.toFixed(2)}`} />
@@ -651,7 +651,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-0.5">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-medium text-sm truncate">{value}</div>
+      <div className="font-medium text-sm [overflow-wrap:anywhere]">{value}</div>
     </div>
   );
 }

@@ -112,7 +112,7 @@ export function ModeSelect() {
       </main>
 
       <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">
-        Fetch-It · Deliveries &amp; Rides · Built with Next.js 16
+        Fetch-It · Deliveries &amp; Rides
       </footer>
     </div>
   );

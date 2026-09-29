@@ -132,13 +132,16 @@ export function LandingView() {
       {/* Top nav */}
       <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <FetchItLogo />
+          <div className="min-w-0 shrink-0">
+            <span className="sm:hidden"><FetchItLogo showWordmark={false} size={32} /></span>
+            <span className="hidden sm:block"><FetchItLogo /></span>
+          </div>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition">Features</a>
             <a href="#personas" className="hover:text-foreground transition">For You</a>
             <a href="#how-it-works" className="hover:text-foreground transition">How it works</a>
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <Button variant="ghost" size="sm" onClick={() => pickRole("CUSTOMER", "login")}>
               Login
             </Button>
@@ -157,9 +160,9 @@ export function LandingView() {
           <div className="grid lg:grid-cols-2 gap-10 items-center">
             <div className="space-y-6">
               <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
-                <span className="inline-flex items-center gap-1.5">
+                <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5">
                   <Smartphone className="h-3.5 w-3.5" />
-                  Installable PWA · Vercel-ready
+                  Book on your phone or desktop
                 </span>
               </Badge>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.05]">
@@ -183,10 +186,10 @@ export function LandingView() {
               </div>
               {/* Product chips */}
               <div className="flex flex-wrap gap-2 pt-1">
-                <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium">
+                <span className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium">
                   <Package className="h-3.5 w-3.5 text-primary" /> Delivery: moto → van → reefer
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium">
+                <span className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium">
                   <Car className="h-3.5 w-3.5 text-emerald-600" /> Ride: moto · tricycle · sedan
                 </span>
               </div>
@@ -225,12 +228,12 @@ export function LandingView() {
           {PERSONAS.map((p) => (
             <Card key={p.role} className="border-2 hover:border-primary/40 transition shadow-sm">
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
+              <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <CardTitle className="text-2xl">{p.title}</CardTitle>
                     <CardDescription className="mt-1 text-base">{p.tagline}</CardDescription>
                   </div>
-                  <div className="grid place-items-center h-12 w-12 rounded-xl bg-primary/10 text-primary">
+                  <div className="grid shrink-0 place-items-center h-12 w-12 rounded-xl bg-primary/10 text-primary">
                     <p.icon className="h-6 w-6" />
                   </div>
                 </div>
@@ -245,12 +248,12 @@ export function LandingView() {
                   ))}
                 </ul>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  <Button className="flex-1 min-w-[140px]" onClick={() => pickRole(p.role, "login")}>
+                  <Button className="min-w-0 flex-1 basis-32 whitespace-normal" onClick={() => pickRole(p.role, "login")}>
                     {p.ctaLogin}
                   </Button>
                   <Button
                     variant="outline"
-                    className="flex-1 min-w-[140px]"
+                    className="min-w-0 flex-1 basis-32 whitespace-normal"
                     onClick={() => pickRole(p.role, "signup")}
                   >
                     {p.ctaSignup}
@@ -330,13 +333,11 @@ export function LandingView() {
           <div className="space-y-2">
             <FetchItLogo />
             <p className="text-sm text-muted-foreground max-w-md">
-              Fetch-It — automated logistics management. Built as a PWA on
-              Next.js 16, deployable to Vercel.
+              Book deliveries and rides, then track them in one place.
             </p>
           </div>
           <div className="text-sm text-muted-foreground space-y-1">
             <p>© {new Date().getFullYear()} Fetch-It. All rights reserved.</p>
-            <p>Deployed on Vercel · Made for shippers.</p>
           </div>
         </div>
       </footer>

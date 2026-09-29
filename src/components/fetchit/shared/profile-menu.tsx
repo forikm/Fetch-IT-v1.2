@@ -100,19 +100,19 @@ export function ProfileMenu({
             <DialogDescription>Your account and notification preferences.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="rounded-md border p-3 space-y-1 text-sm">
-              <div className="flex justify-between">
+            <div className="min-w-0 rounded-md border p-3 space-y-1 text-sm">
+              <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground">Name</span>
-                <span className="font-medium">{name ?? "—"}</span>
+                <span className="min-w-0 text-right font-medium [overflow-wrap:anywhere]">{name ?? "—"}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground">Email</span>
-                <span className="font-medium">{email ?? "—"}</span>
+                <span className="min-w-0 text-right font-medium [overflow-wrap:anywhere]">{email ?? "—"}</span>
               </div>
               {roleLabel && (
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">Account type</span>
-                  <span className="font-medium">{roleLabel}</span>
+                  <span className="min-w-0 text-right font-medium [overflow-wrap:anywhere]">{roleLabel}</span>
                 </div>
               )}
             </div>
