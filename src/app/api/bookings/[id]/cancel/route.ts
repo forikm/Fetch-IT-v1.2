@@ -20,7 +20,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     if (!booking) {
       return NextResponse.json({ error: "Booking not found." }, { status: 404 });
     }
-    if (session.role === "CUSTOMER" && booking.customerId !== session.uid) {
+    if (session.role !== "CUSTOMER" || booking.customerId !== session.uid) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (!["PENDING", "MATCHED", "ACCEPTED"].includes(booking.status)) {
@@ -32,10 +32,13 @@ export async function POST(_req: NextRequest, { params }: Params) {
         { status: 400 },
       );
     }
-    const updated = await db.booking.update({
-      where: { id },
+    const changed = await db.booking.updateMany({
+      where: { id, customerId: session.uid, status: { in: ["PENDING", "MATCHED", "ACCEPTED"] } },
       data: { status: "CANCELLED", cancelledAt: new Date() },
     });
+    if (changed.count === 0) return NextResponse.json({ error: "Booking status changed. Refresh and try again." }, { status: 409 });
+    const updated = await db.booking.findUnique({ where: { id } });
+    if (!updated) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
     return NextResponse.json({ booking: omitTicket(updated) });
   } catch (err) {
     console.error("[cancel] error", err);

@@ -63,8 +63,8 @@ const FEATURES = [
   },
   {
     icon: Cpu,
-    title: "Automated Matching Engine",
-    desc: "Algorithmically assigns incoming bookings to the nearest compatible driver based on proximity and load constraints.",
+    title: "Rider Job Board",
+    desc: "Available riders can see requests that match their vehicle class and claim a job.",
   },
 ];
 
@@ -94,16 +94,18 @@ const PERSONAS: {
 ];
 
 export function LandingView() {
+  const demoEnabled = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true";
   const setView = useAppStore((s) => s.setView);
   const setPendingRole = useAppStore((s) => s.setPendingRole);
   const [seeded, setSeeded] = useState(false);
 
   // Pre-seed demo accounts once so the "Try demo" buttons work instantly.
   useEffect(() => {
+    if (!demoEnabled) return;
     fetch("/api/auth/seed", { method: "POST" })
-      .then(() => setSeeded(true))
-      .catch(() => setSeeded(true));
-  }, []);
+      .then((res) => setSeeded(res.ok))
+      .catch(() => setSeeded(false));
+  }, [demoEnabled]);
 
   function pickRole(role: Role, view: "login" | "signup") {
     setPendingRole(role);
@@ -196,7 +198,7 @@ export function LandingView() {
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground pt-2">
                 <div className="flex items-center gap-1.5">
                   <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-                  <span>4.9 average rider rating</span>
+                  <span>Upfront fare estimates</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Clock className="h-4 w-4 text-primary" />
@@ -259,7 +261,7 @@ export function LandingView() {
                     {p.ctaSignup}
                   </Button>
                 </div>
-                <Button
+                {demoEnabled && <Button
                   variant="ghost"
                   size="sm"
                   className="w-full text-muted-foreground"
@@ -268,7 +270,7 @@ export function LandingView() {
                 >
                   <Play className="h-3.5 w-3.5" />
                   {seeded ? `Try the demo ${p.role.toLowerCase()} account` : "Preparing demo…"}
-                </Button>
+                </Button>}
               </CardContent>
             </Card>
           ))}
@@ -311,8 +313,8 @@ export function LandingView() {
           {[
             { n: "01", t: "Pin your pickup", d: "Drop pins for pickup & drop-off, then choose a vehicle class." },
             { n: "02", t: "See your fare", d: "Dynamic fare is calculated up-front — distance, weight, and surge." },
-            { n: "03", t: "Get matched", d: "Our matching engine pairs you with the nearest compatible rider." },
-            { n: "04", t: "Track & confirm", d: "Watch live GPS, then confirm with OTP, signature and photo e-POD." },
+            { n: "03", t: "Rider accepts", d: "Available riders can claim your request when it becomes due." },
+            { n: "04", t: "Track & confirm", d: "Follow available tracking updates, then confirm delivery with OTP or signature." },
           ].map((s) => (
             <Card key={s.n} className="border bg-card">
               <CardHeader>

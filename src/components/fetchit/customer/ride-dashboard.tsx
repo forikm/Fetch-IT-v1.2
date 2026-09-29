@@ -558,8 +558,7 @@ function EmptyState() {
         </div>
         <h3 className="font-semibold text-lg">No rides yet</h3>
         <p className="text-muted-foreground mt-1 max-w-sm mx-auto">
-          Enter where you are and where you&apos;re headed — we&apos;ll match you
-          with the nearest driver and show the fare upfront.
+          Enter where you are and where you&apos;re headed. We&apos;ll show the fare upfront, then a driver can accept your request.
         </p>
       </CardContent>
     </Card>
@@ -776,7 +775,7 @@ function RideTrackingView({
         <Card className="border-dashed">
           <CardContent className="py-6 flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Matching you with the nearest driver…</span>
+            <span className="text-sm">Waiting for a driver to accept…</span>
           </CardContent>
         </Card>
       )}

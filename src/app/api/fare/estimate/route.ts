@@ -42,6 +42,9 @@ export async function POST(req: NextRequest) {
     }
 
     const when = scheduledAt ? new Date(scheduledAt) : new Date();
+    if (!Number.isFinite(when.getTime()) || (scheduledAt && when.getTime() <= Date.now())) {
+      return NextResponse.json({ error: "Choose a future pickup time." }, { status: 400 });
+    }
 
     if (type === "RIDE") {
       const quote = quoteRideFare({ pickup, dropoff, vehicleClass, when });

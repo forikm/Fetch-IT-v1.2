@@ -98,7 +98,7 @@ export function ModeSelect() {
         <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-            4.9 average driver rating
+            Upfront fare estimate
           </span>
           <span className="flex items-center gap-1.5">
             <Clock className="h-4 w-4 text-primary" />

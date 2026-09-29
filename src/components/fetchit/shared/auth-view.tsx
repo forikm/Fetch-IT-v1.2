@@ -326,7 +326,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                   >
                     {legacyLogin ? "Back to sign in" : "Use an older account"}
                   </Button>
-                  <div className="border-t pt-3">
+                  {(process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true") && <div className="border-t pt-3">
                     <Button
                       type="button"
                       variant="outline"
@@ -342,7 +342,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                       )}
                       Try demo
                     </Button>
-                  </div>
+                  </div>}
                 </TabsContent>
 
                 <TabsContent value="signup" className="space-y-4">

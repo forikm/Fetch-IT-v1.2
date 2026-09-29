@@ -129,6 +129,10 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
+    if (scheduledDate && (!Number.isFinite(scheduledDate.getTime()) || scheduledDate.getTime() <= Date.now())) {
+      return NextResponse.json({ error: "Choose a future pickup time." }, { status: 400 });
+    }
 
     const isRide = type === "RIDE";
 
@@ -152,7 +156,7 @@ export async function POST(req: NextRequest) {
         pickup,
         dropoff,
         vehicleClass,
-        when: scheduledAt ? new Date(scheduledAt) : new Date(),
+        when: scheduledDate ?? new Date(),
       });
 
       const booking = await db.$transaction(async (tx) => {
@@ -172,7 +176,7 @@ export async function POST(req: NextRequest) {
             vehicleClass,
             cargoWeightKg: 0,
             passengers: pax,
-            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+            scheduledAt: scheduledDate,
             distanceKm: quote.distanceKm,
             baseFare: quote.fare.baseFare,
             surgeMultiplier: quote.surgeMultiplier,
@@ -213,7 +217,7 @@ export async function POST(req: NextRequest) {
       dropoff,
       vehicleClass,
       cargoWeightKg: weight,
-      when: scheduledAt ? new Date(scheduledAt) : new Date(),
+      when: scheduledDate ?? new Date(),
     });
     const { distanceKm, surgeMultiplier, fare } = quote;
     const eta = quote.etaMinutes;
@@ -235,7 +239,7 @@ export async function POST(req: NextRequest) {
           vehicleClass,
           cargoWeightKg: weight,
           cargoNotes: cargoNotes ?? null,
-          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+          scheduledAt: scheduledDate,
           distanceKm,
           baseFare: fare.baseFare,
           surgeMultiplier,

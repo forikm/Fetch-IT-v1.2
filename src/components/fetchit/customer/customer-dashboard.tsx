@@ -343,8 +343,7 @@ export function CustomerDashboard() {
               <Package className="h-5 w-5 text-primary" /> Book a delivery
             </DialogTitle>
             <DialogDescription>
-              Tell us where to pick up and drop off. We'll match you with the
-              nearest available rider instantly.
+              Choose your pickup and drop-off. Available riders can accept your request.
             </DialogDescription>
           </DialogHeader>
           {!mapsReady && !mapsFailed ? (
@@ -619,20 +618,8 @@ function BookingForm({
     const applyFallback = () => {
       toast({
         title: "Geolocation unavailable",
-        description: "Using default downtown coordinates instead.",
+        description: "Search for an address or choose a point on the map.",
       });
-      const base = target === "pickup"
-        ? { lat: 1.3521, lng: 103.8198, label: "Singapore Downtown" }
-        : { lat: 1.3450, lng: 103.8120, label: "Orchard Road" };
-      if (target === "pickup") {
-        setPickupLabel(base.label);
-        setPickupLat(String(base.lat));
-        setPickupLng(String(base.lng));
-      } else {
-        setDropoffLabel(base.label);
-        setDropoffLat(String(base.lat));
-        setDropoffLng(String(base.lng));
-      }
     };
 
     if (!navigator.geolocation) {

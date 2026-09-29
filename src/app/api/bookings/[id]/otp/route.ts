@@ -26,10 +26,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!booking) {
     return NextResponse.json({ error: "Booking not found." }, { status: 404 });
   }
-  if (
-    (session.role === "CUSTOMER" && booking.customerId !== session.uid) ||
-    (session.role === "RIDER" && booking.riderId !== session.uid)
-  ) {
+  if (session.role !== "CUSTOMER" || booking.customerId !== session.uid) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
