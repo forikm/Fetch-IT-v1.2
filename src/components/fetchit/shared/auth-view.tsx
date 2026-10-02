@@ -15,7 +15,7 @@ import {
   updateProfile,
   type User,
 } from "firebase/auth";
-import { ArrowLeft, Loader2, LogIn, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Car, Loader2, LogIn, Package, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -235,8 +235,8 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
 
   return (
     <div className="min-h-screen min-w-0 flex flex-col bg-background">
-      <header className="border-b">
-        <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between">
+      <header className="border-b border-foreground/5">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 h-20 flex items-center justify-between">
           <button
             onClick={() => setView("landing")}
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
@@ -247,18 +247,24 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center px-4 py-6 sm:py-8">
-        <div className="w-full min-w-0 max-w-md">
-          <Card className="min-w-0 gap-5 border-2 shadow-sm">
+      <main className="flex-1 mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-2 lg:gap-20">
+        <aside className="relative hidden min-h-[560px] flex-col justify-between overflow-hidden rounded-[2rem] bg-[#dde9df] p-10 text-[#183b33] lg:flex">
+          <div><p className="text-xs font-semibold tracking-[0.16em] text-[#627069]">YOUR EVERYDAY, ON THE MOVE</p><h1 className="mt-8 text-5xl font-semibold leading-[1.08] tracking-[-0.05em]">A little easier.<br />A little closer.</h1><p className="mt-6 max-w-xs text-base leading-7 text-[#627069]">One account for your deliveries, daily rides and everything in between.</p></div>
+          <div className="relative mt-12"><ArrowUpRight className="absolute -right-3 -top-16 h-40 w-40 stroke-[0.7] text-[#183b33]/15" aria-hidden /><div className="relative space-y-3"><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#f5e8d9] text-primary"><Package className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Send something good.</p><p className="mt-1 text-xs text-[#627069]">Parcels, cargo and more</p></div></div><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#dce9de]"><Car className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Go somewhere new.</p><p className="mt-1 text-xs text-[#627069]">A ride for every kind of day</p></div></div></div></div>
+        </aside>
+        <div className="mx-auto w-full min-w-0 max-w-md">
+          <p className="eyebrow mb-4 px-4 sm:px-6">LET&apos;S GET YOU MOVING</p>
+          <Card className="min-w-0 gap-5 border-0 bg-transparent shadow-none">
             <CardHeader className="min-w-0 px-4 sm:px-6">
-              <CardTitle className="text-xl">
-                {pendingVerification ? "Verify your email" : mode === "login" ? "Sign in" : "Create an account"}
+              <CardTitle className="text-3xl font-semibold tracking-tight">
+                {pendingVerification ? "Check your inbox" : mode === "login" ? "Welcome back." : "Your next move starts here."}
               </CardTitle>
               {pendingVerification && (
                 <CardDescription className="break-words [overflow-wrap:anywhere]">
                   Check the link sent to {email || "your inbox"}.
                 </CardDescription>
               )}
+              {!pendingVerification && <CardDescription className="mt-2 leading-relaxed">{mode === "login" ? "Sign in to book, track and manage your trips." : "Create an account for easier deliveries and rides."}</CardDescription>}
             </CardHeader>
             <CardContent className="min-w-0 px-4 sm:px-6">
               {pendingVerification ? (

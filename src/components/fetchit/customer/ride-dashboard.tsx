@@ -283,6 +283,7 @@ export function RideDashboard() {
               variant="outline"
               size="sm"
               className="gap-1.5"
+              aria-label="Switch mode"
               onClick={() => setView("mode-select")}
             >
               <ArrowUpDown className="h-3.5 w-3.5" />
@@ -303,9 +304,14 @@ export function RideDashboard() {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+        <div className="dashboard-welcome">
+          <p className="eyebrow mb-3">YOUR NEXT STOP</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Let&apos;s get you there, {user?.name?.split(" ")[0] ?? "there"}.</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Choose your route and find the ride that fits your day.</p>
+        </div>
         <div className="grid lg:grid-cols-[minmax(0,420px)_1fr] gap-6 items-start">
           {/* ---------- Book a ride panel ---------- */}
-          <Card className="border-2 shadow-sm lg:sticky lg:top-20">
+          <Card className="shadow-sm lg:sticky lg:top-20">
             <CardHeader className="pb-4">
               <CardTitle className="text-xl">Where to?</CardTitle>
               <CardDescription>

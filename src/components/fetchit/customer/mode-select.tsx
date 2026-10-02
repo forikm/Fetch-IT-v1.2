@@ -50,17 +50,17 @@ export function ModeSelect() {
         </div>
       </header>
 
-      <main className="flex-1 mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+      <main className="flex-1 mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-10 sm:py-16">
         {/* Greeting */}
         <div className="text-center max-w-2xl mx-auto">
-          <p className="text-sm font-medium text-primary uppercase tracking-widest">
-            Welcome back
+          <p className="eyebrow">
+            YOUR EVERYDAY, ON THE MOVE
           </p>
-          <h1 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight">
-            What do you need today, {user?.name?.split(" ")[0] ?? "there"}?
+          <h1 className="mt-4 text-3xl sm:text-5xl font-semibold tracking-[-0.04em]">
+            Where to next, {user?.name?.split(" ")[0] ?? "there"}?
           </h1>
           <p className="mt-3 text-muted-foreground">
-            Pick a service to get started. You can switch between them anytime.
+            A parcel to send or a place to be. Choose your next move.
           </p>
         </div>
 
@@ -68,7 +68,7 @@ export function ModeSelect() {
         <div className="mt-10 grid gap-5 md:grid-cols-2">
           <ModeCard
             title="Delivery"
-            tagline="Send packages, goods and freight"
+            tagline="Send a little. Or a lot."
             icon={<Package className="h-7 w-7" />}
             accent="delivery"
             features={[
@@ -81,7 +81,7 @@ export function ModeSelect() {
           />
           <ModeCard
             title="Ride"
-            tagline="Hail a ride for yourself, right now"
+            tagline="Your day. Your destination."
             icon={<Car className="h-7 w-7" />}
             accent="ride"
             features={[
@@ -94,7 +94,7 @@ export function ModeSelect() {
           />
         </div>
 
-        {/* Trust strip */}
+        {/* Service benefits */}
         <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
@@ -102,11 +102,11 @@ export function ModeSelect() {
           </span>
           <span className="flex items-center gap-1.5">
             <Clock className="h-4 w-4 text-primary" />
-            &lt; 3 min average match time
+            Book now or schedule a delivery
           </span>
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="h-4 w-4 text-emerald-600" />
-            Insured trips, verified drivers
+            Digital proof of delivery
           </span>
         </div>
       </main>
@@ -120,15 +120,17 @@ export function ModeSelect() {
 
 const ACCENTS = {
   delivery: {
-    tile: "bg-primary/10 text-primary",
+    tile: "bg-white/70 text-primary",
     ring: "hover:border-primary/50 hover:shadow-primary/10",
-    cta: "from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600",
+    cta: "bg-primary hover:bg-primary/90",
+    surface: "bg-[#f5e8d9] text-[#48341f]",
     glow: "bg-primary/20",
   },
   ride: {
-    tile: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    tile: "bg-white/70 text-[#163c34]",
     ring: "hover:border-emerald-500/50 hover:shadow-emerald-500/10",
-    cta: "from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700",
+    cta: "bg-[#163c34] hover:bg-[#244e42]",
+    surface: "bg-[#e0ebe3] text-[#163c34]",
     glow: "bg-emerald-500/25",
   },
 } as const;
@@ -162,7 +164,7 @@ function ModeCard({
           onClick();
         }
       }}
-      className={`group relative overflow-hidden border-2 bg-card shadow-sm transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${a.ring}`}
+      className={`group relative overflow-hidden rounded-[1.75rem] border-transparent shadow-none transition-all duration-200 cursor-pointer hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${a.surface} ${a.ring}`}
     >
       <div
         aria-hidden
@@ -176,8 +178,8 @@ function ModeCard({
           <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1 group-hover:text-foreground" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
-          <p className="text-muted-foreground mt-1">{tagline}</p>
+          <h2 className="text-3xl font-semibold tracking-tight">{title}</h2>
+          <p className="mt-2 opacity-70">{tagline}</p>
         </div>
         <ul className="space-y-2.5 text-sm flex-1">
           {features.map((f) => (
@@ -185,13 +187,13 @@ function ModeCard({
               <span className="mt-0.5 grid place-items-center h-6 w-6 rounded-md bg-muted text-foreground/70 shrink-0">
                 <f.icon className="h-3.5 w-3.5" />
               </span>
-              <span className="text-foreground/85">{f.text}</span>
+              <span className="opacity-85">{f.text}</span>
             </li>
           ))}
         </ul>
         <Button
           size="lg"
-          className={`w-full gap-2 bg-gradient-to-r text-white border-0 ${a.cta}`}
+          className={`w-full gap-2 text-white border-0 ${a.cta}`}
           tabIndex={-1}
         >
           {cta} <ArrowRight className="h-4 w-4" />

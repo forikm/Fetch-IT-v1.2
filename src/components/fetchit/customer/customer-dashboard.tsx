@@ -208,6 +208,7 @@ export function CustomerDashboard() {
               variant="outline"
               size="sm"
               className="gap-1.5"
+              aria-label="Switch mode"
               onClick={() => setView("mode-select")}
             >
               <ArrowUpDown className="h-3.5 w-3.5" />
@@ -229,10 +230,11 @@ export function CustomerDashboard() {
 
       <main className="flex-1 mx-auto w-full min-w-0 max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
         {/* Welcome */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div className="dashboard-welcome flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Hello, {user?.name?.split(" ")[0] ?? "there"} 👋
+            <p className="eyebrow mb-3">YOUR DELIVERY DESK</p>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
+              Good to see you, {user?.name?.split(" ")[0] ?? "there"}.
             </h1>
             <p className="text-muted-foreground mt-1">
               Ready to ship something today? Track your active deliveries or
@@ -403,8 +405,8 @@ function EmptyState({ onNew }: { onNew: () => void }) {
         </div>
         <h3 className="font-semibold text-lg">No deliveries yet</h3>
         <p className="text-muted-foreground mt-1 max-w-sm mx-auto">
-          Book your first delivery — it takes less than a minute. We'll match
-          you with a nearby rider in seconds.
+          Choose your pickup, destination and vehicle to get your first
+          delivery on its way.
         </p>
         <Button className="mt-5" onClick={onNew}>
           <Plus className="h-4 w-4" /> Book a delivery

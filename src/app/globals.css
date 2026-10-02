@@ -44,28 +44,28 @@
 }
 
 :root {
-  --radius: 0.75rem;
+  --radius: 1rem;
   /* Fetch-It amber/orange palette — logistics brand */
-  --background: oklch(0.99 0.005 90);
-  --foreground: oklch(0.18 0.02 60);
+  --background: #f8f7f2;
+  --foreground: #183b33;
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 60);
+  --card-foreground: #183b33;
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 60);
+  --popover-foreground: #183b33;
   /* Primary: warm amber/orange */
-  --primary: oklch(0.65 0.19 50);
+  --primary: #bd4c1d;
   --primary-foreground: oklch(0.99 0.005 90);
-  --secondary: oklch(0.96 0.03 70);
-  --secondary-foreground: oklch(0.25 0.04 50);
-  --muted: oklch(0.96 0.015 70);
-  --muted-foreground: oklch(0.5 0.025 60);
-  --accent: oklch(0.94 0.06 70);
-  --accent-foreground: oklch(0.3 0.06 50);
+  --secondary: #e7eee7;
+  --secondary-foreground: #24483c;
+  --muted: #eeefe8;
+  --muted-foreground: #627069;
+  --accent: #e7eee7;
+  --accent-foreground: #183b33;
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.6 0.18 145);
-  --border: oklch(0.9 0.02 70);
-  --input: oklch(0.92 0.015 70);
-  --ring: oklch(0.65 0.19 50);
+  --border: #dfe4da;
+  --input: #d7dfd4;
+  --ring: #bd4c1d;
   --chart-1: oklch(0.65 0.19 50);
   --chart-2: oklch(0.7 0.15 145);
   --chart-3: oklch(0.62 0.13 250);
@@ -121,7 +121,27 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+  }
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 6rem;
+  }
+  ::selection {
+    background: #dbe7d6;
+    color: #183b33;
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply text-xs font-semibold tracking-[0.16em] text-muted-foreground;
+  }
+  .section-title {
+    @apply text-3xl font-semibold leading-tight tracking-[-0.04em] sm:text-4xl;
+  }
+  .dashboard-welcome {
+    @apply rounded-3xl border border-border bg-card p-5 sm:p-7;
   }
 }
 
@@ -165,4 +185,9 @@
 .pac-container {
   z-index: 9999 !important;
   pointer-events: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-fit-pulse, .animate-route-dash { animation: none; }
 }

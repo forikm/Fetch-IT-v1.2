@@ -12,7 +12,7 @@ export function FetchItLogo({
   size?: number;
 }) {
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex items-center gap-2.5", className)}>
       <svg
         width={size}
         height={size}
@@ -39,7 +39,7 @@ export function FetchItLogo({
         />
       </svg>
       {showWordmark && (
-        <span className="font-bold text-xl tracking-tight">
+        <span className="font-semibold text-xl tracking-[-0.05em]">
           Fetch<span className="text-primary">-It</span>
         </span>
       )}

@@ -1,97 +1,16 @@
 "use client";
 
-// Landing page — the public storefront for the Fetch-It CUSTOMER app.
-// Hero, features grid, a customer CTA card, demo callouts, and a footer.
-// Fetch-It now offers two products: Delivery (cargo) and Ride (passenger).
-// Riders are not part of this app — they use the separate Fetch-It Rider app.
-
 import { useEffect, useState } from "react";
-import {
-  Package,
-  Truck,
-  MapPin,
-  ShieldCheck,
-  Calculator,
-  Navigation,
-  PenTool,
-  Cpu,
-  Clock,
-  Star,
-  ArrowRight,
-  Smartphone,
-  Play,
-  Car,
-  Bike,
-} from "lucide-react";
+import { ArrowDown, ArrowRight, Car, Check, ChevronRight, Clock, MapPin, Navigation, Package, Play, ShieldCheck, Smartphone, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { FetchItLogo } from "./logo";
 import { useAppStore, type Role } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 const FEATURES = [
-  {
-    icon: Car,
-    title: "Deliveries & Rides",
-    desc: "One app for both: send parcels with motorcycles to vans, or hail a motorcycle, tricycle or sedan for yourself.",
-  },
-  {
-    icon: Calculator,
-    title: "Upfront Dynamic Fares",
-    desc: "Every quote is computed before you book — distance, vehicle class, cargo weight, passengers and peak demand multipliers.",
-  },
-  {
-    icon: Navigation,
-    title: "Real-Time GPS Tracking",
-    desc: "Live driver movement along the route with dynamic Estimated Time of Arrival (ETA) updates.",
-  },
-  {
-    icon: MapPin,
-    title: "Instant & Scheduled Booking",
-    desc: "Drop location pins and book immediately or schedule a pickup ahead of time.",
-  },
-  {
-    icon: PenTool,
-    title: "Digital Proof of Delivery (e-POD)",
-    desc: "Recipient signatures, OTP security validation, and time-stamped photo verification upon completion.",
-  },
-  {
-    icon: Cpu,
-    title: "Rider Job Board",
-    desc: "Available riders can see requests that match their vehicle class and claim a job.",
-  },
-];
-
-const PERSONAS: {
-  role: Role;
-  title: string;
-  tagline: string;
-  bullets: string[];
-  icon: typeof Package;
-  ctaLogin: string;
-  ctaSignup: string;
-}[] = [
-  {
-    role: "CUSTOMER" as Role,
-    title: "I'm a Customer",
-    tagline: "Book deliveries and rides, and track them live.",
-    bullets: [
-      "Delivery: motorcycles to refrigerated vans",
-      "Ride: motorcycle, tricycle or sedan — upfront fare",
-      "Live GPS tracking + ETA",
-      "Sign-off proof of delivery",
-    ],
-    icon: Package,
-    ctaLogin: "Customer login",
-    ctaSignup: "Sign up as customer",
-  },
+  { icon: MapPin, title: "Every stop, in sight.", desc: "Follow your booking from pickup to arrival with route maps and tracking updates." },
+  { icon: Clock, title: "Now, or right on time.", desc: "Book a delivery right away or schedule a pickup for when you need it." },
+  { icon: ShieldCheck, title: "A little extra assurance.", desc: "Confirm deliveries with a signature, photo or secure one-time code." },
 ];
 
 export function LandingView() {
@@ -100,13 +19,11 @@ export function LandingView() {
   const setView = useAppStore((s) => s.setView);
   const setPendingRole = useAppStore((s) => s.setPendingRole);
   const [seeded, setSeeded] = useState(false);
+  const [preview, setPreview] = useState<"delivery" | "ride">("delivery");
 
-  // Pre-seed demo accounts once so the "Try demo" buttons work instantly.
   useEffect(() => {
     if (!demoEnabled) return;
-    fetch("/api/auth/seed", { method: "POST" })
-      .then((res) => setSeeded(res.ok))
-      .catch(() => setSeeded(false));
+    fetch("/api/auth/seed", { method: "POST" }).then((res) => setSeeded(res.ok)).catch(() => setSeeded(false));
   }, [demoEnabled]);
 
   function pickRole(role: Role, view: "login" | "signup") {
@@ -114,13 +31,11 @@ export function LandingView() {
     setView(view);
   }
 
-  async function tryDemo(role: Role) {
-    const email = "customer@fetchit.app";
-    setPendingRole(role);
+  async function tryDemo() {
+    setPendingRole("CUSTOMER");
     const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: "demo1234", role }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "customer@fetchit.app", password: "demo1234", role: "CUSTOMER" }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -132,302 +47,111 @@ export function LandingView() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      {/* Top nav */}
-      <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
-          <div className="min-w-0 shrink-0">
+    <div className="min-h-screen overflow-x-clip bg-background">
+      <header className="sticky top-0 z-40 border-b border-foreground/5 bg-background/95 backdrop-blur-xl">
+        <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
+          <a href="#" aria-label="Fetch-It home" className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <span className="sm:hidden"><FetchItLogo showWordmark={false} size={32} /></span>
             <span className="hidden sm:block"><FetchItLogo /></span>
-          </div>
-          <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            <a href="#features" className="hover:text-foreground transition">Features</a>
-            <a href="#personas" className="hover:text-foreground transition">For You</a>
-            <a href="#how-it-works" className="hover:text-foreground transition">How it works</a>
+          </a>
+          <nav aria-label="Main navigation" className="hidden items-center gap-7 text-sm font-medium text-muted-foreground lg:flex">
+            <a href="#services" className="transition hover:text-foreground">Our services</a>
+            <a href="#features" className="transition hover:text-foreground">Why Fetch-It</a>
+            <a href="#how-it-works" className="transition hover:text-foreground">How it works</a>
           </nav>
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            <Button asChild variant="outline" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm">
-              <a href={riderAppUrl}>
-                <Bike className="hidden h-4 w-4 sm:block" /> Become a rider
-              </a>
-            </Button>
-            <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm" onClick={() => pickRole("CUSTOMER", "login")}>
-              Login
-            </Button>
-            <Button size="sm" className="px-2 text-xs sm:px-3 sm:text-sm" onClick={() => pickRole("CUSTOMER", "signup")}>
-              Get started
-            </Button>
+            <Button asChild variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm"><a href={riderAppUrl}>Become a rider <ArrowRight className="hidden sm:block" /></a></Button>
+            <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm" onClick={() => pickRole("CUSTOMER", "login")}>Login</Button>
+            <Button size="sm" className="px-2 text-xs sm:px-4 sm:text-sm" onClick={() => pickRole("CUSTOMER", "signup")}>Get started</Button>
           </div>
         </div>
       </header>
-
-      {/* Hero */}
-      <section className="relative overflow-hidden border-b">
-        <div className="absolute inset-0 bg-grid opacity-50" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/60 to-background" />
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-          <div className="grid lg:grid-cols-2 gap-10 items-center">
-            <div className="space-y-6">
-              <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
-                <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5">
-                  <Smartphone className="h-3.5 w-3.5" />
-                  Book on your phone or desktop
-                </span>
-              </Badge>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.05]">
-                Deliver anything.
-                <br />
-                <span className="text-primary">Ride anywhere.</span>
-              </h1>
-              <p className="text-lg text-muted-foreground max-w-xl">
-                Fetch-It is an on-demand logistics and mobility platform.
-                Send packages with the right vehicle for the job — or book a
-                ride for yourself — with upfront fares, live tracking, and
-                verifiable proof of delivery.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Button size="lg" onClick={() => pickRole("CUSTOMER", "signup")}>
-                  Get started <ArrowRight className="h-4 w-4" />
-                </Button>
-                <Button size="lg" variant="outline" onClick={() => pickRole("CUSTOMER", "login")}>
-                  Customer login
-                </Button>
+      <main>
+        <section>
+          <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 pb-12 pt-12 sm:px-6 sm:pb-20 sm:pt-20 lg:grid-cols-2 lg:gap-14 lg:px-8">
+            <div>
+              <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary"><span className="h-1.5 w-1.5 rounded-full bg-primary" /> YOUR EVERYDAY, ON THE MOVE</div>
+              <h1 className="max-w-xl text-[clamp(2.8rem,5.5vw,5rem)] font-semibold leading-[1.04] tracking-[-0.055em]">Good things.<br />Going places.<span className="text-primary">↗</span></h1>
+              <p className="mt-6 max-w-md text-base leading-relaxed text-muted-foreground sm:text-lg">A parcel across town. A ride to your next stop. Make your everyday moves a little easier with Fetch-It.</p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button size="lg" onClick={() => pickRole("CUSTOMER", "signup")}>Let&apos;s get moving <ArrowRight /></Button>
+                <Button asChild size="lg" variant="outline"><a href="#services">Explore our services <ArrowDown /></a></Button>
               </div>
-              {/* Product chips */}
-              <div className="flex flex-wrap gap-2 pt-1">
-                <span className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium">
-                  <Package className="h-3.5 w-3.5 text-primary" /> Delivery: moto → van → reefer
-                </span>
-                <span className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium">
-                  <Car className="h-3.5 w-3.5 text-emerald-600" /> Ride: moto · tricycle · sedan
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground pt-2">
-                <div className="flex items-center gap-1.5">
-                  <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-                  <span>Upfront fare estimates</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-primary" />
-                  <span>&lt; 3 min average match time</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                  <span>Insured up to ₱5,000 per parcel</span>
-                </div>
-              </div>
+              <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground sm:text-sm"><span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-700" /> Upfront fare estimates</span><span className="flex items-center gap-1.5"><Smartphone className="h-4 w-4 text-emerald-700" /> Made for your phone</span></div>
             </div>
-
-            {/* Hero card with mock map */}
-            <HeroCard />
+            <TripPreview mode={preview} onModeChange={setPreview} />
+          </div>
+        </section>
+        <div className="border-y border-foreground/5 bg-white/50 dark:bg-card/50">
+          <div className="mx-auto grid max-w-7xl grid-cols-2 gap-5 px-4 py-6 text-xs font-medium text-muted-foreground sm:grid-cols-4 sm:px-6 sm:text-sm lg:px-8">
+            {[{ icon: Package, text: "Parcels to heavy cargo" }, { icon: Car, text: "Rides for your everyday" }, { icon: Navigation, text: "Follow your route" }, { icon: ShieldCheck, text: "Proof of delivery" }].map(({ icon: Icon, text: label }) => <div key={label} className="flex items-center justify-center gap-2"><Icon className="h-4 w-4 shrink-0 text-foreground/60" />{label}</div>)}
           </div>
         </div>
-      </section>
-
-      {/* Persona CTAs */}
-      <section id="personas" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 w-full">
-        <div className="text-center mb-10 max-w-2xl mx-auto">
-          <h2 className="text-3xl font-bold tracking-tight">Two services, one app</h2>
-          <p className="text-muted-foreground mt-3">
-            After logging in, choose Delivery to ship cargo or Ride to get a
-            driver for yourself — fares are always shown upfront.
-          </p>
-        </div>
-        <div className="max-w-2xl mx-auto">
-          {PERSONAS.map((p) => (
-            <Card key={p.role} className="border-2 hover:border-primary/40 transition shadow-sm">
-              <CardHeader>
-              <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <CardTitle className="text-2xl">{p.title}</CardTitle>
-                    <CardDescription className="mt-1 text-base">{p.tagline}</CardDescription>
-                  </div>
-                  <div className="grid shrink-0 place-items-center h-12 w-12 rounded-xl bg-primary/10 text-primary">
-                    <p.icon className="h-6 w-6" />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-2 text-sm">
-                  {p.bullets.map((b) => (
-                    <li key={b} className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                      <span className="text-foreground/80">{b}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Button className="min-w-0 flex-1 basis-32 whitespace-normal" onClick={() => pickRole(p.role, "login")}>
-                    {p.ctaLogin}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="min-w-0 flex-1 basis-32 whitespace-normal"
-                    onClick={() => pickRole(p.role, "signup")}
-                  >
-                    {p.ctaSignup}
-                  </Button>
-                </div>
-                {demoEnabled && <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-muted-foreground"
-                  disabled={!seeded}
-                  onClick={() => tryDemo(p.role)}
-                >
-                  <Play className="h-3.5 w-3.5" />
-                  {seeded ? `Try the demo ${p.role.toLowerCase()} account` : "Preparing demo…"}
-                </Button>}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* Features grid */}
-      <section id="features" className="bg-muted/40 border-y w-full">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-          <div className="text-center mb-10 max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold tracking-tight">Built for end-to-end logistics</h2>
-            <p className="text-muted-foreground mt-3">
-              Every feature you'd expect from a modern freight platform — and a few you wouldn't.
-            </p>
+        <section id="services" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+          <div className="mb-9 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="eyebrow">ONE APP. MORE POSSIBILITIES.</p><h2 className="section-title mt-3">Whatever moves you.</h2></div><p className="max-w-xs text-sm leading-relaxed text-muted-foreground">Two ways to get going. One simple place to book, track and manage it all.</p></div>
+          <div className="grid gap-5 md:grid-cols-2"><ServiceCard kind="delivery" onStart={() => pickRole("CUSTOMER", "signup")} /><ServiceCard kind="ride" onStart={() => pickRole("CUSTOMER", "signup")} /></div>
+          {demoEnabled && seeded && <div className="mt-6 text-center"><Button variant="ghost" size="sm" onClick={tryDemo}><Play className="h-3.5 w-3.5" />Take a look with the demo account</Button></div>}
+        </section>
+        <section id="features" className="scroll-mt-24 bg-card">
+          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+            <div className="mb-12 max-w-xl"><p className="eyebrow">LESS FUSS. MORE FETCH.</p><h2 className="section-title mt-3">The details are taken care of.</h2></div>
+            <div className="grid gap-8 md:grid-cols-3 md:gap-12">{FEATURES.map(({ icon: Icon, title, desc }, i) => <div key={title} className="border-t border-border pt-6"><div className="mb-6 flex items-center justify-between"><Icon className="h-6 w-6 text-primary" /><span className="font-mono text-xs text-muted-foreground">0{i + 1}</span></div><h3 className="text-xl font-semibold tracking-tight">{title}</h3><p className="mt-3 text-sm leading-7 text-muted-foreground">{desc}</p></div>)}</div>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {FEATURES.map((f) => (
-              <Card key={f.title} className="border bg-card hover:shadow-md transition">
-                <CardHeader>
-                  <div className="grid place-items-center h-11 w-11 rounded-lg bg-primary/10 text-primary mb-2">
-                    <f.icon className="h-5 w-5" />
-                  </div>
-                  <CardTitle className="text-lg">{f.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{f.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
+        </section>
+        <section id="how-it-works" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+          <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+            <div><p className="eyebrow">FROM HERE TO THERE</p><h2 className="section-title mt-3">A few taps.<br />And you&apos;re on your way.</h2><p className="mt-5 max-w-sm text-sm leading-7 text-muted-foreground">Skip the complicated part. Your next delivery or ride starts right here.</p></div>
+            <div>{[{ title: "Choose your move", text: "Sign in, then pick Delivery or Ride." }, { title: "Tell us where", text: "Set your pickup and destination, choose a vehicle and review your fare." }, { title: "Let Fetch-It take it from here", text: "Place your booking and follow its progress once a rider accepts." }].map((step, i) => <div key={step.title} className="flex gap-5 border-b border-border py-6 first:pt-0 last:border-0"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-foreground text-sm text-background">0{i + 1}</span><div><h3 className="text-lg font-semibold tracking-tight">{step.title}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.text}</p></div></div>)}</div>
           </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section id="how-it-works" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 w-full">
-        <div className="text-center mb-10 max-w-2xl mx-auto">
-          <h2 className="text-3xl font-bold tracking-tight">From pin-drop to proof in minutes</h2>
-        </div>
-        <div className="grid md:grid-cols-4 gap-5">
-          {[
-            { n: "01", t: "Pin your pickup", d: "Drop pins for pickup & drop-off, then choose a vehicle class." },
-            { n: "02", t: "See your fare", d: "Dynamic fare is calculated up-front — distance, weight, and surge." },
-            { n: "03", t: "Rider accepts", d: "Available riders can claim your request when it becomes due." },
-            { n: "04", t: "Track & confirm", d: "Follow available tracking updates, then confirm delivery with OTP or signature." },
-          ].map((s) => (
-            <Card key={s.n} className="border bg-card">
-              <CardHeader>
-                <div className="text-3xl font-bold text-primary/40">{s.n}</div>
-                <CardTitle className="text-base mt-2">{s.t}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{s.d}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="mt-auto border-t bg-card">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 flex flex-col sm:flex-row justify-between gap-6 items-start sm:items-center">
-          <div className="space-y-2">
-            <FetchItLogo />
-            <p className="text-sm text-muted-foreground max-w-md">
-              Book deliveries and rides, then track them in one place.
-            </p>
-          </div>
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p>© {new Date().getFullYear()} Fetch-It. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+        </section>
+        <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
+          <div className="relative overflow-hidden rounded-[2rem] bg-[#163c34] px-6 py-12 text-white sm:px-12 sm:py-16"><div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-96 w-96 rounded-full border-[50px] border-white/5" /><div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-center"><div><p className="text-xs font-medium tracking-[0.15em] text-[#bed9ce]">WHERE TO NEXT?</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Let&apos;s make your next move.</h2><p className="mt-3 text-sm text-[#bed9ce]">Your deliveries and rides, together at last.</p></div><Button size="lg" onClick={() => pickRole("CUSTOMER", "signup")} className="self-start md:self-auto">Get started <ArrowRight /></Button></div></div>
+        </section>
+      </main>
+      <footer className="border-t border-border"><div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"><div><FetchItLogo size={32} /><p className="mt-3 text-xs text-muted-foreground">A little easier. A little closer. Every day.</p></div><p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Fetch-It. All rights reserved.</p></div></footer>
     </div>
   );
 }
 
-// Hero side panel — stylized map mock with rider + pickup pins.
-function HeroCard() {
+function TripPreview({ mode, onModeChange }: { mode: "delivery" | "ride"; onModeChange: (mode: "delivery" | "ride") => void }) {
+  const Icon = mode === "delivery" ? Truck : Car;
   return (
-    <div className="relative">
-      <Card className="relative overflow-hidden border-2 shadow-xl">
-        <div className="aspect-[4/3] sm:aspect-[5/4] bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:from-amber-950/30 dark:via-orange-950/30 dark:to-amber-900/30">
-          {/* mock map */}
-          <svg
-            viewBox="0 0 400 320"
-            className="absolute inset-0 h-full w-full"
-            preserveAspectRatio="xMidYMid slice"
-          >
-            <defs>
-              <pattern id="streets" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth="1.2" />
-              </pattern>
-            </defs>
-            <rect width="400" height="320" fill="url(#streets)" />
-            {/* route */}
-            <path
-              d="M 60 260 Q 130 230 180 180 T 340 60"
-              fill="none"
-              stroke="var(--primary)"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              strokeDasharray="8 8"
-              className="animate-route-dash"
-              opacity="0.9"
-            />
-            {/* pickup */}
-            <g transform="translate(60, 260)">
-              <circle r="10" fill="var(--primary)" opacity="0.2" />
-              <circle r="6" fill="var(--primary)" />
-              <text y="-14" textAnchor="middle" fontSize="11" fill="#1f2937" fontWeight="700">Pickup</text>
-            </g>
-            {/* dropoff */}
-            <g transform="translate(340, 60)">
-              <circle r="10" fill="#059669" opacity="0.2" />
-              <circle r="6" fill="#059669" />
-              <text y="-14" textAnchor="middle" fontSize="11" fill="#065f46" fontWeight="700">Drop-off</text>
-            </g>
-            {/* rider */}
-            <g transform="translate(190, 170)">
-              <circle r="14" fill="var(--primary)" opacity="0.18" className="animate-fit-pulse" />
-              <circle r="9" fill="var(--primary)" />
-              <path d="M -3 -1 L 0 -4 L 3 -1 L 1 -1 L 1 3 L -1 3 L -1 -1 Z" fill="white" />
-            </g>
+    <div className="relative rounded-[2rem] bg-[#dde9df] p-5 sm:p-8">
+      <div className="mb-5 flex items-center justify-between gap-3"><span className="text-xs font-medium tracking-wide text-[#446358]">YOUR NEXT MOVE</span><span className="rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#446358]">Preview</span></div>
+      <div className="overflow-hidden rounded-2xl bg-card shadow-[0_16px_50px_-20px_rgba(22,60,52,0.3)]">
+        <div className="flex items-center gap-1 border-b p-3" role="group" aria-label="Service preview">{(["delivery", "ride"] as const).map((item) => { const TabIcon = item === "delivery" ? Package : Car; return <button key={item} type="button" aria-pressed={mode === item} onClick={() => onModeChange(item)} className={cn("flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", mode === item ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted")}><TabIcon className="h-4 w-4" />{item === "delivery" ? "Delivery" : "Ride"}</button>; })}</div>
+        <div className="relative aspect-[1.45] overflow-hidden bg-[#f0f1e9]">
+          <svg viewBox="0 0 500 345" className="absolute h-full w-full" aria-label="Illustration of a route from pickup to destination" role="img">
+            <rect width="500" height="345" fill="#f0f1e9" />
+            <path d="M0 20H110V112H0ZM155 0H290V90H155ZM338 0H500V109H338ZM0 161H98V272H0ZM157 146H274V247H157ZM328 153H500V246H328ZM144 294H291V345H144ZM332 283H500V345H332Z" fill="#e2e7da" />
+            <path d="M0 139H500M127 0V345M306 0V345M0 269H500" stroke="#fffdf6" strokeWidth="22" />
+            <path d="M414 -10C371 61 389 161 451 220S534 318 520 355" stroke="#c5dcd6" strokeWidth="33" fill="none" />
+            <path d="M65 218H127V139H306V71H353" stroke="#ec7139" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <circle cx="65" cy="218" r="15" fill="#fff" /><circle cx="65" cy="218" r="6" fill="#ec7139" />
+            <circle cx="353" cy="71" r="15" fill="#163c34" /><circle cx="353" cy="71" r="5" fill="#fff" />
+            <g fill="#b9d0b8"><circle cx="215" cy="199" r="18" /><circle cx="235" cy="210" r="12" /><circle cx="45" cy="50" r="14" /><circle cx="375" cy="316" r="12" /></g>
+            <text x="67" y="251" textAnchor="middle" fill="#446358" fontSize="11" fontWeight="600">PICKUP</text><text x="354" y="42" textAnchor="middle" fill="#446358" fontSize="11" fontWeight="600">DESTINATION</text>
           </svg>
-
-          {/* live chip */}
-          <div className="absolute top-3 left-3 bg-card/95 backdrop-blur rounded-full px-2.5 py-1 text-xs font-medium border shadow-sm flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-fit-pulse" />
-            Live · ETA 12 min
-          </div>
-
-          {/* driver card */}
-          <div className="absolute bottom-3 left-3 right-3 bg-card/95 backdrop-blur rounded-xl p-3 border shadow-sm flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/15 grid place-items-center text-primary">
-              <Truck className="h-5 w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">Closed Van · FIT-2099</p>
-              <p className="text-xs text-muted-foreground truncate">Marcus Rivera · ★ 4.9</p>
-            </div>
-            <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50 text-xs">
-              In transit
-            </Badge>
-          </div>
+          <div className="absolute left-[39%] top-[32%] grid h-12 w-12 place-items-center rounded-2xl border-4 border-white bg-primary text-white shadow-lg"><Icon className="h-6 w-6" /></div>
+          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[10px] font-medium text-[#446358]"><Navigation className="h-3 w-3" /> Your route at a glance</div>
         </div>
-      </Card>
-      <div
-        className="absolute -bottom-3 -right-3 -z-10 w-32 h-32 rounded-full blur-2xl bg-primary/30"
-        aria-hidden
-      />
+        <div className="flex items-center gap-3 p-4 sm:p-5"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{mode === "delivery" ? "Room for the things that matter" : "A ride that fits your day"}</p><p className="mt-1 text-xs text-muted-foreground">{mode === "delivery" ? "Motorcycles, vans & more" : "Motorcycles, tricycles & sedans"}</p></div><ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" /></div>
+      </div>
+      <div className="mt-5 flex items-center gap-2 text-xs text-[#446358]"><span className="grid h-5 w-5 place-items-center rounded-full bg-[#163c34] text-white"><Check className="h-3 w-3" /></span> From your first tap to the final stop.</div>
+    </div>
+  );
+}
+
+function ServiceCard({ kind, onStart }: { kind: "delivery" | "ride"; onStart: () => void }) {
+  const delivery = kind === "delivery";
+  const Icon = delivery ? Package : Car;
+  return (
+    <div className={cn("group relative overflow-hidden rounded-[1.75rem] p-6 sm:p-9", delivery ? "bg-[#f5e8d9] text-[#48341f]" : "bg-[#e0ebe3] text-[#163c34]")}>
+      <div className="flex items-start justify-between gap-4"><span className="rounded-full border border-current/15 px-3 py-1 text-xs font-medium">{delivery ? "For your deliveries" : "For your daily journeys"}</span><Icon className="h-10 w-10 stroke-[1.3] sm:h-14 sm:w-14" /></div>
+      <h3 className="mt-10 text-3xl font-semibold tracking-tight">{delivery ? "Send a little. Or a lot." : "Your day. Your destination."}</h3>
+      <p className="mt-4 max-w-sm text-sm leading-7 opacity-75">{delivery ? "From a small parcel to a full van. Choose the right vehicle, schedule your pickup and follow it to the door." : "The morning commute or an afternoon errand. Choose your ride, see your fare and get where you need to be."}</p>
+      <div className="mt-6 flex flex-wrap gap-2 text-xs">{(delivery ? ["Motorcycle", "Van", "Refrigerated"] : ["Motorcycle", "Tricycle", "Sedan"]).map((item) => <span key={item} className="rounded-full bg-white/40 px-3 py-1.5">{item}</span>)}</div>
+      <button type="button" onClick={onStart} className="mt-9 inline-flex items-center gap-3 rounded-md text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{delivery ? "Book a delivery" : "Find your ride"}<span className="grid h-9 w-9 place-items-center rounded-full bg-white/60 transition group-hover:translate-x-1"><ArrowRight className="h-4 w-4" /></span></button>
     </div>
   );
 }
