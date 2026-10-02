@@ -15,12 +15,12 @@ export function FetchItLogo({
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
       <Image
-        src="/fetch-logo.jpg"
+        src="/fetch-logo-transparent.png"
         width={size}
         height={size}
         alt=""
         aria-hidden="true"
-        className="shrink-0 rounded-full object-contain"
+        className="shrink-0 object-contain"
         unoptimized
       />
       {showWordmark && (

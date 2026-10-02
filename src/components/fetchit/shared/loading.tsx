@@ -6,13 +6,13 @@ export function FetchItLoader({ className }: { className?: string }) {
   return (
     <span aria-hidden="true" className={cn("inline-flex h-5 w-5 shrink-0 items-center justify-center", className)}>
       <picture className="contents">
-        <source media="(prefers-reduced-motion: reduce)" srcSet="/fetch-logo.jpg" />
+        <source media="(prefers-reduced-motion: reduce)" srcSet="/fetch-logo-transparent.png" />
         <Image
           src="/fetch-loading.gif"
           alt=""
           width={96}
           height={96}
-          className="h-full w-full rounded-full object-contain"
+          className="h-full w-full rounded-full object-contain motion-reduce:rounded-none"
           unoptimized
         />
       </picture>

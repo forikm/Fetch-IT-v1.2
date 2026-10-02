@@ -37,10 +37,10 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/fetch-icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/fetch-icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/fetch-icon-v2-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/fetch-icon-v2-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/fetch-icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/fetch-icon-v2-192.png", sizes: "192x192", type: "image/png" }],
   },
   openGraph: {
     title: "Fetch-It — Book & Track Deliveries",
