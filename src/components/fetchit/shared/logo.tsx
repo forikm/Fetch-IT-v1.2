@@ -15,7 +15,7 @@ export function FetchItLogo({
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
       <Image
-        src="/fetch-logo-clean.png"
+        src="/fetch-logo-final.png"
         width={size}
         height={size}
         alt=""
