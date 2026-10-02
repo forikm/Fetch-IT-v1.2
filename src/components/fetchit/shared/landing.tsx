@@ -135,21 +135,26 @@ export function LandingView() {
     <div className="min-h-screen flex flex-col bg-background">
       {/* Top nav */}
       <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
           <div className="min-w-0 shrink-0">
             <span className="sm:hidden"><FetchItLogo showWordmark={false} size={32} /></span>
             <span className="hidden sm:block"><FetchItLogo /></span>
           </div>
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
+          <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition">Features</a>
             <a href="#personas" className="hover:text-foreground transition">For You</a>
             <a href="#how-it-works" className="hover:text-foreground transition">How it works</a>
           </nav>
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            <Button variant="ghost" size="sm" onClick={() => pickRole("CUSTOMER", "login")}>
+            <Button asChild variant="outline" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm">
+              <a href={riderAppUrl}>
+                <Bike className="hidden h-4 w-4 sm:block" /> Become a rider
+              </a>
+            </Button>
+            <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm" onClick={() => pickRole("CUSTOMER", "login")}>
               Login
             </Button>
-            <Button size="sm" onClick={() => pickRole("CUSTOMER", "signup")}>
+            <Button size="sm" className="px-2 text-xs sm:px-3 sm:text-sm" onClick={() => pickRole("CUSTOMER", "signup")}>
               Get started
             </Button>
           </div>
@@ -186,11 +191,6 @@ export function LandingView() {
                 </Button>
                 <Button size="lg" variant="outline" onClick={() => pickRole("CUSTOMER", "login")}>
                   Customer login
-                </Button>
-                <Button asChild size="lg" variant="outline">
-                  <a href={riderAppUrl}>
-                    <Bike className="h-4 w-4" /> Become a rider
-                  </a>
                 </Button>
               </div>
               {/* Product chips */}
