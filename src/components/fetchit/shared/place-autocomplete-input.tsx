@@ -17,12 +17,14 @@ export function PlaceAutocompleteInput({
   placeholder,
   value,
   onChange,
+  onInvalid,
   required,
   className,
 }: {
   placeholder: string;
   value: string;
   onChange: (place: PlaceValue) => void;
+  onInvalid?: () => void;
   required?: boolean;
   className?: string;
 }) {
@@ -77,7 +79,7 @@ export function PlaceAutocompleteInput({
         ref={inputRef}
         placeholder={failed ? "Type an address (autocomplete unavailable)" : placeholder}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => { setText(e.target.value); onInvalid?.(); }}
         required={required}
         className={`pl-9 ${className ?? ""}`}
         autoComplete="off"

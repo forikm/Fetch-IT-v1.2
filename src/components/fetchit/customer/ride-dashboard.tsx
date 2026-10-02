@@ -1,5 +1,9 @@
 "use client";
 
+import { SavedPlaces } from "../shared/saved-places";
+import { RequestError } from "../shared/request-error";
+import { useCustomerData } from "@/hooks/use-customer-data";
+import { customerResponse } from "@/lib/customer-request";
 import { FetchItLoader } from "@/components/fetchit/shared/loading";
 
 // RideDashboard — the RIDE product for customers, Grab/Uber style.
@@ -7,7 +11,7 @@ import { FetchItLoader } from "@/components/fetchit/shared/loading";
 // fares per class, passengers stepper, active rides with live tracking and
 // ride history. Rides skip cargo/e-POD — completion happens at drop-off.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bike,
   Car,
@@ -119,25 +123,42 @@ export function RideDashboard() {
   const [tab, setTab] = useState<"active" | "history">("active");
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadSequence = useRef(0);
   const [tracking, setTracking] = useState<Ride | null>(null);
 
   // Booking panel state
-  const [pickup, setPickup] = useState<PlaceValue | null>(null);
-  const [dropoff, setDropoff] = useState<PlaceValue | null>(null);
-  const [vehicleClass, setVehicleClass] = useState<VehicleClass>("MOTORCYCLE");
-  const [passengers, setPassengers] = useState(1);
+  const emptyDraft = { pickup: null as PlaceValue | null, dropoff: null as PlaceValue | null, vehicleClass: "MOTORCYCLE" as VehicleClass, passengers: 1 };
+  const [draft, setDraft] = useCustomerData(user?.id ?? "anonymous", "ride-draft", emptyDraft);
+  const { pickup, dropoff, vehicleClass, passengers } = draft;
+  const [pickupValid, setPickupValid] = useState(true);
+  const [dropoffValid, setDropoffValid] = useState(true);
+  const setPickup = (pickup: PlaceValue | null) => { setPickupValid(true); setDraft((previous) => ({ ...previous, pickup })); };
+  const setDropoff = (dropoff: PlaceValue | null) => { setDropoffValid(true); setDraft((previous) => ({ ...previous, dropoff })); };
+  const setVehicleClass = (vehicleClass: VehicleClass) => setDraft((previous) => ({ ...previous, vehicleClass }));
+  const setPassengers = (next: number | ((previous: number) => number)) => setDraft((previous) => ({ ...previous, passengers: typeof next === "function" ? next(previous.passengers) : next }));
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [estimatedKey, setEstimatedKey] = useState<string | null>(null);
+  const [fareRetry, setFareRetry] = useState(0);
+  const bookingPanel = useRef<HTMLDivElement>(null);
   const [estimates, setEstimates] = useState<Record<string, ClassEstimate>>({});
   const [estimating, setEstimating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch(`/api/bookings?filter=${tab}&type=RIDE`, { cache: "no-store" });
-      const data = await res.json();
-      setRides((data.bookings ?? []) as Ride[]);
+      const data = await customerResponse<{ bookings: Ride[] }>(res, "We couldn’t load your bookings. Please try again.");
+      if (!Array.isArray(data.bookings)) throw new Error("We couldn’t load your bookings. Please try again.");
+      if (sequence === loadSequence.current) setRides((data.bookings ?? []) as Ride[]);
+    } catch (e) {
+      if (sequence === loadSequence.current) setLoadError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [tab]);
 
@@ -148,7 +169,8 @@ export function RideDashboard() {
   // Fare estimates for every ride class, in parallel, whenever the route is
   // complete. Prices refresh when passengers change too (same engine, but
   // keeps the numbers honest if surge ticks over).
-  const routeKey = pickup && dropoff ? `${pickup.lat},${pickup.lng}|${dropoff.lat},${dropoff.lng}` : null;
+  const routeKey = pickupValid && dropoffValid && pickup && dropoff ? `${pickup.lat},${pickup.lng}|${dropoff.lat},${dropoff.lng}` : null;
+  const fareKey = `${routeKey}|${passengers}`;
   useEffect(() => {
     if (!routeKey || !pickup || !dropoff) {
       setEstimates({});
@@ -156,6 +178,8 @@ export function RideDashboard() {
     }
     let cancelled = false;
     setEstimating(true);
+    setEstimates({});
+    setEstimateError(null);
     (async () => {
       const results = await Promise.all(
         RIDE_VEHICLE_CLASSES.map(async (vc) => {
@@ -189,17 +213,20 @@ export function RideDashboard() {
       const map: Record<string, ClassEstimate> = {};
       for (const r of results) if (r) map[r.vehicleClass] = r;
       setEstimates(map);
+      setEstimatedKey(fareKey);
+      if (Object.keys(map).length < RIDE_VEHICLE_CLASSES.length) setEstimateError("Some fares couldn’t be loaded. Retry to see current prices.");
       setEstimating(false);
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeKey, passengers]);
+  }, [routeKey, passengers, fareRetry]);
 
   async function bookRide() {
-    if (!pickup || !dropoff) return;
+    if (!pickup || !dropoff || !pickupValid || !dropoffValid || !estimates[vehicleClass] || estimatedKey !== fareKey || estimating || submitting) return;
     setSubmitting(true);
+    setBookingError(null);
     try {
       const res = await fetch("/api/bookings", {
         method: "POST",
@@ -212,12 +239,11 @@ export function RideDashboard() {
           passengers,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to book ride");
+      const data = await customerResponse<{ booking: Ride }>(res, "We couldn’t confirm your ride. Check Active rides before trying again. Your details are saved.");
+      if (!data.booking?.id) throw new Error("We couldn’t confirm your ride. Check Active rides before trying again. Your details are saved.");
       const ride = data.booking as Ride;
       setRides((prev) => [ride, ...prev.filter((r) => r.id !== ride.id)]);
-      setPickup(null);
-      setDropoff(null);
+      setDraft(emptyDraft);
       setEstimates({});
       setTab("active");
       toast({
@@ -227,6 +253,7 @@ export function RideDashboard() {
         }`,
       });
     } catch (e) {
+      setBookingError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check Active rides before trying again. Your details are saved.");
       toast({
         title: "Booking failed",
         description: e instanceof Error ? e.message : "Unknown error",
@@ -256,13 +283,13 @@ export function RideDashboard() {
   }
 
   function swap() {
-    if (!pickup && !dropoff) return;
+    if ((!pickup && !dropoff) || !pickupValid || !dropoffValid) return;
     const p = pickup;
     setPickup(dropoff);
     setDropoff(p);
   }
 
-  const canBook = !!pickup && !!dropoff && !submitting;
+  const canBook = pickupValid && dropoffValid && !!pickup && !!dropoff && estimatedKey === fareKey && !submitting && !estimating && !!estimates[vehicleClass];
   const selectedEstimate = estimates[vehicleClass];
 
   return (
@@ -311,7 +338,7 @@ export function RideDashboard() {
         </div>
         <div className="grid lg:grid-cols-[minmax(0,420px)_1fr] gap-6 items-start">
           {/* ---------- Book a ride panel ---------- */}
-          <Card className="shadow-sm lg:sticky lg:top-20">
+          <Card ref={bookingPanel} tabIndex={-1} className="shadow-sm lg:sticky lg:top-20">
             <CardHeader className="pb-4">
               <CardTitle className="text-xl">Where to?</CardTitle>
               <CardDescription>
@@ -319,6 +346,7 @@ export function RideDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground">Your draft is kept in this tab until you book.</p>
               {/* Addresses */}
               <div className="relative space-y-2">
                 <div className="absolute left-[11px] top-[38px] bottom-[38px] w-px bg-border z-0" aria-hidden />
@@ -327,6 +355,7 @@ export function RideDashboard() {
                     placeholder="Pickup point"
                     value={pickup?.label ?? ""}
                     onChange={setPickup}
+                    onInvalid={() => setPickupValid(false)}
                   />
                 </div>
                 <div className="relative z-10">
@@ -334,6 +363,7 @@ export function RideDashboard() {
                     placeholder="Where to?"
                     value={dropoff?.label ?? ""}
                     onChange={setDropoff}
+                    onInvalid={() => setDropoffValid(false)}
                   />
                 </div>
                 <button
@@ -347,7 +377,7 @@ export function RideDashboard() {
               </div>
 
               {/* Route map preview */}
-              {pickup && dropoff && (
+              {pickupValid && dropoffValid && pickup && dropoff && (
                 <BookingRouteMap
                   pickup={{ lat: pickup.lat, lng: pickup.lng }}
                   dropoff={{ lat: dropoff.lat, lng: dropoff.lng }}
@@ -409,6 +439,14 @@ export function RideDashboard() {
                 </div>
               </div>
 
+              <div className="space-y-3">
+                <p className="text-xs font-medium">Pickup favorites</p>
+                <SavedPlaces place={pickupValid ? pickup : null} onSelect={setPickup} />
+                <p className="text-xs font-medium">Destination favorites</p>
+                <SavedPlaces place={dropoffValid ? dropoff : null} onSelect={setDropoff} />
+              </div>
+              {estimateError && <RequestError message={estimateError} onRetry={() => setFareRetry((n) => n + 1)} />}
+              {bookingError && <p role="alert" className="text-sm text-destructive">{bookingError}</p>}
               {/* Passengers */}
               <div className="flex items-center justify-between">
                 <Label htmlFor="passengers" className="flex items-center gap-1.5">
@@ -507,7 +545,9 @@ export function RideDashboard() {
                 <FetchItLoader className="h-14 w-14" />
                 <p>Loading rides…</p>
               </div>
-            ) : rides.length === 0 ? (
+            ) : loadError ? (
+          <RequestError message={loadError} onRetry={() => void load()} />
+        ) : rides.length === 0 ? (
               <EmptyState />
             ) : (
               <div className="space-y-4">
@@ -517,6 +557,7 @@ export function RideDashboard() {
                     ride={r}
                     onTrack={() => setTracking(r)}
                     onCancel={() => cancelRide(r)}
+                    onRepeat={() => { setPickupValid(true); setDropoffValid(true); setDraft({ pickup: { label: r.pickupLabel, lat: r.pickupLat, lng: r.pickupLng }, dropoff: { label: r.dropoffLabel, lat: r.dropoffLat, lng: r.dropoffLng }, vehicleClass: r.vehicleClass, passengers: r.passengers }); setBookingError(null); bookingPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" }); bookingPanel.current?.focus({ preventScroll: true }); toast({ title: "Review your ride", description: "Route filled in. Check the current fare before booking." }); }}
                   />
                 ))}
               </div>
@@ -569,10 +610,12 @@ function RideCard({
   ride,
   onTrack,
   onCancel,
+  onRepeat,
 }: {
   ride: Ride;
   onTrack: () => void;
   onCancel: () => void;
+  onRepeat: () => void;
 }) {
   const isActive = !["DELIVERED", "CANCELLED"].includes(ride.status);
   const canCancel = ["PENDING", "MATCHED"].includes(ride.status);
@@ -634,6 +677,7 @@ function RideCard({
               {isActive ? "Track ride" : "View details"}
             </Button>
           )}
+          {!isActive && <Button size="sm" variant="outline" onClick={onRepeat}>Book again</Button>}
           {canCancel && (
             <Button size="sm" variant="outline" onClick={onCancel} className="gap-1.5">
               <X className="h-3.5 w-3.5" /> Cancel

@@ -1,5 +1,9 @@
 "use client";
 
+import { SavedPlaces } from "../shared/saved-places";
+import { RequestError } from "../shared/request-error";
+import { useCustomerData } from "@/hooks/use-customer-data";
+import { customerResponse } from "@/lib/customer-request";
 import { FetchItLoader } from "@/components/fetchit/shared/loading";
 
 // Customer dashboard — bookings list, booking form, live tracking modal.
@@ -137,7 +141,10 @@ export function CustomerDashboard() {
   const [tab, setTab] = useState<"active" | "history">("active");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadSequence = useRef(0);
   const [showNew, setShowNew] = useState(false);
+  const [repeatBooking, setRepeatBooking] = useState<Booking | null>(null);
   const [trackingBooking, setTrackingBooking] = useState<Booking | null>(null);
   const [mapsReady, setMapsReady] = useState(false);
   const [mapsFailed, setMapsFailed] = useState(false);
@@ -152,13 +159,18 @@ export function CustomerDashboard() {
   }, []);
 
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch(`/api/bookings?filter=${tab}&type=DELIVERY`, { cache: "no-store" });
-      const data = await res.json();
-      setBookings(data.bookings ?? []);
+      const data = await customerResponse<{ bookings: Booking[] }>(res, "We couldn’t load your bookings. Please try again.");
+      if (!Array.isArray(data.bookings)) throw new Error("We couldn’t load your bookings. Please try again.");
+      if (sequence === loadSequence.current) setBookings(data.bookings ?? []);
+    } catch (e) {
+      if (sequence === loadSequence.current) setLoadError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [tab]);
 
@@ -241,13 +253,13 @@ export function CustomerDashboard() {
               book a new pickup.
             </p>
           </div>
-          <Button size="lg" onClick={() => setShowNew(true)} className="gap-2">
+          <Button size="lg" onClick={() => { setRepeatBooking(null); setShowNew(true); }} className="gap-2">
             <Plus className="h-4 w-4" /> New booking
           </Button>
         </div>
 
         {/* Recent booking map preview */}
-        {bookings.length > 0 && (
+        {!loading && !loadError && bookings.length > 0 && (
           <Card className="min-w-0">
             <CardContent className="min-w-0 py-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -301,8 +313,10 @@ export function CustomerDashboard() {
             <FetchItLoader className="h-14 w-14" />
             <p>Loading deliveries…</p>
           </div>
+        ) : loadError ? (
+          <RequestError message={loadError} onRetry={() => void load()} />
         ) : bookings.length === 0 ? (
-          <EmptyState onNew={() => setShowNew(true)} />
+          <EmptyState onNew={() => { setRepeatBooking(null); setShowNew(true); }} />
         ) : (
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4">
             {bookings.map((b) => (
@@ -311,6 +325,7 @@ export function CustomerDashboard() {
                 booking={b}
                 onTrack={() => setTrackingBooking(b)}
                 onRefresh={load}
+                onRepeat={() => { setRepeatBooking(b); setShowNew(true); }}
               />
             ))}
           </div>
@@ -348,6 +363,7 @@ export function CustomerDashboard() {
             </div>
           ) : (
             <BookingForm
+              initialBooking={repeatBooking}
               onCreate={onNewBookingCreated}
               onCancel={() => setShowNew(false)}
             />
@@ -414,10 +430,12 @@ function BookingCard({
   booking,
   onTrack,
   onRefresh,
+  onRepeat,
 }: {
   booking: Booking;
   onTrack: () => void;
   onRefresh: () => void;
+  onRepeat: () => void;
 }) {
   const { toast } = useToast();
   const v = VEHICLES[booking.vehicleClass];
@@ -528,6 +546,7 @@ function BookingCard({
               Cancel
             </Button>
           )}
+          {["DELIVERED", "CANCELLED"].includes(booking.status) && <Button size="sm" variant="outline" onClick={onRepeat}>Book again</Button>}
           {isDelivered && (
             <Button size="sm" variant="outline" className="flex-1" onClick={onTrack}>
               <ShieldCheck className="h-3.5 w-3.5" /> View proof
@@ -562,23 +581,33 @@ function Stat({
 function BookingForm({
   onCreate,
   onCancel,
+  initialBooking,
 }: {
+  initialBooking: Booking | null;
   onCreate: (b: Booking) => void;
   onCancel: () => void;
 }) {
   const { toast } = useToast();
-  // Pickup / dropoff
-  const [pickupLabel, setPickupLabel] = useState("");
-  const [pickupLat, setPickupLat] = useState("");
-  const [pickupLng, setPickupLng] = useState("");
-  const [dropoffLabel, setDropoffLabel] = useState("");
-  const [dropoffLat, setDropoffLat] = useState("");
-  const [dropoffLng, setDropoffLng] = useState("");
-  // Vehicle / cargo
-  const [vehicleClass, setVehicleClass] = useState<VehicleClass>("MOTORCYCLE");
-  const [cargoWeightKg, setCargoWeightKg] = useState("2");
-  const [cargoNotes, setCargoNotes] = useState("");
-  const [scheduledAt, setScheduledAt] = useState("");
+  const userId = useAppStore((state) => state.user?.id ?? "anonymous");
+  const emptyDraft = { pickupLabel: "", pickupLat: "", pickupLng: "", dropoffLabel: "", dropoffLat: "", dropoffLng: "", vehicleClass: "MOTORCYCLE" as VehicleClass, cargoWeightKg: "2", cargoNotes: "", scheduledAt: "" };
+  const [draft, setDraft] = useCustomerData(userId, "delivery-draft", emptyDraft);
+  const { pickupLabel, pickupLat, pickupLng, dropoffLabel, dropoffLat, dropoffLng, vehicleClass, cargoWeightKg, cargoNotes, scheduledAt } = draft;
+  const setPickupLabel = (value: typeof draft.pickupLabel) => setDraft((previous) => ({ ...previous, pickupLabel: value }));
+  const setPickupLat = (value: typeof draft.pickupLat) => setDraft((previous) => ({ ...previous, pickupLat: value }));
+  const setPickupLng = (value: typeof draft.pickupLng) => setDraft((previous) => ({ ...previous, pickupLng: value }));
+  const setDropoffLabel = (value: typeof draft.dropoffLabel) => setDraft((previous) => ({ ...previous, dropoffLabel: value }));
+  const setDropoffLat = (value: typeof draft.dropoffLat) => setDraft((previous) => ({ ...previous, dropoffLat: value }));
+  const setDropoffLng = (value: typeof draft.dropoffLng) => setDraft((previous) => ({ ...previous, dropoffLng: value }));
+  const setVehicleClass = (value: typeof draft.vehicleClass) => setDraft((previous) => ({ ...previous, vehicleClass: value }));
+  const setCargoWeightKg = (value: typeof draft.cargoWeightKg) => setDraft((previous) => ({ ...previous, cargoWeightKg: value }));
+  const setCargoNotes = (value: typeof draft.cargoNotes) => setDraft((previous) => ({ ...previous, cargoNotes: value }));
+  const setScheduledAt = (value: typeof draft.scheduledAt) => setDraft((previous) => ({ ...previous, scheduledAt: value }));
+  useEffect(() => {
+    if (!initialBooking) return;
+    setDraft({ pickupLabel: initialBooking.pickupLabel, pickupLat: String(initialBooking.pickupLat), pickupLng: String(initialBooking.pickupLng), dropoffLabel: initialBooking.dropoffLabel, dropoffLat: String(initialBooking.dropoffLat), dropoffLng: String(initialBooking.dropoffLng), vehicleClass: initialBooking.vehicleClass, cargoWeightKg: String(initialBooking.cargoWeightKg), cargoNotes: initialBooking.cargoNotes ?? "", scheduledAt: "" });
+    // Apply a repeat once on opening; subsequent edits belong to the draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialBooking]);
 
   // Fare estimate
   const [estimate, setEstimate] = useState<{
@@ -599,6 +628,9 @@ function BookingForm({
     etaMinutes: number;
   } | null>(null);
   const [estimating, setEstimating] = useState(false);
+  const fareSequence = useRef(0);
+  const fareKey = JSON.stringify([pickupLat, pickupLng, dropoffLat, dropoffLng, vehicleClass, cargoWeightKg, scheduledAt]);
+  const [estimatedKey, setEstimatedKey] = useState<string | null>(null);
   const [estimateError, setEstimateError] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -674,7 +706,9 @@ function BookingForm({
 
   async function fetchEstimate() {
     if (!canEstimate()) return;
+    const sequence = ++fareSequence.current;
     setEstimating(true);
+    setEstimate(null);
     setEstimateError(null);
     try {
       const res = await fetch("/api/fare/estimate", {
@@ -688,13 +722,12 @@ function BookingForm({
           scheduledAt: scheduledAt || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Estimate failed");
-      setEstimate(data);
-    } catch (e) {
-      setEstimateError(e instanceof Error ? e.message : "Estimate failed");
+      const data = await customerResponse<NonNullable<typeof estimate>>(res, "We couldn’t load the fare. Please retry.");
+      if (sequence === fareSequence.current) { setEstimate(data); setEstimatedKey(fareKey); }
+    } catch {
+      if (sequence === fareSequence.current) setEstimateError("We couldn’t load the fare. Please retry.");
     } finally {
-      setEstimating(false);
+      if (sequence === fareSequence.current) setEstimating(false);
     }
   }
 
@@ -704,13 +737,15 @@ function BookingForm({
       setEstimate(null);
       return;
     }
+    setEstimate(null);
     const t = setTimeout(() => void fetchEstimate(), 350);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); fareSequence.current++; };
   }, [pickupLat, pickupLng, dropoffLat, dropoffLng, vehicleClass, cargoWeightKg, scheduledAt]);
 
   async function handleConfirmBooking() {
     setError(null);
-    if (!canEstimate()) {
+    if (submitting) return;
+    if (!canEstimate() || !estimate || estimatedKey !== fareKey) {
       setError("Please fill in all location fields.");
       return;
     }
@@ -729,11 +764,12 @@ function BookingForm({
           scheduledAt: scheduledAt || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Booking failed");
+      const data = await customerResponse<{ booking: Booking }>(res, "We couldn’t confirm your booking. Check Active bookings before trying again. Your details are saved.");
+      if (!data.booking?.id) throw new Error("We couldn’t confirm your booking. Check Active bookings before trying again. Your details are saved.");
+      setDraft(emptyDraft);
       onCreate(data.booking);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Booking failed");
+      setError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check Active bookings before trying again. Your details are saved.");
     } finally {
       setSubmitting(false);
     }
@@ -757,6 +793,7 @@ function BookingForm({
       }}
       className="space-y-4"
     >
+      <p className="text-xs text-muted-foreground">Your draft is kept in this tab until you book. Review the route and current fare before confirming.</p>
       {/* Step indicator */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-muted-foreground">
         {stepLabels.map((label, i) => (
@@ -803,6 +840,7 @@ function BookingForm({
             <PlaceAutocompleteInput
               placeholder="Search pickup address (e.g. Marina Bay Sands)"
               value={pickupLabel}
+              onInvalid={() => { setPickupLat(""); setPickupLng(""); }}
               onChange={(place) => {
                 setPickupLabel(place.label);
                 setPickupLat(String(place.lat));
@@ -823,6 +861,7 @@ function BookingForm({
               Use demo
             </Button>
           </div>
+          <SavedPlaces place={pickupLabel && pickupLat && pickupLng ? { label: pickupLabel, lat: Number(pickupLat), lng: Number(pickupLng) } : null} onSelect={(place) => { setPickupLabel(place.label); setPickupLat(String(place.lat)); setPickupLng(String(place.lng)); }} />
           <LocationMap
             lat={pickupLat ? Number(pickupLat) : null}
             lng={pickupLng ? Number(pickupLng) : null}
@@ -858,6 +897,7 @@ function BookingForm({
             <PlaceAutocompleteInput
               placeholder="Search drop-off address (e.g. Changi Airport)"
               value={dropoffLabel}
+              onInvalid={() => { setDropoffLat(""); setDropoffLng(""); }}
               onChange={(place) => {
                 setDropoffLabel(place.label);
                 setDropoffLat(String(place.lat));
@@ -878,6 +918,7 @@ function BookingForm({
               Use demo
             </Button>
           </div>
+          <SavedPlaces place={dropoffLabel && dropoffLat && dropoffLng ? { label: dropoffLabel, lat: Number(dropoffLat), lng: Number(dropoffLng) } : null} onSelect={(place) => { setDropoffLabel(place.label); setDropoffLat(String(place.lat)); setDropoffLng(String(place.lng)); }} />
           <LocationMap
             lat={dropoffLat ? Number(dropoffLat) : null}
             lng={dropoffLng ? Number(dropoffLng) : null}
@@ -1020,6 +1061,7 @@ function BookingForm({
                 ) : estimateError ? (
                   <div className="flex items-start gap-2 text-sm text-destructive">
                     <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> {estimateError}
+                    <Button type="button" size="sm" variant="outline" onClick={() => void fetchEstimate()}>Retry fare</Button>
                   </div>
                 ) : null}
               </CardContent>
@@ -1052,7 +1094,7 @@ function BookingForm({
             Next
           </Button>
         ) : (
-          <Button type="button" onClick={handleConfirmBooking} disabled={submitting || !canEstimate()}>
+          <Button type="button" onClick={handleConfirmBooking} disabled={submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
             {submitting ? <FetchItLoader className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             Confirm booking
           </Button>
