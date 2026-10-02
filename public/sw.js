@@ -3,7 +3,7 @@
 // assets, so the user always gets fresh content when online but can still
 // load the app shell offline.
 
-const CACHE_VERSION = "fetchit-customer-v5";
+const CACHE_VERSION = "fetchit-customer-v6";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -74,4 +74,13 @@ self.addEventListener("fetch", (event) => {
 // Allow page to trigger skipWaiting via postMessage.
 self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
+    const client = clients.find((item) => new URL(item.url).origin === self.location.origin);
+    if (client) return client.focus();
+    return self.clients.openWindow("/");
+  }));
 });

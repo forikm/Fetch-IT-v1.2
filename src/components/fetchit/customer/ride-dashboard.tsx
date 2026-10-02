@@ -1,5 +1,12 @@
 "use client";
 
+import { BookingActions } from "../shared/booking-actions";
+import { BookingTimeline } from "../shared/booking-timeline";
+import { CustomerBottomNav } from "../shared/customer-bottom-nav";
+import { ProfileSettings } from "../shared/profile-settings";
+import { NotificationSettings } from "../shared/notification-settings";
+import { HistoryFilters, emptyHistoryFilter } from "../shared/history-filters";
+import { useBookingUpdates } from "@/hooks/use-booking-updates";
 import { SavedPlaces } from "../shared/saved-places";
 import { RequestError } from "../shared/request-error";
 import { useCustomerData } from "@/hooks/use-customer-data";
@@ -69,7 +76,7 @@ import { loadGoogleMaps } from "@/lib/google-maps-loader";
 interface Ride {
   id: string;
   refCode: string;
-  type: string;
+  type: "RIDE" | "DELIVERY";
   customerId: string;
   riderId: string | null;
   pickupLabel: string;
@@ -122,6 +129,12 @@ export function RideDashboard() {
 
   const [tab, setTab] = useState<"active" | "history">("active");
   const [rides, setRides] = useState<Ride[]>([]);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [filters, setFilters] = useState(emptyHistoryFilter);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadSequence = useRef(0);
@@ -146,21 +159,44 @@ export function RideDashboard() {
   const [estimating, setEstimating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  function queryString(cursor?: string) {
+    const query = new URLSearchParams({ filter: tab, type: "RIDE" });
+    if (tab === "history") {
+      if (filters.query.trim()) query.set("q", filters.query.trim());
+      if (filters.status) query.set("status", filters.status);
+      if (filters.from) query.set("from", new Date(filters.from + "T00:00:00").toISOString());
+      if (filters.to) query.set("to", new Date(filters.to + "T23:59:59.999").toISOString());
+    }
+    if (cursor) query.set("cursor", cursor);
+    return query.toString();
+  }
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true); setMoreError(null);
+    const sequence = loadSequence.current;
+    try {
+      const data = await customerResponse<{ bookings: Ride[]; nextCursor: string | null }>(await fetch("/api/bookings?" + queryString(nextCursor), { cache: "no-store" }), "Couldn’t load older bookings. Please retry.");
+      if (sequence !== loadSequence.current) return;
+      setRides((previous) => [...previous, ...data.bookings.filter((booking) => !previous.some((item) => item.id === booking.id))]);
+      setNextCursor(data.nextCursor);
+    } catch { if (sequence === loadSequence.current) setMoreError("Couldn’t load older bookings. Please retry."); }
+    finally { setLoadingMore(false); }
+  }
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`/api/bookings?filter=${tab}&type=RIDE`, { cache: "no-store" });
-      const data = await customerResponse<{ bookings: Ride[] }>(res, "We couldn’t load your bookings. Please try again.");
+      const res = await fetch("/api/bookings?" + queryString(), { cache: "no-store" });
+      const data = await customerResponse<{ bookings: Ride[]; nextCursor: string | null }>(res, "We couldn’t load your bookings. Please try again.");
       if (!Array.isArray(data.bookings)) throw new Error("We couldn’t load your bookings. Please try again.");
-      if (sequence === loadSequence.current) setRides((data.bookings ?? []) as Ride[]);
+      if (sequence === loadSequence.current) { setRides((data.bookings ?? []) as Ride[]); setNextCursor(data.nextCursor ?? null); setMoreError(null); }
     } catch (e) {
       if (sequence === loadSequence.current) setLoadError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [tab]);
+  }, [tab, filters]);
 
   useEffect(() => {
     void load();
@@ -217,7 +253,7 @@ export function RideDashboard() {
       if (Object.keys(map).length < RIDE_VEHICLE_CLASSES.length) setEstimateError("Some fares couldn’t be loaded. Retry to see current prices.");
       setEstimating(false);
     })();
-    return () => {
+  return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -289,11 +325,16 @@ export function RideDashboard() {
     setDropoff(p);
   }
 
+  const { lastChecked, offline } = useBookingUpdates<Ride>(user?.id ?? "", "RIDE", (updated) => {
+    if (tab === "active" && !loading) setRides(updated.filter((booking) => !["DELIVERED", "CANCELLED"].includes(booking.status)));
+    setTracking((previous) => previous ? updated.find((booking) => booking.id === previous.id) ?? previous : null);
+  });
+
   const canBook = pickupValid && dropoffValid && !!pickup && !!dropoff && estimatedKey === fareKey && !submitting && !estimating && !!estimates[vehicleClass];
   const selectedEstimate = estimates[vehicleClass];
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background pb-20 sm:pb-0">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -528,7 +569,7 @@ export function RideDashboard() {
           </Card>
 
           {/* ---------- Rides list ---------- */}
-          <div className="space-y-4 min-w-0">
+          <div ref={listRef} className="space-y-4 min-w-0">
             <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "history")}>
               <TabsList>
                 <TabsTrigger value="active" className="gap-1.5">
@@ -540,7 +581,9 @@ export function RideDashboard() {
               </TabsList>
             </Tabs>
 
-            {loading ? (
+<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{offline ? "Status updates paused — check your connection." : lastChecked ? "Status checked at " + lastChecked.toLocaleTimeString() : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading} onClick={() => void load()}>Refresh bookings</Button></div>
+        {tab === "history" && <HistoryFilters value={filters} onChange={setFilters} />}
+                    {loading ? (
               <div role="status" className="flex flex-col items-center gap-3 py-16 text-sm text-muted-foreground">
                 <FetchItLoader className="h-14 w-14" />
                 <p>Loading rides…</p>
@@ -548,7 +591,7 @@ export function RideDashboard() {
             ) : loadError ? (
           <RequestError message={loadError} onRetry={() => void load()} />
         ) : rides.length === 0 ? (
-              <EmptyState />
+              tab === "history" ? <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">No bookings match these filters.</p> : <EmptyState />
             ) : (
               <div className="space-y-4">
                 {rides.map((r) => (
@@ -562,6 +605,8 @@ export function RideDashboard() {
                 ))}
               </div>
             )}
+            {tab === "history" && nextCursor && !loading && <Button variant="outline" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Loading…" : "Load older bookings"}</Button>}
+        {moreError && <RequestError message={moreError} onRetry={() => void loadMore()} />}
           </div>
         </div>
       </main>
@@ -581,6 +626,8 @@ export function RideDashboard() {
         </DialogContent>
       </Dialog>
 
+      <CustomerBottomNav selected={profileOpen ? "profile" : tab === "history" ? "bookings" : "home"} onHome={() => { setTab("active"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBookings={() => { setTab("history"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} onProfile={() => setProfileOpen(true)} />
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Your profile</DialogTitle><DialogDescription>Manage your contact details and booking alerts.</DialogDescription></DialogHeader><ProfileSettings /><NotificationSettings /></DialogContent></Dialog>
       <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">
         Fetch-It · Deliveries &amp; Rides
       </footer>
@@ -670,7 +717,8 @@ function RideCard({
           </div>
         )}
 
-        <div className="flex gap-2 pt-1">
+        <BookingTimeline status={ride.status} type="RIDE" />
+        <div className="flex flex-wrap gap-2 pt-1">
           {ride.riderId && (
             <Button size="sm" className="flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={onTrack}>
               <Navigation className="h-3.5 w-3.5" />
@@ -684,6 +732,7 @@ function RideCard({
             </Button>
           )}
         </div>
+        <BookingActions booking={ride} />
       </CardContent>
     </Card>
   );

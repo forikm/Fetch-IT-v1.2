@@ -1,5 +1,12 @@
 "use client";
 
+import { BookingActions } from "../shared/booking-actions";
+import { BookingTimeline } from "../shared/booking-timeline";
+import { CustomerBottomNav } from "../shared/customer-bottom-nav";
+import { ProfileSettings } from "../shared/profile-settings";
+import { NotificationSettings } from "../shared/notification-settings";
+import { HistoryFilters, emptyHistoryFilter } from "../shared/history-filters";
+import { useBookingUpdates } from "@/hooks/use-booking-updates";
 import { SavedPlaces } from "../shared/saved-places";
 import { RequestError } from "../shared/request-error";
 import { useCustomerData } from "@/hooks/use-customer-data";
@@ -87,7 +94,7 @@ import { loadGoogleMaps } from "@/lib/google-maps-loader";
 interface Booking {
   id: string;
   refCode: string;
-  type: string;
+  type: "RIDE" | "DELIVERY";
   customerId: string;
   riderId: string | null;
   pickupLabel: string;
@@ -140,6 +147,12 @@ export function CustomerDashboard() {
 
   const [tab, setTab] = useState<"active" | "history">("active");
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [filters, setFilters] = useState(emptyHistoryFilter);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadSequence = useRef(0);
@@ -158,21 +171,44 @@ export function CustomerDashboard() {
       .catch(() => setMapsFailed(true));
   }, []);
 
+  function queryString(cursor?: string) {
+    const query = new URLSearchParams({ filter: tab, type: "DELIVERY" });
+    if (tab === "history") {
+      if (filters.query.trim()) query.set("q", filters.query.trim());
+      if (filters.status) query.set("status", filters.status);
+      if (filters.from) query.set("from", new Date(filters.from + "T00:00:00").toISOString());
+      if (filters.to) query.set("to", new Date(filters.to + "T23:59:59.999").toISOString());
+    }
+    if (cursor) query.set("cursor", cursor);
+    return query.toString();
+  }
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true); setMoreError(null);
+    const sequence = loadSequence.current;
+    try {
+      const data = await customerResponse<{ bookings: Booking[]; nextCursor: string | null }>(await fetch("/api/bookings?" + queryString(nextCursor), { cache: "no-store" }), "Couldn’t load older bookings. Please retry.");
+      if (sequence !== loadSequence.current) return;
+      setBookings((previous) => [...previous, ...data.bookings.filter((booking) => !previous.some((item) => item.id === booking.id))]);
+      setNextCursor(data.nextCursor);
+    } catch { if (sequence === loadSequence.current) setMoreError("Couldn’t load older bookings. Please retry."); }
+    finally { setLoadingMore(false); }
+  }
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`/api/bookings?filter=${tab}&type=DELIVERY`, { cache: "no-store" });
-      const data = await customerResponse<{ bookings: Booking[] }>(res, "We couldn’t load your bookings. Please try again.");
+      const res = await fetch("/api/bookings?" + queryString(), { cache: "no-store" });
+      const data = await customerResponse<{ bookings: Booking[]; nextCursor: string | null }>(res, "We couldn’t load your bookings. Please try again.");
       if (!Array.isArray(data.bookings)) throw new Error("We couldn’t load your bookings. Please try again.");
-      if (sequence === loadSequence.current) setBookings(data.bookings ?? []);
+      if (sequence === loadSequence.current) { setBookings(data.bookings ?? []); setNextCursor(data.nextCursor ?? null); setMoreError(null); }
     } catch (e) {
       if (sequence === loadSequence.current) setLoadError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [tab]);
+  }, [tab, filters]);
 
   useEffect(() => {
     void load();
@@ -202,8 +238,12 @@ export function CustomerDashboard() {
     });
   }
 
+  const { lastChecked, offline } = useBookingUpdates<Booking>(user?.id ?? "", "DELIVERY", (updated) => {
+    if (tab === "active" && !loading) setBookings(updated.filter((booking) => !["DELIVERED", "CANCELLED"].includes(booking.status)));
+    setTrackingBooking((previous) => previous ? updated.find((booking) => booking.id === previous.id) ?? previous : null);
+  });
   return (
-    <div className="min-h-screen w-full min-w-0 overflow-x-clip flex flex-col bg-background">
+    <div className="min-h-screen w-full min-w-0 overflow-x-clip flex flex-col bg-background pb-20 sm:pb-0">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">
         <div className="mx-auto w-full max-w-7xl min-w-0 px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
@@ -290,6 +330,7 @@ export function CustomerDashboard() {
           </Card>
         )}
 
+        <div ref={listRef} />
         {/* Tabs */}
         <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "history")}>
           <TabsList>
@@ -307,7 +348,9 @@ export function CustomerDashboard() {
           </TabsList>
         </Tabs>
 
-        {/* List */}
+<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{offline ? "Status updates paused — check your connection." : lastChecked ? "Status checked at " + lastChecked.toLocaleTimeString() : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading} onClick={() => void load()}>Refresh bookings</Button></div>
+        {tab === "history" && <HistoryFilters value={filters} onChange={setFilters} />}
+                {/* List */}
         {loading ? (
           <div role="status" className="flex flex-col items-center gap-3 py-16 text-sm text-muted-foreground">
             <FetchItLoader className="h-14 w-14" />
@@ -316,7 +359,7 @@ export function CustomerDashboard() {
         ) : loadError ? (
           <RequestError message={loadError} onRetry={() => void load()} />
         ) : bookings.length === 0 ? (
-          <EmptyState onNew={() => { setRepeatBooking(null); setShowNew(true); }} />
+          tab === "history" ? <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">No bookings match these filters.</p> : <EmptyState onNew={() => { setRepeatBooking(null); setShowNew(true); }} />
         ) : (
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4">
             {bookings.map((b) => (
@@ -330,6 +373,8 @@ export function CustomerDashboard() {
             ))}
           </div>
         )}
+        {tab === "history" && nextCursor && !loading && <Button variant="outline" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Loading…" : "Load older bookings"}</Button>}
+        {moreError && <RequestError message={moreError} onRetry={() => void loadMore()} />}
       </main>
 
       {/* New booking modal */}
@@ -397,6 +442,8 @@ export function CustomerDashboard() {
         </DialogContent>
       </Dialog>
 
+      <CustomerBottomNav selected={profileOpen ? "profile" : tab === "history" ? "bookings" : "home"} onHome={() => { setTab("active"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBookings={() => { setTab("history"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} onProfile={() => setProfileOpen(true)} />
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Your profile</DialogTitle><DialogDescription>Manage your contact details and booking alerts.</DialogDescription></DialogHeader><ProfileSettings /><NotificationSettings /></DialogContent></Dialog>
       <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">
         Fetch-It · Deliveries &amp; Rides
       </footer>
@@ -529,7 +576,8 @@ function BookingCard({
           </div>
         )}
 
-        <div className="flex gap-2 pt-1">
+        <BookingTimeline status={booking.status} type="DELIVERY" />
+        <div className="flex flex-wrap gap-2 pt-1">
           {canTrack && (
             <Button size="sm" className="flex-1" onClick={onTrack}>
               <Navigation className="h-3.5 w-3.5" /> Track
@@ -553,6 +601,7 @@ function BookingCard({
             </Button>
           )}
         </div>
+        <BookingActions booking={booking} />
       </CardContent>
     </Card>
   );

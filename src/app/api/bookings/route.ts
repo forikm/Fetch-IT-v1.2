@@ -1,5 +1,5 @@
 // /api/bookings
-// GET — list bookings for the current user (as customer or rider), optionally
+// GET — list bookings for the signed-in customer, optionally
 //       filtered by product type (?type=DELIVERY|RIDE).
 // POST — create a new booking (customer only):
 //        • type=DELIVERY (default) — cargo booking with weight-based fare
@@ -8,6 +8,7 @@
 //        (/api/rider/available) until a rider claims them.
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireCustomer, CustomerError, customerErrorResponse } from "@/lib/customer-access";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import {
@@ -19,61 +20,68 @@ import { quoteFare, quoteRideFare, generateRefCode } from "@/lib/fare";
 import { generateTicketId, omitTicket } from "@/lib/ticket";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await requireCustomer();
 
-  const url = new URL(req.url);
-  const filter = url.searchParams.get("filter") || "active"; // active | history | all
-  const type = url.searchParams.get("type"); // DELIVERY | RIDE | undefined
+    const url = new URL(req.url);
+    const filter = url.searchParams.get("filter") || "active"; // active | history | all
+    const type = url.searchParams.get("type");
+    const query = url.searchParams.get("q")?.trim().slice(0, 200);
+    const status = url.searchParams.get("status");
+    const cursor = url.searchParams.get("cursor");
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
+    if ((from && !Number.isFinite(Date.parse(from))) || (to && !Number.isFinite(Date.parse(to)))) throw new CustomerError("Choose valid history dates.", 400);
 
-  const where =
-    session.role === "CUSTOMER"
-      ? { customerId: session.uid }
-      : session.role === "RIDER"
-        ? { riderId: session.uid }
-        : {};
+    const where = { customerId: session.uid };
 
-  const statusFilter =
-    filter === "active"
-      ? { status: { in: ["PENDING", "MATCHED", "ACCEPTED", "PICKED_UP", "IN_TRANSIT"] } }
-      : filter === "history"
-        ? { status: { in: ["DELIVERED", "CANCELLED"] } }
-        : {};
+    const statusFilter =
+      filter === "active"
+        ? { status: { in: ["PENDING", "MATCHED", "ACCEPTED", "PICKED_UP", "IN_TRANSIT"] } }
+        : filter === "history"
+          ? { status: { in: ["DELIVERED", "CANCELLED"] } }
+          : {};
 
-  const bookings = await db.booking.findMany({
-    where: {
-      ...where,
-      ...statusFilter,
-      ...(type === "DELIVERY" || type === "RIDE" ? { type } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      customer: { select: { id: true, name: true, phone: true } },
-      rider: {
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          vehicleClass: true,
-          vehiclePlate: true,
-          rating: true,
+    const bookings = await db.booking.findMany({
+      where: {
+        ...where,
+        ...statusFilter,
+        ...(filter === "history" && (status === "DELIVERED" || status === "CANCELLED") ? { status } : {}),
+        ...(filter === "history" && query ? { OR: [{ refCode: { contains: query, mode: "insensitive" as const } }, { pickupLabel: { contains: query, mode: "insensitive" as const } }, { dropoffLabel: { contains: query, mode: "insensitive" as const } }] } : {}),
+        ...(filter === "history" && (from || to) ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+        ...(type === "DELIVERY" || type === "RIDE" ? { type } : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: {
+        customer: { select: { id: true, name: true, phone: true } },
+        rider: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            vehicleClass: true,
+            vehiclePlate: true,
+            rating: true,
+          },
         },
+        trackingUpdates: {
+          where: { source: "NATIVE" },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { lat: true, lng: true, createdAt: true },
+        },
+        deliveryProofs: true,
       },
-      trackingUpdates: {
-        where: { source: "NATIVE" },
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { lat: true, lng: true, createdAt: true },
-      },
-      deliveryProofs: true,
-    },
-    take: 100,
-  });
+      take: 101,
+    });
 
-  // This is the customer app — the R0001/D0001 tracking ticket is a
-  // rider-only artifact (see src/lib/ticket.ts) and never leaves the server
-  // here.
-  return NextResponse.json({ bookings: bookings.map(omitTicket) });
+    // This is the customer app — the R0001/D0001 tracking ticket is a
+    // rider-only artifact (see src/lib/ticket.ts) and never leaves the server
+    // here.
+    const page = bookings.slice(0, 100);
+    return NextResponse.json({ bookings: page.map(omitTicket), nextCursor: bookings.length > 100 ? page[page.length - 1].id : null }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) { return customerErrorResponse(error); }
 }
 
 export async function POST(req: NextRequest) {
