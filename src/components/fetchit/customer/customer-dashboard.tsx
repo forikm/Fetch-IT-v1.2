@@ -1,5 +1,8 @@
 "use client";
 
+import { NotificationInbox } from "../shared/notification-inbox";
+import { BookingHistoryRow } from "../shared/booking-history-row";
+import { BookingSummary } from "../shared/booking-summary";
 import { BookingActions } from "../shared/booking-actions";
 import { BookingTimeline } from "../shared/booking-timeline";
 import { CustomerBottomNav } from "../shared/customer-bottom-nav";
@@ -147,6 +150,22 @@ export function CustomerDashboard() {
 
   const [tab, setTab] = useState<"active" | "history">("active");
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [summaryBooking, setSummaryBooking] = useState<Booking | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const pendingBookingId = useAppStore((state) => state.pendingBookingId);
+  useEffect(() => {
+    if (!pendingBookingId) return;
+    let cancelled = false;
+    async function open() {
+      try {
+        const data = await customerResponse<{ booking: Booking }>(await fetch(`/api/bookings/${pendingBookingId}`, { cache: "no-store" }), "Couldn’t load the booking summary. Please try again.");
+        if (!cancelled) { setSummaryBooking(data.booking); setSummaryError(null); }
+      } catch { if (!cancelled) setSummaryError("Couldn’t load the booking summary. Please try again from the notification inbox."); }
+      finally { if (!cancelled) useAppStore.getState().clearPendingBooking(); }
+    }
+    void open();
+    return () => { cancelled = true; };
+  }, [pendingBookingId]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [filters, setFilters] = useState(emptyHistoryFilter);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -270,6 +289,7 @@ export function CustomerDashboard() {
               <span className="font-medium">{user?.name}</span>
               <span className="text-xs text-muted-foreground">{user?.email}</span>
             </div>
+            <NotificationInbox onBooking={(id, type) => useAppStore.getState().openBookingSummary(id, type === "RIDE" ? "ride" : "delivery")} />
             <ProfileMenu
               name={user?.name}
               email={user?.email}
@@ -299,7 +319,7 @@ export function CustomerDashboard() {
         </div>
 
         {/* Recent booking map preview */}
-        {!loading && !loadError && bookings.length > 0 && (
+        {tab === "active" && !loading && !loadError && bookings.length > 0 && (
           <Card className="min-w-0">
             <CardContent className="min-w-0 py-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -361,8 +381,9 @@ export function CustomerDashboard() {
         ) : bookings.length === 0 ? (
           tab === "history" ? <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">No bookings match these filters.</p> : <EmptyState onNew={() => { setRepeatBooking(null); setShowNew(true); }} />
         ) : (
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4">
+          <div className={tab === "history" ? "min-w-0 space-y-2" : "grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4"}>
             {bookings.map((b) => (
+              tab === "history" ? <BookingHistoryRow key={b.id} booking={b} onOpen={() => setSummaryBooking(b)} /> : (
               <BookingCard
                 key={b.id}
                 booking={b}
@@ -370,6 +391,7 @@ export function CustomerDashboard() {
                 onRefresh={load}
                 onRepeat={() => { setRepeatBooking(b); setShowNew(true); }}
               />
+              )
             ))}
           </div>
         )}
@@ -380,7 +402,7 @@ export function CustomerDashboard() {
       {/* New booking modal */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent
-          className="sm:max-w-2xl max-h-[92vh] overflow-y-auto"
+          className="sm:max-w-2xl"
           onPointerDownOutside={(e) => {
             // Google's address-suggestion dropdown (.pac-container) is
             // rendered directly on <body>, outside this dialog's own DOM
@@ -442,6 +464,11 @@ export function CustomerDashboard() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!summaryBooking} onOpenChange={(open) => !open && setSummaryBooking(null)}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Booking summary</DialogTitle><DialogDescription>{summaryBooking?.refCode}</DialogDescription></DialogHeader>{summaryBooking && <BookingSummary booking={summaryBooking} onRepeat={() => {
+        setRepeatBooking(summaryBooking); setShowNew(true);
+        setSummaryBooking(null);
+      }} onDetails={() => { setTrackingBooking(summaryBooking); setSummaryBooking(null); }} />}</DialogContent></Dialog>
+      <Dialog open={!!summaryError} onOpenChange={(open) => !open && setSummaryError(null)}><DialogContent><DialogHeader><DialogTitle>Summary unavailable</DialogTitle><DialogDescription>{summaryError}</DialogDescription></DialogHeader></DialogContent></Dialog>
       <CustomerBottomNav selected={profileOpen ? "profile" : tab === "history" ? "bookings" : "home"} onHome={() => { setTab("active"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBookings={() => { setTab("history"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} onProfile={() => setProfileOpen(true)} />
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Your profile</DialogTitle><DialogDescription>Manage your contact details and booking alerts.</DialogDescription></DialogHeader><ProfileSettings /><NotificationSettings /></DialogContent></Dialog>
       <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">
@@ -840,7 +867,7 @@ function BookingForm({
         // "Confirm booking" button.
         if (e.key === "Enter") e.preventDefault();
       }}
-      className="space-y-4"
+      className="min-w-0 space-y-4"
     >
       <p className="text-xs text-muted-foreground">Your draft is kept in this tab until you book. Review the route and current fare before confirming.</p>
       {/* Step indicator */}
@@ -988,19 +1015,19 @@ function BookingForm({
           <div className="rounded-md border bg-muted/20 p-3 text-xs space-y-1">
             <div className="flex min-w-0 items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-              <span className="min-w-0 truncate">{pickupLabel}</span>
+              <span className="min-w-0 break-words [overflow-wrap:anywhere]">{pickupLabel}</span>
             </div>
             <div className="flex min-w-0 items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-              <span className="min-w-0 truncate">{dropoffLabel}</span>
+              <span className="min-w-0 break-words [overflow-wrap:anywhere]">{dropoffLabel}</span>
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div className="space-y-2">
               <Label htmlFor="vc">Vehicle class</Label>
               <Select value={vehicleClass} onValueChange={(v) => setVehicleClass(v as VehicleClass)}>
-                <SelectTrigger id="vc"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="vc"><SelectValue>{v?.label}</SelectValue></SelectTrigger>
                 <SelectContent>
                   {VEHICLE_LIST.map((v) => (
                     <SelectItem key={v.id} value={v.id}>
@@ -1009,7 +1036,7 @@ function BookingForm({
                   ))}
                 </SelectContent>
               </Select>
-              {v && <p className="text-xs text-muted-foreground">{v.description}</p>}
+              {v && <p className="text-xs text-muted-foreground">{v.capacityKg} kg capacity · ₱{v.baseFare} for the first {v.includedKm} km. {v.description}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="weight">Cargo weight (kg)</Label>
@@ -1030,7 +1057,7 @@ function BookingForm({
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div className="space-y-2">
               <Label htmlFor="scheduled">Schedule for later (optional)</Label>
               <Input
@@ -1126,7 +1153,7 @@ function BookingForm({
       )}
 
       {/* Navigation */}
-      <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+      <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">
         <Button
           type="button"
           variant="outline"

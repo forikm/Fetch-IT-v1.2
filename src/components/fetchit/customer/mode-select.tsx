@@ -5,6 +5,8 @@
 // Picking a mode drops them into the matching dashboard; both dashboards
 // expose a "Switch mode" action that returns here.
 
+import { NotificationInbox } from "../shared/notification-inbox";
+import { useBookingUpdates } from "@/hooks/use-booking-updates";
 import {
   Package,
   MapPin,
@@ -29,6 +31,7 @@ export function ModeSelect() {
   const chooseMode = useAppStore((s) => s.chooseMode);
   const logout = useAppStore((s) => s.logout);
 
+  useBookingUpdates(user?.id ?? "", "ALL", () => {});
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
@@ -40,6 +43,7 @@ export function ModeSelect() {
               <span className="font-medium">{user?.name}</span>
               <span className="text-xs text-muted-foreground">{user?.email}</span>
             </div>
+            <NotificationInbox onBooking={(id, type) => useAppStore.getState().openBookingSummary(id, type === "RIDE" ? "ride" : "delivery")} />
             <ProfileMenu
               name={user?.name}
               email={user?.email}

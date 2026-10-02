@@ -52,6 +52,9 @@ interface AppState {
   mode: AppMode | null;
   // Login form prefills role so the UI can show a tailored form.
   pendingRole: Role | null;
+  pendingBookingId: string | null;
+  openBookingSummary: (id: string, mode: AppMode) => void;
+  clearPendingBooking: () => void;
   setView: (v: AppView) => void;
   setPendingRole: (r: Role | null) => void;
   setUser: (u: AuthUser | null) => void;
@@ -68,6 +71,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   view: "landing",
   mode: null,
   pendingRole: null,
+  pendingBookingId: null,
+  openBookingSummary: (id, mode) => set({ pendingBookingId: id, mode, view: mode === "ride" ? "ride-dashboard" : "customer-dashboard" }),
+  clearPendingBooking: () => set({ pendingBookingId: null }),
   setView: (v) => set({ view: v }),
   setPendingRole: (r) => set({ pendingRole: r }),
   setUser: (u) =>
@@ -109,7 +115,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch {
       // Demo and legacy accounts may not have Firebase configured or signed in.
     }
-    set({ user: null, view: "landing", pendingRole: null, mode: null });
+    set({ user: null, view: "landing", pendingRole: null, pendingBookingId: null, mode: null });
   },
   refreshUser: async () => {
     const res = await fetch("/api/auth/me", { cache: "no-store" });

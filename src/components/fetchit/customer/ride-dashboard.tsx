@@ -1,5 +1,8 @@
 "use client";
 
+import { NotificationInbox } from "../shared/notification-inbox";
+import { BookingHistoryRow } from "../shared/booking-history-row";
+import { BookingSummary } from "../shared/booking-summary";
 import { BookingActions } from "../shared/booking-actions";
 import { BookingTimeline } from "../shared/booking-timeline";
 import { CustomerBottomNav } from "../shared/customer-bottom-nav";
@@ -129,6 +132,22 @@ export function RideDashboard() {
 
   const [tab, setTab] = useState<"active" | "history">("active");
   const [rides, setRides] = useState<Ride[]>([]);
+  const [summaryBooking, setSummaryBooking] = useState<Ride | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const pendingBookingId = useAppStore((state) => state.pendingBookingId);
+  useEffect(() => {
+    if (!pendingBookingId) return;
+    let cancelled = false;
+    async function open() {
+      try {
+        const data = await customerResponse<{ booking: Ride }>(await fetch(`/api/bookings/${pendingBookingId}`, { cache: "no-store" }), "Couldn’t load the booking summary. Please try again.");
+        if (!cancelled) { setSummaryBooking(data.booking); setSummaryError(null); }
+      } catch { if (!cancelled) setSummaryError("Couldn’t load the booking summary. Please try again from the notification inbox."); }
+      finally { if (!cancelled) useAppStore.getState().clearPendingBooking(); }
+    }
+    void open();
+    return () => { cancelled = true; };
+  }, [pendingBookingId]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [filters, setFilters] = useState(emptyHistoryFilter);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -361,6 +380,7 @@ export function RideDashboard() {
               <span className="font-medium">{user?.name}</span>
               <span className="text-xs text-muted-foreground">{user?.email}</span>
             </div>
+            <NotificationInbox onBooking={(id, type) => useAppStore.getState().openBookingSummary(id, type === "RIDE" ? "ride" : "delivery")} />
             <ProfileMenu
               name={user?.name}
               email={user?.email}
@@ -379,7 +399,7 @@ export function RideDashboard() {
         </div>
         <div className="grid lg:grid-cols-[minmax(0,420px)_1fr] gap-6 items-start">
           {/* ---------- Book a ride panel ---------- */}
-          <Card ref={bookingPanel} tabIndex={-1} className="shadow-sm lg:sticky lg:top-20">
+          <Card ref={bookingPanel} tabIndex={-1} className={cn("min-w-0 shadow-sm lg:sticky lg:top-20", tab === "history" && "hidden lg:block")}>
             <CardHeader className="pb-4">
               <CardTitle className="text-xl">Where to?</CardTitle>
               <CardDescription>
@@ -595,6 +615,7 @@ export function RideDashboard() {
             ) : (
               <div className="space-y-4">
                 {rides.map((r) => (
+              tab === "history" ? <BookingHistoryRow key={r.id} booking={r} onOpen={() => setSummaryBooking(r)} /> : (
                   <RideCard
                     key={r.id}
                     ride={r}
@@ -602,6 +623,7 @@ export function RideDashboard() {
                     onCancel={() => cancelRide(r)}
                     onRepeat={() => { setPickupValid(true); setDropoffValid(true); setDraft({ pickup: { label: r.pickupLabel, lat: r.pickupLat, lng: r.pickupLng }, dropoff: { label: r.dropoffLabel, lat: r.dropoffLat, lng: r.dropoffLng }, vehicleClass: r.vehicleClass, passengers: r.passengers }); setBookingError(null); bookingPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" }); bookingPanel.current?.focus({ preventScroll: true }); toast({ title: "Review your ride", description: "Route filled in. Check the current fare before booking." }); }}
                   />
+              )
                 ))}
               </div>
             )}
@@ -626,6 +648,13 @@ export function RideDashboard() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!summaryBooking} onOpenChange={(open) => !open && setSummaryBooking(null)}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Booking summary</DialogTitle><DialogDescription>{summaryBooking?.refCode}</DialogDescription></DialogHeader>{summaryBooking && <BookingSummary booking={summaryBooking} onRepeat={() => {
+        setPickupValid(true); setDropoffValid(true); setDraft({ pickup: { label: summaryBooking.pickupLabel, lat: summaryBooking.pickupLat, lng: summaryBooking.pickupLng }, dropoff: { label: summaryBooking.dropoffLabel, lat: summaryBooking.dropoffLat, lng: summaryBooking.dropoffLng }, vehicleClass: summaryBooking.vehicleClass, passengers: summaryBooking.passengers }); setBookingError(null);
+        setTab("active");
+        setSummaryBooking(null);
+        requestAnimationFrame(() => { bookingPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" }); bookingPanel.current?.focus({ preventScroll: true }); });
+      }} onDetails={() => { setTracking(summaryBooking); setSummaryBooking(null); }} />}</DialogContent></Dialog>
+      <Dialog open={!!summaryError} onOpenChange={(open) => !open && setSummaryError(null)}><DialogContent><DialogHeader><DialogTitle>Summary unavailable</DialogTitle><DialogDescription>{summaryError}</DialogDescription></DialogHeader></DialogContent></Dialog>
       <CustomerBottomNav selected={profileOpen ? "profile" : tab === "history" ? "bookings" : "home"} onHome={() => { setTab("active"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBookings={() => { setTab("history"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} onProfile={() => setProfileOpen(true)} />
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Your profile</DialogTitle><DialogDescription>Manage your contact details and booking alerts.</DialogDescription></DialogHeader><ProfileSettings /><NotificationSettings /></DialogContent></Dialog>
       <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">

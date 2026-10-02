@@ -23,10 +23,19 @@ npx prisma generate
 
 The SQL only creates `CustomerReview`, `SupportTicket`, and their indexes. Existing booking/user columns are unchanged.
 
+## Notification inbox and compact history
+
+The bell in the customer hub and both dashboards opens a booking notification inbox. Status updates are saved per account on this device, with an unread badge and a mark-all-read action. Selecting an update marks it read and opens the matching delivery or ride summary. Initial sign-in establishes a baseline without flooding the inbox with old bookings; subsequent status changes are checked every 15 seconds and when the tab regains focus or reconnects.
+
+History rows show only the completion/cancellation status and destination address. Selecting a row opens the full summary, including route, fare, rider, progress, receipt, rating, help, and repeat-booking actions. The ride booking form is hidden in mobile history and reappears when repeating a ride.
+
+Dialogs fit the viewport width and height with internal scrolling. The delivery form wraps long addresses, uses a short vehicle label, and keeps its Back and Confirm controls reachable on narrow phones.
+
 ## Verification
 
 ```powershell
 node --experimental-strip-types --test tests/customer-request.test.mjs
+node --experimental-strip-types --test tests/booking-notifications.test.mjs
 npx tsc --noEmit
 ```
 
