@@ -1,5 +1,7 @@
 "use client";
 
+import { FetchItLoader } from "@/components/fetchit/shared/loading";
+
 // Auth view for the Fetch-It CUSTOMER app.
 // Customers only — riders sign in from the separate Fetch-It Rider app.
 
@@ -15,7 +17,7 @@ import {
   updateProfile,
   type User,
 } from "firebase/auth";
-import { ArrowLeft, ArrowUpRight, Car, Loader2, LogIn, Package, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Car, LogIn, Package, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -273,7 +275,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                   {error && <p className="text-sm text-destructive [overflow-wrap:anywhere]" role="alert">{error}</p>}
                   {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
                   <Button className="w-full" onClick={checkVerification} disabled={loading}>
-                    {loading && <Loader2 className="h-4 w-4 animate-spin" />} I&apos;ve verified my email
+                    {loading && <FetchItLoader className="h-4 w-4" />} I&apos;ve verified my email
                   </Button>
                   <Button variant="outline" className="w-full" onClick={resendVerification} disabled={loading}>Resend email</Button>
                   <Button variant="ghost" className="w-full" onClick={useDifferentAccount} disabled={loading}>Use a different account</Button>
@@ -319,7 +321,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                     )}
                     {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
                     <Button type="submit" className="w-full" disabled={loading}>
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+                      {loading ? <FetchItLoader className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
                       Sign in
                     </Button>
                   </form>
@@ -342,7 +344,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                       onClick={() => tryDemo()}
                     >
                       {loading ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <FetchItLoader className="h-3.5 w-3.5" />
                       ) : (
                         <LogIn className="h-3.5 w-3.5" />
                       )}
@@ -407,7 +409,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                     {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <FetchItLoader className="h-4 w-4" />
                       ) : (
                         <UserPlus className="h-4 w-4" />
                       )}

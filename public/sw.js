@@ -3,13 +3,14 @@
 // assets, so the user always gets fresh content when online but can still
 // load the app shell offline.
 
-const CACHE_VERSION = "fetchit-customer-v1";
+const CACHE_VERSION = "fetchit-customer-v2";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/icon.svg",
+  "/fetch-icon-192.png",
+  "/fetch-icon-512.png",
+  "/fetch-logo.jpg",
+  "/fetch-loading.gif",
 ];
 
 self.addEventListener("install", (event) => {

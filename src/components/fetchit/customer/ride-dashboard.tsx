@@ -1,5 +1,7 @@
 "use client";
 
+import { FetchItLoader } from "@/components/fetchit/shared/loading";
+
 // RideDashboard — the RIDE product for customers, Grab/Uber style.
 // "Where to?" panel with address autocomplete, ride-class picker with live
 // fares per class, passengers stepper, active rides with live tracking and
@@ -10,7 +12,6 @@ import {
   Bike,
   Car,
   ArrowUpDown,
-  Loader2,
   Navigation,
   Phone,
   X,
@@ -45,7 +46,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore, type AuthUser } from "@/lib/store";
 import {
@@ -395,7 +395,7 @@ export function RideDashboard() {
                         </span>
                         <span className="text-right shrink-0">
                           {estimating && !est ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            <FetchItLoader className="h-4 w-4 text-muted-foreground" />
                           ) : est ? (
                             <span className="block font-semibold text-sm">₱{est.totalFare}</span>
                           ) : (
@@ -475,7 +475,7 @@ export function RideDashboard() {
                 onClick={bookRide}
               >
                 {submitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <FetchItLoader className="h-4 w-4" />
                 ) : (
                   <Navigation className="h-4 w-4" />
                 )}
@@ -503,16 +503,9 @@ export function RideDashboard() {
             </Tabs>
 
             {loading ? (
-              <div className="space-y-4">
-                {[0, 1].map((i) => (
-                  <Card key={i} className="border">
-                    <CardHeader><Skeleton className="h-6 w-40" /></CardHeader>
-                    <CardContent className="space-y-3">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-2/3" />
-                    </CardContent>
-                  </Card>
-                ))}
+              <div role="status" className="flex flex-col items-center gap-3 py-16 text-sm text-muted-foreground">
+                <FetchItLoader className="h-14 w-14" />
+                <p>Loading rides…</p>
               </div>
             ) : rides.length === 0 ? (
               <EmptyState />
@@ -780,7 +773,7 @@ function RideTrackingView({
       ) : (
         <Card className="border-dashed">
           <CardContent className="py-6 flex items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <FetchItLoader className="h-4 w-4" />
             <span className="text-sm">Waiting for a driver to accept…</span>
           </CardContent>
         </Card>

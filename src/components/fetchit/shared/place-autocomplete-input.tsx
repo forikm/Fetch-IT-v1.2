@@ -1,5 +1,7 @@
 "use client";
 
+import { FetchItLoader } from "@/components/fetchit/shared/loading";
+
 // A drop-in replacement for a plain address <Input>. As the person types,
 // Google Places suggests real addresses; picking one fills in a proper
 // label AND the lat/lng behind the scenes — no manual coordinate entry.
@@ -7,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
-import { Loader2, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 export type PlaceValue = { label: string; lat: number; lng: number };
 
@@ -81,7 +83,7 @@ export function PlaceAutocompleteInput({
         autoComplete="off"
       />
       {!ready && !failed && (
-        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+        <FetchItLoader className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       )}
       {failed && (
         <p className="text-xs text-amber-600 mt-1">{failed}</p>

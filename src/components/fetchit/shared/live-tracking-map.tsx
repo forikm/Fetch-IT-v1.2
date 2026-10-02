@@ -1,7 +1,9 @@
 "use client";
 
+import { FetchItLoader } from "@/components/fetchit/shared/loading";
+
 import { useEffect, useRef, useState } from "react";
-import { Loader2, MapPinOff } from "lucide-react";
+import { MapPinOff } from "lucide-react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
 type Point = { lat: number; lng: number };
@@ -133,7 +135,7 @@ export function LiveTrackingMap({
       <div ref={containerRef} className="absolute inset-0" />
       {!ready && (
         <div className="absolute inset-0 grid place-items-center bg-muted/50">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <FetchItLoader className="h-6 w-6 text-primary" />
         </div>
       )}
       {ready && !rider && (

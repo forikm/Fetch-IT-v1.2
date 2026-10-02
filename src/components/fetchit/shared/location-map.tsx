@@ -1,5 +1,7 @@
 "use client";
 
+import { FetchItLoader } from "@/components/fetchit/shared/loading";
+
 // Grab/Uber-style "drop a pin" map. The pin stays fixed in the center of
 // the view; the person drags the MAP underneath it to position it. Hitting
 // "Confirm this location" reverse-geocodes wherever the pin is pointing
@@ -8,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 import { Button } from "@/components/ui/button";
-import { Loader2, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 // Lingayen, Pangasinan, Philippines — used as the map's starting view
 // whenever no address has been picked yet.
@@ -100,7 +102,7 @@ export function LocationMap({
         <div ref={containerRef} className="absolute inset-0" />
         {!ready && (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/40">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <FetchItLoader className="h-4 w-4 text-muted-foreground" />
           </div>
         )}
         {/* Pin fixed to the center of the viewport — the map pans underneath it. */}
@@ -121,7 +123,7 @@ export function LocationMap({
         >
           {confirming ? (
             <>
-              <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> Looking up address…
+              <FetchItLoader className="h-3 w-3 mr-1.5" /> Looking up address…
             </>
           ) : (
             "Confirm this location"

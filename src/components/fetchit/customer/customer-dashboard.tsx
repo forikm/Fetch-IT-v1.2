@@ -1,5 +1,7 @@
 "use client";
 
+import { FetchItLoader } from "@/components/fetchit/shared/loading";
+
 // Customer dashboard — bookings list, booking form, live tracking modal.
 // All client-side; view state lives in this component.
 
@@ -12,7 +14,6 @@ import {
   Calculator,
   Clock,
   Star,
-  Loader2,
   History,
   X,
   ShieldCheck,
@@ -60,7 +61,6 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore, type AuthUser } from "@/lib/store";
 import {
@@ -297,16 +297,9 @@ export function CustomerDashboard() {
 
         {/* List */}
         {loading ? (
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4">
-            {[0, 1, 2, 3].map((i) => (
-              <Card key={i} className="border">
-                <CardHeader><Skeleton className="h-6 w-40" /></CardHeader>
-                <CardContent className="space-y-3">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-2/3" />
-                </CardContent>
-              </Card>
-            ))}
+          <div role="status" className="flex flex-col items-center gap-3 py-16 text-sm text-muted-foreground">
+            <FetchItLoader className="h-14 w-14" />
+            <p>Loading deliveries…</p>
           </div>
         ) : bookings.length === 0 ? (
           <EmptyState onNew={() => setShowNew(true)} />
@@ -350,7 +343,7 @@ export function CustomerDashboard() {
           </DialogHeader>
           {!mapsReady && !mapsFailed ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin" />
+              <FetchItLoader className="h-6 w-6" />
               <p className="text-sm">Preparing map services…</p>
             </div>
           ) : (
@@ -531,7 +524,7 @@ function BookingCard({
               onClick={cancel}
               disabled={cancelling}
             >
-              {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+              {cancelling ? <FetchItLoader className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
               Cancel
             </Button>
           )}
@@ -974,7 +967,7 @@ function BookingForm({
               <CardContent className="py-4">
                 {estimating ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Calculating fare…
+                    <FetchItLoader className="h-4 w-4" /> Calculating fare…
                   </div>
                 ) : estimate ? (
                   <div className="space-y-2">
@@ -1060,7 +1053,7 @@ function BookingForm({
           </Button>
         ) : (
           <Button type="button" onClick={handleConfirmBooking} disabled={submitting || !canEstimate()}>
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            {submitting ? <FetchItLoader className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             Confirm booking
           </Button>
         )}
@@ -1269,7 +1262,7 @@ function TrackingView({
               </div>
             ) : (
               <Button variant="outline" onClick={loadOtp} disabled={loadingOtp}>
-                {loadingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                {loadingOtp ? <FetchItLoader className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
                 Reveal OTP
               </Button>
             )}

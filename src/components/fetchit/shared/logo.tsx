@@ -1,6 +1,7 @@
 // Brand logo + wordmark for Fetch-It.
 
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 export function FetchItLogo({
   className,
@@ -13,31 +14,15 @@ export function FetchItLogo({
 }) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <svg
+      <Image
+        src="/fetch-logo.jpg"
         width={size}
         height={size}
-        viewBox="0 0 64 64"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
+        alt=""
         aria-hidden="true"
-      >
-        <rect width="64" height="64" rx="14" fill="var(--primary)" />
-        {/* stylised parcel + arrow inside */}
-        <path
-          d="M16 22 L32 14 L48 22 L48 42 L32 50 L16 42 Z"
-          fill="var(--primary-foreground)"
-          opacity="0.95"
-        />
-        <path
-          d="M32 14 L48 22 L32 30 L16 22 Z"
-          fill="var(--primary-foreground)"
-          opacity="0.55"
-        />
-        <path
-          d="M28 38 L36 38 L36 30 L40 30 L32 22 L24 30 L28 30 Z"
-          fill="var(--primary)"
-        />
-      </svg>
+        className="shrink-0 rounded-full object-contain"
+        unoptimized
+      />
       {showWordmark && (
         <span className="font-semibold text-xl tracking-[-0.05em]">
           Fetch<span className="text-primary">-It</span>

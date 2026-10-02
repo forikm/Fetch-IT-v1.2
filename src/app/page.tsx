@@ -7,6 +7,7 @@ import { AuthView } from "@/components/fetchit/shared/auth-view";
 import { ModeSelect } from "@/components/fetchit/customer/mode-select";
 import { CustomerDashboard } from "@/components/fetchit/customer/customer-dashboard";
 import { RideDashboard } from "@/components/fetchit/customer/ride-dashboard";
+import { FetchItLoadingScreen } from "@/components/fetchit/shared/loading";
 
 export default function Home() {
   const { view, bootstrapped, bootstrap } = useAppStore();
@@ -16,27 +17,7 @@ export default function Home() {
   }, [bootstrap]);
 
   if (!bootstrapped) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 64 64"
-            className="animate-fit-pulse"
-            aria-hidden
-          >
-            <rect width="64" height="64" rx="14" fill="var(--primary)" />
-            <path
-              d="M16 22 L32 14 L48 22 L48 42 L32 50 L16 42 Z"
-              fill="var(--primary-foreground)"
-              opacity="0.95"
-            />
-          </svg>
-          <p className="text-sm">Loading Fetch-It…</p>
-        </div>
-      </div>
-    );
+    return <FetchItLoadingScreen />;
   }
 
   if (view === "landing") return <LandingView />;

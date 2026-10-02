@@ -1,12 +1,14 @@
 "use client";
 
+import { FetchItLoader } from "@/components/fetchit/shared/loading";
+
 // Read-only preview map: drops a green pin at pickup and a red pin at
 // drop-off, then frames the view to fit both. No dragging, no confirm
 // button — just a quick visual for "here's where this booking goes."
 
 import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
-import { Loader2 } from "lucide-react";
+
 
 export function BookingRouteMap({
   pickup,
@@ -63,7 +65,7 @@ export function BookingRouteMap({
       <div ref={containerRef} className="absolute inset-0" />
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center bg-muted/40">
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <FetchItLoader className="h-4 w-4 text-muted-foreground" />
         </div>
       )}
     </div>
