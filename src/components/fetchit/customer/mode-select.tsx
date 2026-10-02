@@ -17,6 +17,7 @@ import {
   Clock,
   Star,
   Users,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +29,7 @@ export function ModeSelect() {
   const user = useAppStore((s) => s.user) as AuthUser | null;
   const chooseMode = useAppStore((s) => s.chooseMode);
   const logout = useAppStore((s) => s.logout);
+  const riderAppUrl = process.env.NEXT_PUBLIC_RIDER_APP_URL || "https://fetch-it-rider.vercel.app/";
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -92,6 +94,21 @@ export function ModeSelect() {
             cta="Book a ride"
             onClick={() => chooseMode("ride")}
           />
+        </div>
+
+        {/* Rider app */}
+        <div className="mt-6 flex flex-col gap-4 rounded-xl border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold">Become a rider</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Sign up and accept jobs in the Fetch-It Rider app.
+            </p>
+          </div>
+          <Button asChild variant="outline" className="shrink-0 gap-2">
+            <a href={riderAppUrl}>
+              Become a rider <ExternalLink className="h-4 w-4" />
+            </a>
+          </Button>
         </div>
 
         {/* Trust strip */}

@@ -21,6 +21,7 @@ import {
   Smartphone,
   Play,
   Car,
+  Bike,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,6 +95,7 @@ const PERSONAS: {
 ];
 
 export function LandingView() {
+  const riderAppUrl = process.env.NEXT_PUBLIC_RIDER_APP_URL || "https://fetch-it-rider.vercel.app/";
   const demoEnabled = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true";
   const setView = useAppStore((s) => s.setView);
   const setPendingRole = useAppStore((s) => s.setPendingRole);
@@ -184,6 +186,11 @@ export function LandingView() {
                 </Button>
                 <Button size="lg" variant="outline" onClick={() => pickRole("CUSTOMER", "login")}>
                   Customer login
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <a href={riderAppUrl}>
+                    <Bike className="h-4 w-4" /> Become a rider
+                  </a>
                 </Button>
               </div>
               {/* Product chips */}
