@@ -18,3 +18,10 @@ test("duplicate events preserve read state and inbox size is bounded", () => {
   assert.equal(mergeBookingNotifications([{ ...item, read: true }], [item])[0].read, true);
   assert.equal(mergeBookingNotifications([], Array.from({ length: 110 }, (_, index) => ({ ...item, id: String(index) }))).length, 100);
 });
+test("old records entering a page do not notify", () => {
+  assert.deepEqual(createBookingNotifications([booking], {}, now), []);
+  assert.deepEqual(createBookingNotifications([{ ...booking, createdAt: '2026-09-01T00:00:00Z' }], {}, now), []);
+});
+test("a booking created after this session starts notifies", () => {
+  assert.equal(createBookingNotifications([{ ...booking, status: 'PENDING', createdAt: now }], {}, now, '2026-10-02T10:30:00Z').length, 1);
+});

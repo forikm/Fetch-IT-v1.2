@@ -12,17 +12,17 @@ export function useBookingUpdates<T extends Update>(userId: string, type: string
   const callback = useRef(onUpdate);
   const [preferences] = useCustomerData(userId, "notifications", { inApp: true, browser: false }, true);
   const preferenceRef = useRef(preferences);
-  const [snapshots, saveSnapshots] = useCustomerData<Record<string, BookingStatus> | null>(userId, "booking-statuses", null, true);
-  const snapshotRef = useRef(snapshots);
-  const [, saveInbox] = useCustomerData<BookingNotification[]>(userId, "notification-inbox", [], true);
+  const [, saveInbox] = useCustomerData<BookingNotification[]>(userId, "notification-inbox-v2", [], true);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [offline, setOffline] = useState(false);
-  useEffect(() => { callback.current = onUpdate; preferenceRef.current = preferences; snapshotRef.current = snapshots; }, [onUpdate, preferences, snapshots]);
+  useEffect(() => { callback.current = onUpdate; preferenceRef.current = preferences; }, [onUpdate, preferences]);
   useEffect(() => {
     if (!userId) return;
     let stopped = false;
     let running = false;
-    let baseline: Record<string, BookingStatus> | null = snapshotRef.current;
+    // Always establish a fresh session baseline; never replay history on login.
+    let baseline: Record<string, BookingStatus> | null = null;
+    const startedAt = new Date().toISOString();
     async function poll() {
       if (running || stopped) return;
       running = true;
@@ -30,7 +30,7 @@ export function useBookingUpdates<T extends Update>(userId: string, type: string
         const response = await fetch("/api/bookings?filter=all", { cache: "no-store" });
         const data = await customerResponse<{ bookings: T[] }>(response, "Updates unavailable");
         if (stopped || !Array.isArray(data.bookings)) return;
-        const updates = createBookingNotifications(data.bookings, baseline ?? snapshotRef.current, new Date().toISOString());
+        const updates = createBookingNotifications(data.bookings, baseline, new Date().toISOString(), startedAt);
         if (updates.length) {
           saveInbox((previous) => mergeBookingNotifications(previous, updates));
           if (preferenceRef.current.inApp) toast({ title: updates.length > 1 ? "Booking updates" : "Booking update", description: updates.map((item) => item.refCode + " · " + statusLabel(item.status, item.type)).join("; ") });
@@ -40,8 +40,7 @@ export function useBookingUpdates<T extends Update>(userId: string, type: string
             }
           }
         }
-        baseline = Object.fromEntries(data.bookings.map((booking) => [booking.id, booking.status]));
-        saveSnapshots(baseline);
+        baseline = { ...baseline, ...Object.fromEntries(data.bookings.map((booking) => [booking.id, booking.status])) };
         callback.current(type === "ALL" ? data.bookings : data.bookings.filter((booking) => booking.type === type));
         setLastChecked(new Date()); setOffline(false);
       } catch { if (!stopped) setOffline(true); }

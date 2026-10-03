@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 
 export function NotificationInbox({ onBooking }: { onBooking: (id: string, type: "DELIVERY" | "RIDE") => void }) {
   const id = useAppStore((state) => state.user?.id ?? "anonymous");
-  const [items, save] = useCustomerData<BookingNotification[]>(id, "notification-inbox", [], true);
+  const [items, save] = useCustomerData<BookingNotification[]>(id, "notification-inbox-v2", [], true);
   const [open, setOpen] = useState(false);
   const unread = items.filter((item) => !item.read).length;
   return <>
