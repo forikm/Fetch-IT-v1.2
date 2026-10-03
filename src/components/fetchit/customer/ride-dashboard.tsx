@@ -70,7 +70,7 @@ import {
   type BookingStatus,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { FetchItLogo } from "../shared/logo";
+import { BrandNavigation } from "../shared/brand-navigation";
 import { PlaceAutocompleteInput, type PlaceValue } from "../shared/place-autocomplete-input";
 import { BookingRouteMap } from "../shared/booking-route-map";
 import { ProfileMenu } from "../shared/profile-menu";
@@ -357,14 +357,7 @@ export function RideDashboard() {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setView("mode-select")}
-            className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Go to mode selection"
-          >
-            <FetchItLogo />
-          </button>
+          <BrandNavigation />
           <div className="flex items-center gap-3">
             <Button
               variant="outline"

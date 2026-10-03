@@ -23,7 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAppStore, type AuthUser } from "@/lib/store";
-import { FetchItLogo } from "../shared/logo";
+import { BrandNavigation } from "../shared/brand-navigation";
 import { ProfileMenu } from "../shared/profile-menu";
 
 export function ModeSelect() {
@@ -37,7 +37,7 @@ export function ModeSelect() {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <FetchItLogo />
+          <BrandNavigation />
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex flex-col items-end text-sm leading-tight">
               <span className="font-medium">{user?.name}</span>

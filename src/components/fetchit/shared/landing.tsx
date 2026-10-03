@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowRight, Car, Check, ChevronRight, Clock, MapPin, Navigation, Package, Play, ShieldCheck, Smartphone, Truck } from "lucide-react";
+import { ArrowRight, Car, Check, ChevronRight, Clock, MapPin, Navigation, Package, Play, ShieldCheck, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FetchItLogo } from "./logo";
+import { BrandNavigation, ItMark } from "./brand-navigation";
 import { useAppStore, type Role } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -17,14 +18,18 @@ export function LandingView() {
   const riderAppUrl = process.env.NEXT_PUBLIC_RIDER_APP_URL || "https://fetch-it-rider.vercel.app/";
   const demoEnabled = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true";
   const setView = useAppStore((s) => s.setView);
+  const user = useAppStore((s) => s.user);
+  const chooseMode = useAppStore((s) => s.chooseMode);
+  const start = () => user ? setView("mode-select") : pickRole("CUSTOMER", "signup");
+  useEffect(() => { const id = location.hash.slice(1); if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" })); }, []);
   const setPendingRole = useAppStore((s) => s.setPendingRole);
   const [seeded, setSeeded] = useState(false);
   const [preview, setPreview] = useState<"delivery" | "ride">("delivery");
 
   useEffect(() => {
-    if (!demoEnabled) return;
+    if (!demoEnabled || user) return;
     fetch("/api/auth/seed", { method: "POST" }).then((res) => setSeeded(res.ok)).catch(() => setSeeded(false));
-  }, [demoEnabled]);
+  }, [demoEnabled, user]);
 
   function pickRole(role: Role, view: "login" | "signup") {
     setPendingRole(role);
@@ -49,20 +54,12 @@ export function LandingView() {
   return (
     <div className="min-h-screen overflow-x-clip bg-background">
       <header className="sticky top-0 z-40 border-b border-foreground/5 bg-background/95 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
-          <a href="#" aria-label="Fetch-It home" className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <span className="sm:hidden"><FetchItLogo showWordmark={false} size={32} /></span>
-            <span className="hidden sm:block"><FetchItLogo /></span>
-          </a>
-          <nav aria-label="Main navigation" className="hidden items-center gap-7 text-sm font-medium text-muted-foreground lg:flex">
-            <a href="#services" className="transition hover:text-foreground">Our services</a>
-            <a href="#features" className="transition hover:text-foreground">Why Fetch-It</a>
-            <a href="#how-it-works" className="transition hover:text-foreground">How it works</a>
-          </nav>
-          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className="mx-auto flex min-h-20 max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3 sm:flex-nowrap sm:px-6 lg:px-8">
+          <BrandNavigation />
+          <div className="flex w-full shrink-0 items-center justify-between gap-1 sm:w-auto sm:gap-2">
             <Button asChild variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm"><a href={riderAppUrl}>Become a rider <ArrowRight className="hidden sm:block" /></a></Button>
-            <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm" onClick={() => pickRole("CUSTOMER", "login")}>Login</Button>
-            <Button size="sm" className="px-2 text-xs sm:px-4 sm:text-sm" onClick={() => pickRole("CUSTOMER", "signup")}>Get started</Button>
+            {!user && <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm" onClick={() => pickRole("CUSTOMER", "login")}>Login</Button>}
+            <Button size="sm" className="px-2 text-xs sm:px-4 sm:text-sm" onClick={start}>{user ? "Dashboard" : "Get started"}</Button>
           </div>
         </div>
       </header>
@@ -74,10 +71,8 @@ export function LandingView() {
               <h1 className="max-w-xl text-[clamp(2.8rem,5.5vw,5rem)] font-semibold leading-[1.04] tracking-[-0.055em]">Good things.<br />Going places.<span className="text-primary">↗</span></h1>
               <p className="mt-6 max-w-md text-base leading-relaxed text-muted-foreground sm:text-lg">A parcel across town. A ride to your next stop. Make your everyday moves a little easier with Fetch-It.</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Button size="lg" onClick={() => pickRole("CUSTOMER", "signup")}>Let&apos;s get moving <ArrowRight /></Button>
-                <Button asChild size="lg" variant="outline"><a href="#services">Explore our services <ArrowDown /></a></Button>
+                <Button size="lg" onClick={start}>Let&apos;s get moving <ArrowRight /></Button>
               </div>
-              <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground sm:text-sm"><span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-700" /> Upfront fare estimates</span><span className="flex items-center gap-1.5"><Smartphone className="h-4 w-4 text-emerald-700" /> Made for your phone</span></div>
             </div>
             <TripPreview mode={preview} onModeChange={setPreview} />
           </div>
@@ -89,24 +84,25 @@ export function LandingView() {
         </div>
         <section id="services" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
           <div className="mb-9 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="eyebrow">ONE APP. MORE POSSIBILITIES.</p><h2 className="section-title mt-3">Whatever moves you.</h2></div><p className="max-w-xs text-sm leading-relaxed text-muted-foreground">Two ways to get going. One simple place to book, track and manage it all.</p></div>
-          <div className="grid gap-5 md:grid-cols-2"><ServiceCard kind="delivery" onStart={() => pickRole("CUSTOMER", "signup")} /><ServiceCard kind="ride" onStart={() => pickRole("CUSTOMER", "signup")} /></div>
+          <div className="grid gap-5 md:grid-cols-2"><ServiceCard kind="delivery" onStart={() => user ? chooseMode("delivery") : pickRole("CUSTOMER", "signup")} /><ServiceCard kind="ride" onStart={() => user ? chooseMode("ride") : pickRole("CUSTOMER", "signup")} /></div>
           {demoEnabled && seeded && <div className="mt-6 text-center"><Button variant="ghost" size="sm" onClick={tryDemo}><Play className="h-3.5 w-3.5" />Take a look with the demo account</Button></div>}
         </section>
-        <section id="features" className="scroll-mt-24 bg-card">
+        <section id="about-us" className="scroll-mt-24 bg-card">
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
-            <div className="mb-12 max-w-xl"><p className="eyebrow">LESS FUSS. MORE FETCH.</p><h2 className="section-title mt-3">The details are taken care of.</h2></div>
+            <div className="mb-12 max-w-xl"><p className="eyebrow">ABOUT US · LESS FUSS. MORE FETCH.</p><h2 className="section-title mt-3">The details are taken care of.</h2></div>
             <div className="grid gap-8 md:grid-cols-3 md:gap-12">{FEATURES.map(({ icon: Icon, title, desc }, i) => <div key={title} className="border-t border-border pt-6"><div className="mb-6 flex items-center justify-between"><Icon className="h-6 w-6 text-primary" /><span className="font-mono text-xs text-muted-foreground">0{i + 1}</span></div><h3 className="text-xl font-semibold tracking-tight">{title}</h3><p className="mt-3 text-sm leading-7 text-muted-foreground">{desc}</p></div>)}</div>
           </div>
         </section>
         <section id="how-it-works" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
           <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
-            <div><p className="eyebrow">FROM HERE TO THERE</p><h2 className="section-title mt-3">A few taps.<br />And you&apos;re on your way.</h2><p className="mt-5 max-w-sm text-sm leading-7 text-muted-foreground">Skip the complicated part. Your next delivery or ride starts right here.</p></div>
+            <div><p className="eyebrow">FROM HERE TO THERE</p><h2 className="mt-3 flex items-center gap-2 text-lg font-semibold">How <ItMark /> Works</h2><h2 className="section-title mt-3">A few taps.<br />And you&apos;re on your way.</h2><p className="mt-5 max-w-sm text-sm leading-7 text-muted-foreground">Skip the complicated part. Your next delivery or ride starts right here.</p></div>
             <div>{[{ title: "Choose your move", text: "Sign in, then pick Delivery or Ride." }, { title: "Tell us where", text: "Set your pickup and destination, choose a vehicle and review your fare." }, { title: "Let Fetch-It take it from here", text: "Place your booking and follow its progress once a rider accepts." }].map((step, i) => <div key={step.title} className="flex gap-5 border-b border-border py-6 first:pt-0 last:border-0"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-foreground text-sm text-background">0{i + 1}</span><div><h3 className="text-lg font-semibold tracking-tight">{step.title}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.text}</p></div></div>)}</div>
           </div>
         </section>
         <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
-          <div className="relative overflow-hidden rounded-[2rem] bg-[#163c34] px-6 py-12 text-white sm:px-12 sm:py-16"><div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-96 w-96 rounded-full border-[50px] border-white/5" /><div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-center"><div><p className="text-xs font-medium tracking-[0.15em] text-[#bed9ce]">WHERE TO NEXT?</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Let&apos;s make your next move.</h2><p className="mt-3 text-sm text-[#bed9ce]">Your deliveries and rides, together at last.</p></div><Button size="lg" onClick={() => pickRole("CUSTOMER", "signup")} className="self-start md:self-auto">Get started <ArrowRight /></Button></div></div>
+          <div className="relative overflow-hidden rounded-[2rem] bg-[#163c34] px-6 py-12 text-white sm:px-12 sm:py-16"><div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-96 w-96 rounded-full border-[50px] border-white/5" /><div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-center"><div><p className="text-xs font-medium tracking-[0.15em] text-[#bed9ce]">WHERE TO NEXT?</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Let&apos;s make your next move.</h2><p className="mt-3 text-sm text-[#bed9ce]">Your deliveries and rides, together at last.</p></div><Button size="lg" onClick={start} className="self-start md:self-auto">{user ? "Dashboard" : "Get started"} <ArrowRight /></Button></div></div>
         </section>
+        <section id="contact-us" aria-label="Contact Us" className="mx-auto min-h-40 max-w-7xl scroll-mt-24 px-4 sm:px-6 lg:px-8" />
       </main>
       <footer className="border-t border-border"><div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"><div><FetchItLogo size={32} /><p className="mt-3 text-xs text-muted-foreground">A little easier. A little closer. Every day.</p></div><p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Fetch-It. All rights reserved.</p></div></footer>
     </div>

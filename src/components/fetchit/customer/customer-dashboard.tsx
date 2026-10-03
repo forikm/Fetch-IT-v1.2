@@ -85,7 +85,7 @@ import {
   BOOKING_STATUS_LABEL,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { FetchItLogo } from "../shared/logo";
+import { BrandNavigation } from "../shared/brand-navigation";
 import { StatusBadge } from "../shared/status-badge";
 import { PlaceAutocompleteInput } from "../shared/place-autocomplete-input";
 import { LocationMap } from "../shared/location-map";
@@ -237,14 +237,6 @@ export function CustomerDashboard() {
     await logout();
   }
 
-  // Clicking the logo always brings you back to the main dashboard view —
-  // closes any open dialogs and resets to the default "Active" tab.
-  function goHome() {
-    setShowNew(false);
-    setTrackingBooking(null);
-    setTab("active");
-  }
-
   function onNewBookingCreated(b: Booking) {
     setBookings((prev) => [b, ...prev.filter((x) => x.id !== b.id)]);
     setShowNew(false);
@@ -266,14 +258,7 @@ export function CustomerDashboard() {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">
         <div className="mx-auto w-full max-w-7xl min-w-0 px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={goHome}
-            className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Go to dashboard"
-          >
-            <FetchItLogo />
-          </button>
+          <BrandNavigation />
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <Button
               variant="outline"
