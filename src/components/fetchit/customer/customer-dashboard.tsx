@@ -9,6 +9,7 @@ import { CustomerBottomNav } from "../shared/customer-bottom-nav";
 import { ProfileSettings } from "../shared/profile-settings";
 import { NotificationSettings } from "../shared/notification-settings";
 import { HistoryFilters, emptyHistoryFilter } from "../shared/history-filters";
+import { useTrackingUpdates } from "@/hooks/use-tracking-updates";
 import { useBookingUpdates } from "@/hooks/use-booking-updates";
 import { SavedPlaces } from "../shared/saved-places";
 import { RequestError } from "../shared/request-error";
@@ -251,7 +252,11 @@ export function CustomerDashboard() {
 
   const { lastChecked, offline } = useBookingUpdates<Booking>(user?.id ?? "", "DELIVERY", (updated) => {
     if (tab === "active" && !loading) setBookings(updated.filter((booking) => !["DELIVERED", "CANCELLED"].includes(booking.status)));
-    setTrackingBooking((previous) => previous ? updated.find((booking) => booking.id === previous.id) ?? previous : null);
+    setTrackingBooking((previous) => {
+      const latest = updated.find((booking) => booking.id === previous?.id);
+      // The dialog owns fresh GPS/proof data; list status patches must preserve it.
+      return previous && latest ? { ...previous, status: latest.status, etaMinutes: latest.etaMinutes, riderId: latest.riderId, rider: latest.rider } : previous;
+    });
   });
   return (
     <div className="min-h-screen w-full min-w-0 overflow-x-clip flex flex-col bg-background pb-20 sm:pb-0">
@@ -1196,6 +1201,9 @@ function TrackingView({
   const pickup = { lat: booking.pickupLat, lng: booking.pickupLng };
   const dropoff = { lat: booking.dropoffLat, lng: booking.dropoffLng };
 
+  const updateCallback = useRef(onUpdated);
+  useEffect(() => { updateCallback.current = onUpdated; }, [onUpdated]);
+
   // Socket events update status only. Location comes from native ticket
   // updates returned by the authenticated booking API below.
   useEffect(() => {
@@ -1205,16 +1213,15 @@ function TrackingView({
     (async () => {
       const { getTrackingSocket } = await import("@/lib/socket");
       const socket = getTrackingSocket();
-      if (!socket) return;
+      if (!socket || cancelled) return;
       socket.emit("subscribe", { bookingId: booking.id });
       const onStatus = (data: { bookingId: string; status: BookingStatus }) => {
         if (data.bookingId !== booking.id) return;
         setStatus(data.status);
-        onUpdated({ status: data.status });
+        updateCallback.current({ status: data.status });
       };
       socket.on("status:change", onStatus);
       cleanup = () => {
-        if (cancelled) return;
         socket.off("status:change", onStatus);
       };
     })();
@@ -1222,35 +1229,16 @@ function TrackingView({
       cancelled = true;
       cleanup?.();
     };
-  }, [booking.id, booking.riderId, onUpdated]);
+  }, [booking.id, booking.riderId]);
 
-  // Poll booking every 6 seconds as a fallback if socket doesn't connect
-  useEffect(() => {
-    const t = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/bookings/${booking.id}`, { cache: "no-store" });
-        const data = await res.json();
-        if (data?.booking) {
-          setStatus(data.booking.status);
-          setEta(data.booking.etaMinutes ?? eta);
-          setRiderLat(data.booking.trackingUpdates?.[0]?.lat ?? null);
-          setRiderLng(data.booking.trackingUpdates?.[0]?.lng ?? null);
-          setLastGpsAt(data.booking.trackingUpdates?.[0]?.createdAt ?? null);
-          onUpdated({
-            status: data.booking.status,
-            etaMinutes: data.booking.etaMinutes,
-            riderId: data.booking.riderId,
-            rider: data.booking.rider,
-            trackingUpdates: data.booking.trackingUpdates,
-            deliveryProofs: data.booking.deliveryProofs,
-          });
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 6000);
-    return () => clearInterval(t);
-  }, [booking.id, eta, onUpdated]);
+  useTrackingUpdates<Booking>(booking.id, (updated) => {
+    if (updated.status) setStatus(updated.status);
+    if (updated.etaMinutes !== undefined) setEta(updated.etaMinutes);
+    setRiderLat(updated.trackingUpdates?.[0]?.lat ?? null);
+    setRiderLng(updated.trackingUpdates?.[0]?.lng ?? null);
+    setLastGpsAt(updated.trackingUpdates?.[0]?.createdAt ?? null);
+    onUpdated(updated);
+  });
 
   async function loadOtp() {
     setLoadingOtp(true);

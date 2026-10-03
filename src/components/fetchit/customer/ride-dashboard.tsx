@@ -9,6 +9,7 @@ import { CustomerBottomNav } from "../shared/customer-bottom-nav";
 import { ProfileSettings } from "../shared/profile-settings";
 import { NotificationSettings } from "../shared/notification-settings";
 import { HistoryFilters, emptyHistoryFilter } from "../shared/history-filters";
+import { useTrackingUpdates } from "@/hooks/use-tracking-updates";
 import { useBookingUpdates } from "@/hooks/use-booking-updates";
 import { SavedPlaces } from "../shared/saved-places";
 import { RequestError } from "../shared/request-error";
@@ -346,7 +347,10 @@ export function RideDashboard() {
 
   const { lastChecked, offline } = useBookingUpdates<Ride>(user?.id ?? "", "RIDE", (updated) => {
     if (tab === "active" && !loading) setRides(updated.filter((booking) => !["DELIVERED", "CANCELLED"].includes(booking.status)));
-    setTracking((previous) => previous ? updated.find((booking) => booking.id === previous.id) ?? previous : null);
+    setTracking((previous) => {
+      const latest = updated.find((booking) => booking.id === previous?.id);
+      return previous && latest ? { ...previous, status: latest.status, etaMinutes: latest.etaMinutes, rider: latest.rider } : previous;
+    });
   });
 
   const canBook = pickupValid && dropoffValid && !!pickup && !!dropoff && estimatedKey === fareKey && !submitting && !estimating && !!estimates[vehicleClass];
@@ -799,28 +803,11 @@ function RideTrackingView({
   const pickup = { lat: ride.pickupLat, lng: ride.pickupLng };
   const dropoff = { lat: ride.dropoffLat, lng: ride.dropoffLng };
 
-  // Poll for status. The route map does not display rider coordinates.
-  useEffect(() => {
-    const t = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/bookings/${ride.id}`, { cache: "no-store" });
-        const data = await res.json();
-        if (data?.booking) {
-          setStatus(data.booking.status);
-          setEta(data.booking.etaMinutes ?? eta);
-          onUpdated({
-            status: data.booking.status,
-            etaMinutes: data.booking.etaMinutes,
-            rider: data.booking.rider,
-          });
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 6000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ride.id]);
+  useTrackingUpdates<Ride>(ride.id, (updated) => {
+    if (updated.status) setStatus(updated.status);
+    if (updated.etaMinutes !== undefined) setEta(updated.etaMinutes);
+    onUpdated(updated);
+  });
 
   const done = status === "DELIVERED";
   const cancelled = status === "CANCELLED";
