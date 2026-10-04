@@ -1,5 +1,3 @@
-> The manual SQL instructions below describe the previous schema. For the rebuilt database use versioned migrations and [database-rebuild.md](database-rebuild.md).
-
 # Customer improvements
 
 ## Customer experience
@@ -16,14 +14,15 @@
 
 ## Shared database
 
-The schema is synchronized across Customer, Rider, and Admin. Apply the additive, repeatable SQL to a database before deploying these features there:
+The schema is synchronized across Customer, Rider, and Admin. Customer owns the versioned migrations. From the customer repository:
 
 ```powershell
-npx prisma db execute --file prisma/add-customer-features.sql --schema prisma/schema.prisma
-npx prisma generate
+npm run db:sync
+npm run db:deploy
+npm run db:generate
 ```
 
-The SQL only creates `CustomerReview`, `SupportTicket`, and their indexes. Existing booking/user columns are unchanged.
+Generate Prisma in the other apps after synchronizing. Follow [database-rebuild.md](database-rebuild.md) for fresh-database setup and coordinated deployment; the removed manual SQL patches target the previous schema.
 
 ## Notification inbox and compact history
 
