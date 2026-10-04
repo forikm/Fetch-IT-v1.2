@@ -37,6 +37,7 @@ import {
 import { FetchItLogo } from "./logo";
 import { useAppStore, type AuthUser } from "@/lib/store";
 import { getCustomerAuth } from "@/lib/firebase-client";
+import { normalizePhilippinePhone } from "@/lib/phone";
 
 const DEMO_EMAIL = "customer@fetchit.app";
 const DEMO_PASSWORD = "demo1234";
@@ -86,7 +87,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     const res = await fetch("/api/auth/firebase-session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken, phone: phone.trim() || undefined }),
+      body: JSON.stringify({ idToken, phone: phone.trim() ? normalizePhilippinePhone(phone) : undefined }),
     });
     // Vercel can return an empty body when a function fails before its
     // handler runs. Keep the HTTP status visible instead of showing a JSON
@@ -137,6 +138,8 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
           await finishSignIn(credential.user);
         }
       } else {
+        const normalizedPhone = normalizePhilippinePhone(phone);
+        setPhone(normalizedPhone);
         const credential = await createUserWithEmailAndPassword(getCustomerAuth(), email.trim(), password);
         await updateProfile(credential.user, { displayName: name.trim() });
         setPendingVerification(true);
@@ -272,6 +275,12 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
               {pendingVerification ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">Open the email link, then return here.</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="verification-phone">Phone number</Label>
+                    <Input id="verification-phone" type="tel" required autoComplete="tel" maxLength={32}
+                      value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+63 917 123 4567" />
+                    <p className="text-xs text-muted-foreground">Required to finish creating your account. Local 09 numbers are saved with +63.</p>
+                  </div>
                   {error && <p className="text-sm text-destructive [overflow-wrap:anywhere]" role="alert">{error}</p>}
                   {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
                   <Button className="w-full" onClick={checkVerification} disabled={loading}>
@@ -379,14 +388,18 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
                       <div className="space-y-2">
-                        <Label htmlFor="phone">Phone (optional)</Label>
+                        <Label htmlFor="phone">Phone number</Label>
                         <Input
                           id="phone"
                           type="tel"
+                          required
+                          autoComplete="tel"
+                          maxLength={32}
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
                           placeholder="+63 917 000 0000"
                         />
+                        <p className="text-xs text-muted-foreground">Philippine number required (+63).</p>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="password-su">Password</Label>

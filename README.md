@@ -10,6 +10,7 @@ Next.js 16 · App Router · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma 
 - **Delivery dashboard** — 3-step cargo booking wizard (pickup → drop-off → details), vehicle classes from motorcycle to refrigerated van, weight-based dynamic fares with surge, live tracking with OTP / signature / photo e-POD.
 - **Ride dashboard** — Grab-style "Where to?" panel, ride classes (motorcycle / tricycle / sedan) with upfront fares per class, passengers stepper, live driver tracking and trip history.
 - Firebase email/password sign-up with email verification for new customers. Existing accounts and the demo account retain their legacy sign-in.
+- Customer sign-up requires a valid Philippine phone number. Local numbers such as `09171234567` are stored as `+639171234567`; profile edits use the same validation. Email/password sign-in does not ask existing accounts to re-enter their phone.
 - Demo seed accounts (`/api/auth/seed`) for instant trials.
 
 ## Firebase Spark setup (customer app only)

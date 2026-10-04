@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCustomerAdminAuth } from "@/lib/firebase-admin";
 import { createSessionToken, setSessionCookie } from "@/lib/session";
+import { normalizePhilippinePhone } from "@/lib/phone";
 
 // Exchange a verified Firebase ID token for the cookie used by booking APIs.
 export async function POST(req: NextRequest) {
@@ -35,6 +36,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This account cannot be used in the customer app." }, { status: 403 });
     }
     if (!user) {
+      let normalizedPhone: string;
+      try {
+        normalizedPhone = normalizePhilippinePhone(phone);
+      } catch (error) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Enter a valid Philippine phone number." }, { status: 400 });
+      }
       // Never attach a Firebase account to a legacy account by email alone.
       // Existing users keep their current account until explicitly migrated.
       const existing = await db.user.findUnique({ where: { email } });
@@ -48,7 +55,7 @@ export async function POST(req: NextRequest) {
         data: {
           email,
           name: identity.name?.trim() || email.split("@")[0],
-          phone: typeof phone === "string" && phone.trim() ? phone.trim() : null,
+          phone: normalizedPhone,
           role: "CUSTOMER",
           authIdentities: { create: { provider: "FIREBASE", providerUserId: identity.uid } },
         },

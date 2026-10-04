@@ -44,7 +44,10 @@ async function booking(customer, rider, number) {
     await request(`/api/bookings/${first.id}/review`, token, 409, "POST", { rating: 5 });
     await Promise.all([request(`/api/bookings/${second.id}/review`, token, 201, "POST", { rating: 1 }), request(`/api/bookings/${third.id}/review`, token, 201, "POST", { rating: 5 })]);
     assert(Math.abs((await db.riderProfile.findUnique({ where: { userId: rider.id } })).rating - 10 / 3) < 1e-10);
-    const profile = await request("/api/auth/me", token, 200, "PATCH", { name: "Updated check customer", phone: "+639171234567", role: "ADMIN" });
+    await request("/api/auth/me", token, 400, "PATCH", { name: "Updated check customer", phone: "" });
+    await request("/api/auth/me", token, 400, "PATCH", { name: "Updated check customer", phone: "+12025550123" });
+    const profile = await request("/api/auth/me", token, 200, "PATCH", { name: "Updated check customer", phone: "09171234567", role: "ADMIN" });
+    assert.equal(profile.user.phone, "+639171234567");
     assert.equal(profile.user.role, "CUSTOMER"); assert.equal(profile.user.name, "Updated check customer");
     await request("/api/auth/me", token, 400, "PATCH", { name: "X", phone: "bad" });
     const history = await request(`/api/bookings?filter=history&type=DELIVERY&q=${marker}&status=DELIVERED`, token);
