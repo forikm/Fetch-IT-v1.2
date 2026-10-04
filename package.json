@@ -7,9 +7,13 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
-    "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:deploy": "prisma migrate deploy",
+    "db:reset:test": "node scripts/reset-test-database.cjs",
+    "db:sync": "node scripts/sync-shared.cjs",
+    "db:check": "node scripts/sync-shared.cjs --check",
+    "tracking:cleanup": "node scripts/cleanup-tracking.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.11.1",

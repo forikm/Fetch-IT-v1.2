@@ -1,3 +1,5 @@
+import { bookingView, riderSelect } from "@/lib/db-data";
+import type { Prisma } from "@prisma/client";
 // /api/bookings
 // GET — list bookings for the signed-in customer, optionally
 //       filtered by product type (?type=DELIVERY|RIDE).
@@ -35,7 +37,7 @@ export async function GET(req: NextRequest) {
 
     const where = { customerId: session.uid };
 
-    const statusFilter =
+    const statusFilter: Prisma.BookingWhereInput =
       filter === "active"
         ? { status: { in: ["PENDING", "MATCHED", "ACCEPTED", "PICKED_UP", "IN_TRANSIT"] } }
         : filter === "history"
@@ -55,22 +57,8 @@ export async function GET(req: NextRequest) {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: {
         customer: { select: { id: true, name: true, phone: true } },
-        rider: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            vehicleClass: true,
-            vehiclePlate: true,
-            rating: true,
-          },
-        },
-        trackingUpdates: {
-          where: { source: "NATIVE" },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { lat: true, lng: true, createdAt: true },
-        },
+        rider: { select: riderSelect },
+        liveLocation: { select: { lat: true, lng: true, createdAt: true } },
         deliveryProofs: true,
       },
       take: 101,
@@ -80,7 +68,7 @@ export async function GET(req: NextRequest) {
     // rider-only artifact (see src/lib/ticket.ts) and never leaves the server
     // here.
     const page = bookings.slice(0, 100);
-    return NextResponse.json({ bookings: page.map(omitTicket), nextCursor: bookings.length > 100 ? page[page.length - 1].id : null }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ bookings: page.map(b => omitTicket(bookingView(b))), nextCursor: bookings.length > 100 ? page[page.length - 1].id : null }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return customerErrorResponse(error); }
 }
 
@@ -191,16 +179,17 @@ export async function POST(req: NextRequest) {
             totalFare: quote.fare.totalFare,
             currency: quote.fare.currency,
             status: "PENDING",
+            events: { create: { actorId: session.uid, actorName: session.name, actorRole: "CUSTOMER", action: "CREATED", toStatus: "PENDING" } },
             etaMinutes: quote.etaMinutes,
           },
           include: {
             customer: { select: { id: true, name: true, phone: true } },
-            rider: true,
+            rider: { select: riderSelect },
           },
         });
       });
 
-      return NextResponse.json({ booking: omitTicket(booking) });
+      return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
     }
 
     // ---------- DELIVERY ----------
@@ -254,16 +243,17 @@ export async function POST(req: NextRequest) {
           totalFare: fare.totalFare,
           currency: fare.currency,
           status: "PENDING",
+          events: { create: { actorId: session.uid, actorName: session.name, actorRole: "CUSTOMER", action: "CREATED", toStatus: "PENDING" } },
           etaMinutes: eta,
         },
         include: {
           customer: { select: { id: true, name: true, phone: true } },
-          rider: true,
+          rider: { select: riderSelect },
         },
       });
     });
 
-    return NextResponse.json({ booking: omitTicket(booking) });
+    return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
   } catch (err) {
     console.error("[bookings POST] error", err);
     return NextResponse.json(

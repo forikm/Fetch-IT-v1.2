@@ -18,13 +18,13 @@ function cookie(user, admin = false) {
   return `${admin ? "fetchit_admin_session" : "fetchit_session"}=${value}.${crypto.createHmac("sha256", secret).update(value).digest("base64url")}`;
 }
 async function request(path, token, expected = 200, method = "GET", data, admin = false) {
-  const response = await fetch(`http://localhost:${admin ? 3002 : 3000}${path}`, { method, headers: { ...(token ? { cookie: token } : {}), "Content-Type": "application/json" }, ...(data ? { body: JSON.stringify(data) } : {}) });
+  const response = await fetch(`http://localhost:${admin ? process.env.ADMIN_TEST_PORT || 3002 : process.env.CUSTOMER_TEST_PORT || 3000}${path}`, { method, headers: { ...(token ? { cookie: token } : {}), "Content-Type": "application/json" }, ...(data ? { body: JSON.stringify(data) } : {}) });
   const text = await response.text();
   assert.equal(response.status, expected, `${method} ${path}: ${text.slice(0, 300)}`);
   try { return JSON.parse(text); } catch { return text; }
 }
 async function user(role) {
-  const saved = await db.user.create({ data: { name: "Disposable feature check", email: `${marker}-${role}-${users.length}@example.invalid`, role, passwordHash: "DISPOSABLE-NO-LOGIN" } });
+  const saved = await db.user.create({ data: { name: "Disposable feature check", email: `${marker}-${role.toLowerCase()}-${users.length}@example.invalid`, role, ...(role === "RIDER" ? { riderProfile: { create: { vehicleClass: "MOTORCYCLE" } }, riderPresence: { create: {} } } : {}) } });
   users.push(saved.id); return saved;
 }
 async function booking(customer, rider, number) {
@@ -43,7 +43,7 @@ async function booking(customer, rider, number) {
     await request(`/api/bookings/${first.id}/review`, token, 201, "POST", { rating: 4, comment: "Disposable feature check" });
     await request(`/api/bookings/${first.id}/review`, token, 409, "POST", { rating: 5 });
     await Promise.all([request(`/api/bookings/${second.id}/review`, token, 201, "POST", { rating: 1 }), request(`/api/bookings/${third.id}/review`, token, 201, "POST", { rating: 5 })]);
-    assert(Math.abs((await db.user.findUnique({ where: { id: rider.id } })).rating - 10 / 3) < 1e-10);
+    assert(Math.abs((await db.riderProfile.findUnique({ where: { userId: rider.id } })).rating - 10 / 3) < 1e-10);
     const profile = await request("/api/auth/me", token, 200, "PATCH", { name: "Updated check customer", phone: "+639171234567", role: "ADMIN" });
     assert.equal(profile.user.role, "CUSTOMER"); assert.equal(profile.user.name, "Updated check customer");
     await request("/api/auth/me", token, 400, "PATCH", { name: "X", phone: "bad" });
@@ -69,6 +69,7 @@ async function booking(customer, rider, number) {
     console.log("PASS: customer ownership, role checks, reviews, concurrent averages, profile validation, filtered/paginated history, receipts, help requests, and admin replies.");
   } finally {
     if (bookings.length) { await db.supportTicket.deleteMany({ where: { bookingId: { in: bookings } } }); await db.customerReview.deleteMany({ where: { bookingId: { in: bookings } } }); await db.booking.deleteMany({ where: { id: { in: bookings } } }); }
+    if (users.length) await db.adminAudit.deleteMany({ where: { actorId: { in: users } } });
     if (users.length) await db.user.deleteMany({ where: { id: { in: users } } });
     await db.$disconnect();
   }

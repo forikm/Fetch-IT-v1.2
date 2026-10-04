@@ -1,48 +1,31 @@
-// GET  /api/bookings/[id]/otp
-// Returns the OTP for this booking. The customer retrieves this code and
-// verbally shares it with the rider; the rider submits it via /proof to
-// complete the e-POD. Stored on the booking row (added as a derived field
-// — we persist it lazily on first request to avoid schema changes).
-//
-// To keep this self-contained without another model, we store the OTP
-// inside DeliveryProof with proofType='OTP' (the FIRST such row for a
-// booking is the canonical OTP). If none exists yet, we create one.
-
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
-import { generateOtp } from "@/lib/fare";
+import { requireCustomer, CustomerError, customerErrorResponse } from "@/lib/customer-access";
+import { createChallenge, readChallenge } from "@/lib/delivery-challenge";
 
-type Params = { params: Promise<{ id: string }> };
-
-export async function GET(_req: NextRequest, { params }: Params) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { id } = await params;
-
-  const booking = await db.booking.findUnique({ where: { id } });
-  if (!booking) {
-    return NextResponse.json({ error: "Booking not found." }, { status: 404 });
-  }
-  if (session.role !== "CUSTOMER" || booking.customerId !== session.uid) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  let proof = await db.deliveryProof.findFirst({
-    where: { bookingId: id, proofType: "OTP" },
-  });
-  if (!proof) {
-    proof = await db.deliveryProof.create({
-      data: {
-        bookingId: id,
-        riderId: booking.riderId ?? session.uid,
-        proofType: "OTP",
-        otpCode: generateOtp(),
-      },
+// Codes belong to the booking, and are never included in general booking responses.
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await requireCustomer();
+    const { id } = await params;
+    const result = await db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${id} FOR UPDATE`;
+      const booking = await tx.booking.findFirst({ where: { id, customerId: session.uid } });
+      if (!booking) throw new CustomerError("Booking not found.", 404);
+      if (booking.type !== "DELIVERY" || ["DELIVERED", "CANCELLED"].includes(booking.status))
+        throw new CustomerError("Delivery codes are only available for active deliveries.", 409);
+      const now = new Date();
+      let challenge = await tx.deliveryChallenge.findUnique({ where: { bookingId: id } });
+      if (challenge?.verifiedAt) throw new CustomerError("This code has already been used.", 409);
+      if (!challenge || challenge.expiresAt <= now) {
+        const data = createChallenge(id, now);
+        challenge = await tx.deliveryChallenge.upsert({ where: { bookingId: id },
+          create: { bookingId: id, ...data }, update: { ...data, createdAt: now } });
+      }
+      if (challenge.attempts >= challenge.maxAttempts)
+        throw new CustomerError("Too many incorrect attempts. Wait for the code to expire before requesting a new one.", 429);
+      return { otp: readChallenge(id, challenge.codeCiphertext), expiresAt: challenge.expiresAt };
     });
-  }
-
-  return NextResponse.json({ otp: proof.otpCode });
+    return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) { return customerErrorResponse(error); }
 }

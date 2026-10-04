@@ -1,3 +1,4 @@
+import { bookingView, riderSelect } from "@/lib/db-data";
 import { NextRequest, NextResponse } from "next/server";
 import { requireCustomer, CustomerError, customerErrorResponse } from "@/lib/customer-access";
 import { db } from "@/lib/db";
@@ -16,11 +17,11 @@ export async function GET(req: NextRequest) {
       select: {
         id: true, refCode: true, type: true, status: true, updatedAt: true,
         createdAt: true, dropoffLabel: true, etaMinutes: true, riderId: true,
-        rider: { select: { id: true, name: true, phone: true, vehicleClass: true, vehiclePlate: true, rating: true } },
+        rider: { select: riderSelect },
         // Coordinates are needed only while the tracking dialog is open.
-        ...(onlyTracked ? { trackingUpdates: { where: { source: "NATIVE" }, orderBy: { createdAt: "desc" as const }, take: 1, select: { lat: true, lng: true, createdAt: true } } } : {}),
+        ...(onlyTracked ? { liveLocation: { select: { lat: true, lng: true, createdAt: true } } } : {}),
       },
     });
-    return NextResponse.json({ bookings }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ bookings: bookings.map(bookingView) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return customerErrorResponse(error); }
 }

@@ -1,3 +1,5 @@
+> The manual SQL instructions below describe the previous schema. For the rebuilt database use versioned migrations and [database-rebuild.md](database-rebuild.md).
+
 # Customer improvements
 
 ## Customer experience

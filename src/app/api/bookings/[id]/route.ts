@@ -1,3 +1,4 @@
+import { bookingView, riderSelect } from "@/lib/db-data";
 // /api/bookings/[id]
 // GET — fetch a single booking (with customer / rider / proofs / latest tracking).
 // NOTE: this is the CUSTOMER app. Riders claim and progress jobs from the
@@ -5,13 +6,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { requireCustomer, customerErrorResponse } from "@/lib/customer-access";
 import { omitTicket } from "@/lib/ticket";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
-  const session = await getSession();
+  let session;
+  try { session = await requireCustomer(); }
+  catch (error) { return customerErrorResponse(error); }
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -21,23 +24,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     where: { id },
     include: {
       customer: { select: { id: true, name: true, phone: true, email: true } },
-      rider: {
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          vehicleClass: true,
-          vehiclePlate: true,
-          rating: true,
-          totalDeliveries: true,
-        },
-      },
-      trackingUpdates: {
-        where: { source: "NATIVE" },
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { lat: true, lng: true, createdAt: true },
-      },
+      rider: { select: riderSelect },
+      liveLocation: { select: { lat: true, lng: true, createdAt: true } },
       deliveryProofs: { orderBy: { createdAt: "desc" } },
     },
   });
@@ -55,5 +43,5 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({ booking: omitTicket(booking) });
+  return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
 }

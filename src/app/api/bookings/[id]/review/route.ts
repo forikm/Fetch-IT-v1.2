@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: Context) {
       if (await tx.customerReview.findUnique({ where: { bookingId: id } })) throw new CustomerError("You already reviewed this booking.", 409);
       const saved = await tx.customerReview.create({ data: { bookingId: id, customerId: session.uid, riderId: booking.riderId, rating: body.rating, comment: body.comment?.trim() || null } });
       const average = await tx.customerReview.aggregate({ where: { riderId: booking.riderId }, _avg: { rating: true } });
-      await tx.user.update({ where: { id: booking.riderId }, data: { rating: average._avg.rating ?? body.rating } });
+      await tx.riderProfile.update({ where: { userId: booking.riderId }, data: { rating: average._avg.rating ?? body.rating } });
       return saved;
     });
     return NextResponse.json({ review }, { status: 201 });

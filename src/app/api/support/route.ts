@@ -6,8 +6,8 @@ export async function GET(request: NextRequest) {
   try {
     const session = await requireCustomer();
     const bookingId = request.nextUrl.searchParams.get("bookingId");
-    const tickets = await db.supportTicket.findMany({ where: { customerId: session.uid, ...(bookingId ? { bookingId } : {}) }, orderBy: { createdAt: "desc" }, take: 100 });
-    return NextResponse.json({ tickets });
+    const tickets = await db.supportTicket.findMany({ where: { customerId: session.uid, ...(bookingId ? { bookingId } : {}) }, include: { messages: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } }, orderBy: { createdAt: "desc" }, take: 100 });
+    return NextResponse.json({ tickets: tickets.map(({ messages, ...ticket }) => ({ ...ticket, adminReply: messages[0]?.body ?? null })) });
   } catch (error) { return customerErrorResponse(error); }
 }
 export async function POST(request: NextRequest) {

@@ -1,8 +1,6 @@
-import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCustomerAdminAuth } from "@/lib/firebase-admin";
-import { hashPassword } from "@/lib/password";
 import { createSessionToken, setSessionCookie } from "@/lib/session";
 
 // Exchange a verified Firebase ID token for the cookie used by booking APIs.
@@ -28,7 +26,11 @@ export async function POST(req: NextRequest) {
     }
 
     const email = identity.email.toLowerCase();
-    let user = await db.user.findUnique({ where: { id: identity.uid } });
+    const linked = await db.authIdentity.findUnique({
+      where: { provider_providerUserId: { provider: "FIREBASE", providerUserId: identity.uid } },
+      include: { user: true },
+    });
+    let user = linked?.user ?? null;
     if (user && (user.role !== "CUSTOMER" || user.email !== email)) {
       return NextResponse.json({ error: "This account cannot be used in the customer app." }, { status: 403 });
     }
@@ -44,14 +46,11 @@ export async function POST(req: NextRequest) {
       }
       user = await db.user.create({
         data: {
-          id: identity.uid,
           email,
           name: identity.name?.trim() || email.split("@")[0],
           phone: typeof phone === "string" && phone.trim() ? phone.trim() : null,
           role: "CUSTOMER",
-          // Firebase owns this password. A random, unknown password keeps the
-          // shared User table compatible with the rider and admin apps.
-          passwordHash: hashPassword(randomBytes(48).toString("base64url")),
+          authIdentities: { create: { provider: "FIREBASE", providerUserId: identity.uid } },
         },
       });
     }

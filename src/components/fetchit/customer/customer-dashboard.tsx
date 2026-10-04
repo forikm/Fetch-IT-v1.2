@@ -135,8 +135,7 @@ interface Booking {
     id: string;
     proofType: "SIGNATURE" | "OTP" | "PHOTO";
     signatureSvg: string | null;
-    otpCode: string | null;
-    otpVerified: boolean;
+    verifiedAt: string | null;
     photoUrl: string | null;
     recipientName: string | null;
     createdAt: string;
@@ -1197,6 +1196,13 @@ function TrackingView({
   const [eta, setEta] = useState<number | null>(booking.etaMinutes);
   const [otp, setOtp] = useState<string | null>(null);
   const [loadingOtp, setLoadingOtp] = useState(false);
+  const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!otpExpiresAt) return;
+    const timer = setTimeout(() => { setOtp(null); setOtpExpiresAt(null); setOtpError("This code expired. Reveal a new code when the rider arrives."); }, Math.max(0, Date.parse(otpExpiresAt) - Date.now()));
+    return () => clearTimeout(timer);
+  }, [otpExpiresAt]);
 
   const pickup = { lat: booking.pickupLat, lng: booking.pickupLng };
   const dropoff = { lat: booking.dropoffLat, lng: booking.dropoffLng };
@@ -1242,11 +1248,15 @@ function TrackingView({
 
   async function loadOtp() {
     setLoadingOtp(true);
+    setOtpError(null);
     try {
       const res = await fetch(`/api/bookings/${booking.id}/otp`, { cache: "no-store" });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not retrieve the delivery code.");
       setOtp(data.otp);
-    } finally {
+      setOtpExpiresAt(data.expiresAt);
+    } catch (error) { setOtpError(error instanceof Error ? error.message : "Please retry."); }
+    finally {
       setLoadingOtp(false);
     }
   }
@@ -1257,7 +1267,7 @@ function TrackingView({
   const proofs = booking.deliveryProofs ?? [];
   const sigProof = proofs.find((p) => p.proofType === "SIGNATURE");
   const photoProof = proofs.find((p) => p.proofType === "PHOTO" && p.photoUrl);
-  const otpProof = proofs.find((p) => p.proofType === "OTP" && p.otpVerified);
+  const otpProof = proofs.find((p) => p.proofType === "OTP" && p.verifiedAt);
 
   return (
     <div className="space-y-4">
@@ -1344,9 +1354,10 @@ function TrackingView({
               <KeyRound className="h-4 w-4 text-primary" /> Delivery hand-off code
             </div>
             <p className="text-sm text-muted-foreground">
-              Share this 6-digit code with your rider when they arrive — they
-              can't complete the delivery without it.
+              Share this 6-digit code with your rider at hand-off. A recipient signature can also confirm delivery.
             </p>
+            {otpError && <p role="alert" className="text-sm text-destructive">{otpError}</p>}
+            {otpExpiresAt && <p className="text-xs text-muted-foreground">Valid until {new Date(otpExpiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.</p>}
             {otp ? (
               <div className="font-mono text-2xl sm:text-3xl tracking-[0.15em] sm:tracking-[0.3em] text-center py-3 bg-card rounded-lg border">
                 {otp}
@@ -1393,11 +1404,10 @@ function TrackingView({
             {sigProof?.signatureSvg && (
               <div>
                 <p className="text-xs text-muted-foreground mb-1.5">Recipient signature</p>
-                <div
-                  className="bg-white rounded-lg border p-2"
-                  dangerouslySetInnerHTML={{
-                    __html: `<svg viewBox="0 0 300 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:80px">${sigProof.signatureSvg}</svg>`,
-                  }}
+                <img
+                  className="bg-white rounded-lg border p-2 w-full h-24"
+                  alt="Recipient signature"
+                  src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg viewBox="0 0 300 100" xmlns="http://www.w3.org/2000/svg">${sigProof.signatureSvg}</svg>`)}`}
                 />
               </div>
             )}

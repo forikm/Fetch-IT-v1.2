@@ -1,7 +1,7 @@
 # Fetch-It Customer
 
 On-demand **Delivery** (cargo) and **Ride** (passenger) booking for customers.
-Next.js 16 · App Router · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma · PostgreSQL (Railway) · Vercel-ready PWA.
+Next.js 16 · App Router · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma · PostgreSQL (Neon) · Vercel-ready PWA.
 
 ## What's inside
 
@@ -20,7 +20,7 @@ Next.js 16 · App Router · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma 
 4. In **Project settings → Service accounts**, generate a private key. Copy `project_id`, `client_email`, and `private_key` from the downloaded JSON into `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`. These are server-only secrets; never put them in `NEXT_PUBLIC_*`, Git, or the browser. Set a long `SESSION_SECRET` too.
 5. Restart the app after editing `.env`. Sign up with a new email, open Firebase's verification message, return to the app, and click **I've verified my email**. The customer database record and booking session are created only after Firebase confirms the address.
 
-Firebase's default verification email is handled by Firebase. The customer app does not need a separate email service, SMS service, Firebase database, or database schema migration. Firebase credentials and the shared booking database are separate: Firebase proves the email/password identity; the existing PostgreSQL `User` record and cookie session continue to power bookings.
+Firebase's default verification email is handled by Firebase. The customer app does not need a separate email service, SMS service, Firebase database, for sending verification emails. Firebase proves the email/password identity; its UID is linked through `AuthIdentity` to an independent Fetch `User` ID and cookie session.
 
 The legacy demo account still uses **Try the demo customer account**. Existing customer accounts can use **Have a pre-Firebase Fetch-It account?** on sign-in. New Firebase sign-ups cannot reuse an email already present in the shared database; existing accounts need an explicit migration if you want to move them to Firebase later.
 
@@ -36,7 +36,7 @@ npm run dev                   # http://localhost:3000
 
 1. Push this folder to a GitHub repo and import it in Vercel.
 2. Set environment variables (Project → Settings → Environment Variables):
-   - `DATABASE_URL` — the **public** Railway PostgreSQL connection string (`postgresql://…rlwy.net:…/railway`).
+   - `DATABASE_URL` — the shared Neon PostgreSQL connection string.
    - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — a Maps/Places-enabled Google key.
 3. Deploy. The build runs `prisma generate && next build` (no DB push on build).
 
@@ -62,7 +62,11 @@ use the ticket-based endpoint to provide real location updates.
 To sync the schema after changing `prisma/schema.prisma`:
 
 ```bash
-npm run db:push
+# From fetch-customer (the canonical schema owner):
+npm run db:sync
+npm run db:deploy
+# In each app:
+npm run db:generate
 ```
 
 ## Demo accounts
@@ -72,3 +76,7 @@ Seeded automatically by the landing page (idempotent):
 | Email | Password | Role |
 |---|---|---|
 | `customer@fetchit.app` | `demo1234` | CUSTOMER |
+
+## Database rebuild
+
+The canonical schema and versioned migrations live in fetch-customer. See [docs/database-rebuild.md](docs/database-rebuild.md) for account identities, rider records, delivery codes, GPS retention, and coordinated deployment. Set the same DELIVERY_CODE_SECRET in customer and rider environments. Configure CRON_SECRET in the rider deployment for daily tracking cleanup. External image storage is deferred.
