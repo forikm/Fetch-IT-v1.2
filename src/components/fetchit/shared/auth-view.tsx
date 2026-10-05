@@ -39,6 +39,8 @@ import { useAppStore, type AuthUser } from "@/lib/store";
 import { getCustomerAuth } from "@/lib/firebase-client";
 import { normalizePhilippinePhone } from "@/lib/phone";
 import { customerAuthMessage, startCustomerSignup } from "@/lib/customer-signup";
+import { clearAuthProgress, readAuthProgress, saveAuthProgress } from "@/lib/auth-progress";
+import { useVisiblePoll } from "@/hooks/use-visible-poll";
 
 const DEMO_EMAIL = "customer@fetchit.app";
 const DEMO_PASSWORD = "demo1234";
@@ -46,23 +48,28 @@ const DEMO_PASSWORD = "demo1234";
 export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
   const setView = useAppStore((s) => s.setView);
   const setUser = useAppStore((s) => s.setUser);
+  const [restoredProgress] = useState(readAuthProgress);
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
 
   // Shared fields
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(restoredProgress?.email ?? "");
   const [password, setPassword] = useState("");
   // Signup-only fields
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [name, setName] = useState(restoredProgress?.name ?? "");
+  const [phone, setPhone] = useState(restoredProgress?.phone ?? "");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingVerification, setPendingVerification] = useState(false);
-  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(!!restoredProgress?.verificationSent);
+  const [firebaseUid, setFirebaseUid] = useState<string | null>(restoredProgress?.firebaseUid ?? null);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [pendingName, setPendingName] = useState<{ uid: string; name: string } | null>(null);
   const [legacyLogin, setLegacyLogin] = useState(false);
   const requestPending = useRef(false);
+  const signupEmail = useRef<string | null>(null);
+  const progressEnabled = useRef(true);
 
   function beginRequest() {
     if (requestPending.current) return false;
@@ -83,8 +90,25 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     if (legacyLogin) return;
     try {
       unsubscribe = onAuthStateChanged(getCustomerAuth(), (user) => {
-        if (user && !user.emailVerified) {
+        if (!user) {
+          setFirebaseUid(null);
+          setVerificationSent(false);
+          setPendingVerification(false);
+          return;
+        }
+        const progress = readAuthProgress();
+        const sameIdentity = !!user && progress?.firebaseUid === user.uid;
+        if (user && (!user.emailVerified || sameIdentity)) {
+          const sameDraft = !!progress && progress.email.toLowerCase() === user.email?.toLowerCase() && (!progress.firebaseUid || sameIdentity);
+          const creating = signupEmail.current === user.email?.toLowerCase();
+          if (!sameDraft && !creating) {
+            setName(user.displayName || "");
+            setPhone("");
+          }
+          if (!user.displayName && sameDraft && progress.name) setPendingName({ uid: user.uid, name: progress.name });
           setEmail(user.email || "");
+          setFirebaseUid(user.uid);
+          setVerificationSent(sameIdentity && !!progress?.verificationSent);
           setPendingVerification(true);
         }
       });
@@ -94,13 +118,39 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     return () => unsubscribe();
   }, [legacyLogin]);
 
-  async function finishSignIn(user: User) {
-    await reload(user);
+  useEffect(() => {
+    if (!progressEnabled.current || useAppStore.getState().user) return;
+    saveAuthProgress({ mode, email, name, phone, firebaseUid, verificationSent });
+  }, [mode, email, name, phone, firebaseUid, verificationSent]);
+
+  useVisiblePoll(pendingVerification && firebaseUid ? `verification:${firebaseUid}` : "", async signal => {
+    if (requestPending.current || emailVerified) return;
+    const user = getCustomerAuth().currentUser;
+    if (!user || user.uid !== firebaseUid) return;
+    requestPending.current = true;
+    try {
+      await reload(user);
+      if (signal.aborted || !user.emailVerified) return;
+      setEmailVerified(true);
+      try { normalizePhilippinePhone(phone); }
+      catch { setNotice("Email verified. Enter your phone number below, then continue."); return; }
+      setLoading(true);
+      setError(null);
+      setNotice("Email verified. Finishing your signup…");
+      await finishSignIn(user, true);
+    } catch (err) {
+      if (!signal.aborted && user.emailVerified) setError(customerAuthMessage(err));
+    } finally { endRequest(); }
+  }, 15000);
+
+  async function finishSignIn(user: User, refreshed = false) {
+    if (!refreshed) await reload(user);
     if (!user.emailVerified) {
       setPendingVerification(true);
       setNotice("Your email is not verified yet. Open the verification link or send another email below.");
       return;
     }
+    setEmailVerified(true);
     if (pendingName?.uid === user.uid) {
       await updateProfile(user, { displayName: pendingName.name });
       setPendingName(null);
@@ -152,6 +202,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
         const normalizedPhone = normalizePhilippinePhone(phone);
         setPhone(normalizedPhone);
         const auth = getCustomerAuth();
+        signupEmail.current = email.trim().toLowerCase();
         setVerificationSent(false);
         const result = await startCustomerSignup({
           create: async (address, secret) => (await createUserWithEmailAndPassword(auth, address, secret)).user,
@@ -163,6 +214,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
         setEmail(result.user.email || email.trim());
         setPassword("");
         setPendingVerification(true);
+        setFirebaseUid(result.user.uid);
         setPendingName(result.profileError ? { uid: result.user.uid, name: name.trim() } : null);
         if (result.verificationError) {
           setError(`Your signup is saved, but the verification email could not be sent. ${customerAuthMessage(result.verificationError)} Select Send verification email to retry.`);
@@ -174,6 +226,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     } catch (err) {
       setError(customerAuthMessage(err));
     } finally {
+      signupEmail.current = null;
       endRequest();
     }
   }
@@ -186,14 +239,18 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       // Still allow the user to return to sign-in when Firebase is unavailable.
     }
     setPendingVerification(false);
+    setFirebaseUid(null);
+    setEmailVerified(false);
     setVerificationSent(false);
     setPendingName(null);
     setPassword("");
+    setEmail("");
     setName("");
     setPhone("");
     setMode("login");
     setNotice(null);
     setError(null);
+    clearAuthProgress();
     endRequest();
   }
 
@@ -270,7 +327,8 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       <header className="border-b border-foreground/5">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 h-20 flex items-center justify-between">
           <button
-            onClick={() => setView("landing")}
+            onClick={() => { progressEnabled.current = false; clearAuthProgress(); setView("landing"); }}
+            disabled={loading}
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
           >
             <ArrowLeft className="h-4 w-4" /> Back
@@ -289,11 +347,11 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
           <Card className="min-w-0 gap-5 border-0 bg-transparent shadow-none">
             <CardHeader className="min-w-0 px-4 sm:px-6">
               <CardTitle className="text-3xl font-semibold tracking-tight">
-                {pendingVerification ? verificationSent ? "Check your inbox" : "Verify your email" : mode === "login" ? "Welcome back." : "Your next move starts here."}
+                {pendingVerification ? emailVerified ? "Email verified" : verificationSent ? "Check your inbox" : "Verify your email" : mode === "login" ? "Welcome back." : "Your next move starts here."}
               </CardTitle>
               {pendingVerification && (
                 <CardDescription className="break-words [overflow-wrap:anywhere]">
-                  {verificationSent ? `Check the link sent to ${email || "your inbox"}.` : `Verify ${email || "your email address"} to finish signing up.`}
+                  {emailVerified ? "Finish your account details to continue." : verificationSent ? `Check the link sent to ${email || "your inbox"}.` : `Verify ${email || "your email address"} to finish signing up.`}
                 </CardDescription>
               )}
               {!pendingVerification && <CardDescription className="mt-2 leading-relaxed">{mode === "login" ? "Sign in to book, track and manage your trips." : "Create an account for easier deliveries and rides."}</CardDescription>}
@@ -301,7 +359,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
             <CardContent className="min-w-0 px-4 sm:px-6">
               {pendingVerification ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">{verificationSent ? "Open the email link, then return here." : "Your signup is saved. Send a verification email below, then open its link and return here."}</p>
+                  <p className="text-sm text-muted-foreground">{emailVerified ? "Your email is verified. Continue below if signup has not finished automatically." : verificationSent ? "Open the email link, then return here. We’ll check verification when you return; your progress is saved." : "Your signup is saved. Send a verification email below, then open its link and return here."}</p>
                   <div className="space-y-2">
                     <Label htmlFor="verification-phone">Phone number</Label>
                     <Input id="verification-phone" type="tel" required autoComplete="tel" maxLength={32}
@@ -311,9 +369,9 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                   {error && <p className="text-sm text-destructive [overflow-wrap:anywhere]" role="alert">{error}</p>}
                   {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
                   <Button className="w-full" onClick={checkVerification} disabled={loading}>
-                    {loading && <FetchItLoader className="h-4 w-4" />} I&apos;ve verified my email
+                    {loading && <FetchItLoader className="h-4 w-4" />} {emailVerified ? "Continue" : "I've verified my email"}
                   </Button>
-                  <Button variant="outline" className="w-full" onClick={resendVerification} disabled={loading}>{verificationSent ? "Resend email" : "Send verification email"}</Button>
+                  {!emailVerified && <Button variant="outline" className="w-full" onClick={resendVerification} disabled={loading}>{verificationSent ? "Resend email" : "Send verification email"}</Button>}
                   <Button variant="ghost" className="w-full" onClick={useDifferentAccount} disabled={loading}>Use a different account</Button>
                 </div>
               ) : <Tabs

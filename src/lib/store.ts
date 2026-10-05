@@ -8,6 +8,7 @@
 
 import { create } from "zustand";
 import { clearOfflineAccount, hasPendingLogout, readOfflineCustomer, saveOfflineCustomer, setPendingLogout } from "./offline-data";
+import { clearAuthProgress, readAuthProgress } from "./auth-progress";
 let sessionEpoch = 0;
 
 export type Role = "CUSTOMER" | "RIDER";
@@ -42,6 +43,12 @@ export type AppMode = "delivery" | "ride";
 // Sessions of other roles (e.g. RIDER) must never see this app's UI.
 function isAllowedRole(role: AuthUser["role"] | undefined): boolean {
   return role === "CUSTOMER";
+}
+
+function guestView(current: AppView, restoreProgress = false): AppView {
+  if (current === "login" || current === "signup") return current;
+  if (restoreProgress && current === "landing") return readAuthProgress()?.mode ?? "landing";
+  return "landing";
 }
 
 interface AppState {
@@ -82,6 +89,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPendingRole: (r) => set({ pendingRole: r }),
   setUser: (u) => {
     sessionEpoch++;
+    clearAuthProgress();
     if (u?.role === "CUSTOMER") { setPendingLogout(false); saveOfflineCustomer({ ...u, role: "CUSTOMER" }); }
     else clearOfflineAccount();
     set({
@@ -101,6 +109,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const epoch = sessionEpoch;
     try {
       if (hasPendingLogout()) {
+        clearAuthProgress();
         const logout = await fetch("/api/auth/logout", { method: "POST" });
         if (!logout.ok) throw new Error("Sign-out is waiting for a connection.");
         setPendingLogout(false);
@@ -110,28 +119,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!res.ok) {
         if (res.status >= 500) throw new Error("Account check unavailable.");
         clearOfflineAccount();
-        set({ bootstrapped: true });
+        set({ user: null, offlineAccess: false, view: guestView(get().view, true), bootstrapped: true });
         return;
       }
       const data = (await res.json()) as { user: AuthUser | null };
       if (epoch !== sessionEpoch) return;
       const allowed = isAllowedRole(data.user?.role);
-      if (allowed && data.user) saveOfflineCustomer({ ...data.user, role: "CUSTOMER" });
+      if (allowed && data.user) { clearAuthProgress(); saveOfflineCustomer({ ...data.user, role: "CUSTOMER" }); }
       else clearOfflineAccount();
       set({
         user: allowed ? data.user : null,
-        view: allowed ? "mode-select" : "landing",
+        view: allowed ? "mode-select" : guestView(get().view, true),
         bootstrapped: true,
         offlineAccess: false,
       });
     } catch {
       if (epoch !== sessionEpoch) return;
       const saved = readOfflineCustomer();
-      set({ user: saved, view: saved ? "mode-select" : "landing", offlineAccess: !!saved, bootstrapped: true });
+      set({ user: saved, view: saved ? "mode-select" : guestView(get().view, true), offlineAccess: !!saved, bootstrapped: true });
     }
   },
   logout: async () => {
     const epoch = ++sessionEpoch;
+    clearAuthProgress();
     clearOfflineAccount(get().user?.id);
     setPendingLogout(true);
     set({ user: null, offlineAccess: false, view: "landing", pendingRole: null, pendingBookingId: null, mode: null });
@@ -152,6 +162,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const epoch = sessionEpoch;
     if (!navigator.onLine) return;
     if (hasPendingLogout()) {
+      clearAuthProgress();
       const response = await fetch("/api/auth/logout", { method: "POST" });
       if (!response.ok) return;
       setPendingLogout(false);
@@ -159,15 +170,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const res = await fetch("/api/auth/me", { cache: "no-store" });
     if (epoch !== sessionEpoch) return;
     if (!res.ok) {
-      if (res.status === 401 || res.status === 403) { clearOfflineAccount(get().user?.id); set({ user: null, view: "landing", offlineAccess: false }); }
+      if (res.status === 401 || res.status === 403) { clearOfflineAccount(get().user?.id); set({ user: null, view: guestView(get().view), offlineAccess: false }); }
       return;
     }
     const data = (await res.json()) as { user: AuthUser | null };
     if (epoch !== sessionEpoch) return;
     if (data.user?.role === "CUSTOMER") {
       const previousId = get().user?.id;
+      clearAuthProgress();
       saveOfflineCustomer({ ...data.user, role: "CUSTOMER" });
       set({ user: data.user, offlineAccess: false, ...(previousId !== data.user.id ? { view: "mode-select" as AppView, mode: null } : {}) });
-    } else { clearOfflineAccount(get().user?.id); set({ user: null, view: "landing", offlineAccess: false }); }
+    } else { clearOfflineAccount(get().user?.id); set({ user: null, view: guestView(get().view), offlineAccess: false }); }
   },
 }));

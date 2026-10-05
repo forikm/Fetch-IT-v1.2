@@ -4,6 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import * as offline from "../src/lib/offline-data.ts";
+import * as progress from "../src/lib/auth-progress.ts";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const compiled = ts.transpileModule(fs.readFileSync(new URL("../src/lib/store.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
@@ -21,6 +22,7 @@ function app(fetch) {
   const exports = {};
   vm.runInNewContext(compiled, { exports, navigator: { onLine: true }, fetch, require: name => {
     if (name === "./offline-data") return offline;
+    if (name === "./auth-progress") return progress;
     if (name === "firebase/auth") return { async signOut() {} };
     if (name === "@/lib/firebase-client") return { getCustomerAuth() { return {}; } };
     return require(name);
@@ -68,4 +70,48 @@ test("an in-flight account refresh cannot restore the customer after logout", as
   resolve(new Response(JSON.stringify({ user })));
   await refresh;
   assert.equal(store.getState().user, null); assert.equal(offline.readOfflineCustomer(), null);
+});
+
+for (const view of ["signup", "login"]) {
+  for (const status of [200, 401, 403]) {
+    test(`returning to ${view} with no session (HTTP ${status}) preserves the form`, async () => {
+      const store = app(async () => new Response(JSON.stringify({ user: null }), { status }));
+      store.getState().setView(view);
+      await store.getState().refreshUser();
+      assert.equal(store.getState().view, view);
+      assert.equal(store.getState().user, null);
+    });
+  }
+}
+
+test("cold reopening restores signup progress without granting a customer session", async () => {
+  progress.saveAuthProgress({ mode: "signup", email: "pending@example.invalid", name: "Pending", phone: "+639171234567", firebaseUid: "pending-firebase", verificationSent: true });
+  const store = app(async () => new Response(JSON.stringify({ user: null })));
+  await store.getState().bootstrap();
+  assert.equal(store.getState().view, "signup");
+  assert.equal(store.getState().user, null);
+  assert.equal(store.getState().offlineAccess, false);
+  assert.equal(progress.readAuthProgress().phone, "+639171234567");
+});
+
+test("an expired customer session still leaves protected dashboards", async () => {
+  const store = app(async () => new Response(JSON.stringify({ user: null })));
+  store.getState().setUser(user);
+  store.getState().chooseMode("ride");
+  await store.getState().refreshUser();
+  assert.equal(store.getState().view, "landing");
+  assert.equal(store.getState().user, null);
+  assert.equal(offline.readOfflineCustomer(), null);
+});
+
+test("completed sign-in and logout clear signup progress", async () => {
+  const draft = { mode: "signup", email: user.email, name: user.name, phone: "", firebaseUid: "pending-firebase", verificationSent: true };
+  const store = app(async () => new Response("{}"));
+  progress.saveAuthProgress(draft);
+  store.getState().setUser(user);
+  assert.equal(progress.readAuthProgress(), null);
+  progress.saveAuthProgress(draft);
+  await store.getState().logout();
+  assert.equal(progress.readAuthProgress(), null);
+  assert.equal(store.getState().view, "landing");
 });

@@ -31,6 +31,8 @@ Firebase creates the email/password identity before verification is sent; the Fe
 
 Run the signup regressions with `node --test tests/customer-signup*.test.mjs`. The SDK integration test uses a local REST fixture and does not create real Firebase users or send real emails.
 
+Switching to an email app keeps signup open. Email, name, phone and verification progress are saved on the device for up to 24 hours so reopening the PWA resumes the form; passwords and tokens are never included. Firebase still proves the identity and verification status. The app checks verification when visible and on return, finishing signup automatically when the required phone number is present. Successful sign-in, logout, leaving the form with Back, and changing accounts clear saved progress. See [docs/firebase-email-delivery.md](docs/firebase-email-delivery.md) for sender branding and inbox placement.
+
 The legacy demo account still uses **Try the demo customer account**. Existing customer accounts can use **Have a pre-Firebase Fetch-It account?** on sign-in. New Firebase sign-ups cannot reuse an email already present in the shared database; existing accounts need an explicit migration if you want to move them to Firebase later.
 
 ## Run locally
