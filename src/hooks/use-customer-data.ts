@@ -4,8 +4,12 @@ import { useSyncExternalStore } from "react";
 
 const memory = new Map<string, string>();
 const eventName = "fetchit-customer-data";
+if (typeof window !== "undefined") window.addEventListener(eventName, (event) => {
+  const id = (event as CustomEvent<{ clearUserId?: string }>).detail?.clearUserId;
+  if (id) for (const key of memory.keys()) if (key.startsWith(`fetchit:${id}:`)) memory.delete(key);
+});
 
-/** Account-scoped storage. Drafts last for this tab; saved places persist on this device. */
+/** Account-scoped storage. Persistent drafts and saved places survive app restarts. */
 export function useCustomerData<T>(userId: string, name: string, initial: T, persistent = false) {
   const key = `fetchit:${userId}:${name}`;
   const read = () => {

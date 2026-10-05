@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCustomerData } from "@/hooks/use-customer-data";
 import { statusLabel, type BookingStatus } from "@/lib/constants";
 import { customerResponse } from "@/lib/customer-request";
+import { saveSnapshot } from "@/lib/offline-data";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { isActiveBooking } from "@/lib/booking-status-query";
 
@@ -61,6 +62,8 @@ export function useBookingUpdates<T extends Update>(userId: string, type: string
         }
         baseline.current = { ...baseline.current, ...Object.fromEntries(bookings.map((booking) => [booking.id, booking.status])) };
         cache.current = bookings;
+        for (const service of ["RIDE", "DELIVERY"]) saveSnapshot(userId, `/api/bookings?filter=active&type=${service}`, { bookings: bookings.filter(booking => booking.type === service && isActiveBooking(booking.status)), nextCursor: null });
+        for (const booking of bookings) saveSnapshot(userId, `/api/bookings/${booking.id}`, { booking });
         callback.current(type === "ALL" ? bookings : bookings.filter((booking) => booking.type === type));
         setLastChecked(new Date()); setOffline(false);
       } catch { if (!signal.aborted) setOffline(true); }

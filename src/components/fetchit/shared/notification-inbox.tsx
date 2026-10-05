@@ -22,6 +22,7 @@ export function NotificationInbox({ onBooking }: { onBooking: (id: string, type:
   const [error, setError] = useState("");
   const [marking, setMarking] = useState(false);
   async function refresh(signal?: AbortSignal) {
+    if (!navigator.onLine) return;
     try { const data = await customerResponse<{ items: SupportNotification[] }>(await fetch("/api/support/notifications", { cache: "no-store", signal }), "Couldn’t load support notifications. Please retry.");
       if (!signal?.aborted) { setSupport(data.items); setError(""); }
     } catch (e) { if (!signal?.aborted) setError((e as Error).message); }

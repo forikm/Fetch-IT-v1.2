@@ -18,6 +18,12 @@ const db = new PrismaClient({ datasourceUrl: databaseUrl });
 const port = 3210;
 const password = "booking-test-only";
 let server;
+function startServer() {
+  const child = spawn(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "start", "-p", String(port)], {
+    cwd: root, env: { ...process.env, DATABASE_URL: databaseUrl }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  child.stdout.resume(); child.stderr.resume();
+  return child;
+}
 function cookie(user) {
   const value = Buffer.from(JSON.stringify({ uid: user.id, email: user.email, name: user.name, role: user.role, exp: Date.now() + 600000 })).toString("base64url");
   const secret = process.env.SESSION_SECRET || "fetch-it-dev-secret-please-rotate";
@@ -44,9 +50,7 @@ async function main() {
       assert(/^fetch_[a-z_]+$/.test(fn.name));
       await db.$executeRawUnsafe(`ALTER FUNCTION "${schema}"."${fn.name}"() SET search_path TO "${schema}", pg_catalog`);
     }
-    server = spawn(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "start", "-p", String(port)], {
-      cwd: root, env: { ...process.env, DATABASE_URL: databaseUrl }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-    server.stdout.resume(); server.stderr.resume();
+    server = startServer();
     let ready = false;
     for (let attempt = 0; attempt < 60; attempt++) {
       assert.equal(server.exitCode, null, "Booking server must stay running.");
@@ -100,11 +104,20 @@ async function main() {
     assert(history.bookings.some(b => b.vehicleClass === "CLOSED_VAN"));
     console.log("PASS: ride/delivery booking creation and quotes for all three vehicles, passenger/cargo validation, retired vehicle rejection, separate service lists, and historical booking compatibility.");
     if (process.env.BOOKING_PREVIEW === "1") {
-      console.log(`Isolated preview: http://localhost:${port}. Older account login: ${email}, password: ${password}. Send a newline to close and clean up.`);
+      console.log(`Isolated preview: http://localhost:${port}. Older account login: ${email}, password: ${password}. Commands: offline stops the server, online restarts it, done cleans up.`);
       await new Promise(resolve => {
-        const timer = setTimeout(resolve, 10 * 60 * 1000);
-        process.stdin.once("data", () => { clearTimeout(timer); resolve(); });
-        process.stdin.once("end", () => { clearTimeout(timer); resolve(); });
+        const finish = () => {
+          clearTimeout(timer); process.stdin.removeListener("data", onData); process.stdin.removeListener("end", finish); process.stdin.pause(); resolve();
+        };
+        const onData = input => {
+          const command = input.toString().trim();
+          if (command === "offline") { server.kill(); console.log("Preview server stopped. Reopen the app to verify cached offline access."); }
+          else if (command === "online") { server = startServer(); console.log("Preview server restarted."); }
+          else finish();
+        };
+        const timer = setTimeout(finish, 20 * 60 * 1000);
+        process.stdin.on("data", onData);
+        process.stdin.once("end", finish);
       });
     }
   } finally {

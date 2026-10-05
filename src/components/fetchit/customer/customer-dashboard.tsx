@@ -14,6 +14,9 @@ import { useBookingUpdates } from "@/hooks/use-booking-updates";
 import { SavedPlaces } from "../shared/saved-places";
 import { RequestError } from "../shared/request-error";
 import { useCustomerData } from "@/hooks/use-customer-data";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { readCustomerBooking } from "@/lib/offline-bookings";
+import { readSnapshot, saveSnapshot } from "@/lib/offline-data";
 import { customerResponse } from "@/lib/customer-request";
 import { FetchItLoader } from "@/components/fetchit/shared/loading";
 
@@ -148,6 +151,8 @@ export interface Booking {
 }
 
 export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: BookingType }) {
+  const online = useOnlineStatus();
+  const offlineAccess = useAppStore(state => state.offlineAccess);
   const isRide = bookingType === "RIDE";
   const ServiceIcon = isRide ? Car : Package;
   const user = useAppStore((s) => s.user) as AuthUser | null;
@@ -162,23 +167,25 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   const pendingBookingId = useAppStore((state) => state.pendingBookingId);
   useEffect(() => {
     if (!pendingBookingId) return;
+    const bookingId = pendingBookingId;
     let cancelled = false;
     async function open() {
       try {
-        const data = await customerResponse<{ booking: Booking }>(await fetch(`/api/bookings/${pendingBookingId}`, { cache: "no-store" }), "Couldn’t load the booking summary. Please try again.");
+        const { data } = await readCustomerBooking<{ booking: Booking }>(user?.id ?? "", `/api/bookings/${encodeURIComponent(bookingId)}`);
         if (!cancelled) { setSummaryBooking(data.booking); setSummaryError(null); }
       } catch { if (!cancelled) setSummaryError("Couldn’t load the booking summary. Please try again from the notification inbox."); }
       finally { if (!cancelled) useAppStore.getState().clearPendingBooking(); }
     }
     void open();
     return () => { cancelled = true; };
-  }, [pendingBookingId]);
+  }, [pendingBookingId, user?.id]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [filters, setFilters] = useState(emptyHistoryFilter);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadSequence = useRef(0);
@@ -192,10 +199,11 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   // the booking dialog opens — by the time someone taps "New booking" it's
   // usually already ready, so the loading screen rarely even shows.
   useEffect(() => {
+    if (!online || offlineAccess) return;
     loadGoogleMaps()
       .then(() => setMapsReady(true))
       .catch(() => setMapsFailed(true));
-  }, []);
+  }, [online, offlineAccess]);
 
   function queryString(cursor?: string) {
     const query = new URLSearchParams({ filter: tab, type: bookingType });
@@ -213,8 +221,10 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     setLoadingMore(true); setMoreError(null);
     const sequence = loadSequence.current;
     try {
-      const data = await customerResponse<{ bookings: Booking[]; nextCursor: string | null }>(await fetch("/api/bookings?" + queryString(nextCursor), { cache: "no-store" }), "Couldn’t load older bookings. Please retry.");
+      const result = await readCustomerBooking<{ bookings: Booking[]; nextCursor: string | null }>(user?.id ?? "", "/api/bookings?" + queryString(nextCursor));
+      const data = result.data;
       if (sequence !== loadSequence.current) return;
+      if (result.cached) setSavedAt(previous => Math.min(previous ?? result.savedAt, result.savedAt));
       setBookings((previous) => [...previous, ...data.bookings.filter((booking) => !previous.some((item) => item.id === booking.id))]);
       setNextCursor(data.nextCursor);
     } catch { if (sequence === loadSequence.current) setMoreError("Couldn’t load older bookings. Please retry."); }
@@ -225,8 +235,9 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch("/api/bookings?" + queryString(), { cache: "no-store" });
-      const data = await customerResponse<{ bookings: Booking[]; nextCursor: string | null }>(res, "We couldn’t load your bookings. Please try again.");
+      const result = await readCustomerBooking<{ bookings: Booking[]; nextCursor: string | null }>(user?.id ?? "", "/api/bookings?" + queryString());
+      const data = result.data;
+      if (sequence === loadSequence.current) setSavedAt(result.cached ? result.savedAt : null);
       if (!Array.isArray(data.bookings)) throw new Error("We couldn’t load your bookings. Please try again.");
       if (sequence === loadSequence.current) { setBookings(data.bookings ?? []); setNextCursor(data.nextCursor ?? null); setMoreError(null); }
     } catch (e) {
@@ -234,12 +245,13 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [tab, filters, bookingType]);
+  }, [tab, filters, bookingType, user?.id]);
 
   useEffect(() => {
     let cancelled = false;
     queueMicrotask(() => { if (!cancelled) void load(); });
-    return () => { cancelled = true; };
+    window.addEventListener("online", load);
+    return () => { cancelled = true; window.removeEventListener("online", load); };
   }, [load]);
 
   async function handleLogout() {
@@ -247,6 +259,10 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   }
 
   function onNewBookingCreated(b: Booking) {
+    const key = `/api/bookings?filter=active&type=${bookingType}`;
+    const saved = readSnapshot<{ bookings: Booking[] }>(user?.id ?? "", key);
+    saveSnapshot(user?.id ?? "", `/api/bookings/${b.id}`, { booking: b });
+    saveSnapshot(user?.id ?? "", key, { bookings: [b, ...(saved?.data.bookings ?? bookings).filter(item => item.id !== b.id && !["DELIVERED", "CANCELLED"].includes(item.status))], nextCursor: null });
     setBookings((prev) => [b, ...prev.filter((x) => x.id !== b.id)]);
     setShowNew(false);
     setTab("active");
@@ -259,7 +275,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   }
 
   const { lastChecked, offline } = useBookingUpdates<Booking>(user?.id ?? "", bookingType, (updated) => {
-    if (tab === "active" && !loading) setBookings(updated.filter((booking) => !["DELIVERED", "CANCELLED"].includes(booking.status)));
+    if (tab === "active" && !loading) { setBookings(updated.filter((booking) => !["DELIVERED", "CANCELLED"].includes(booking.status))); setSavedAt(null); }
     setTrackingBooking((previous) => {
       const latest = updated.find((booking) => booking.id === previous?.id);
       // The dialog owns fresh GPS/proof data; list status patches must preserve it.
@@ -308,6 +324,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
           </Button>
         </div>
 
+        {savedAt && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Saved bookings · last updated {new Date(savedAt).toLocaleString()}. Statuses and rider locations may have changed.</p>}
         {/* Recent booking map preview */}
         {tab === "active" && !loading && !loadError && bookings.length > 0 && (
           <Card className="min-w-0">
@@ -321,11 +338,11 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
                 </div>
                 <StatusBadge status={bookings[0].status} type={bookings[0].type} />
               </div>
-              <BookingRouteMap
+              {online && !offlineAccess ? <BookingRouteMap
                 pickup={{ lat: bookings[0].pickupLat, lng: bookings[0].pickupLng }}
                 dropoff={{ lat: bookings[0].dropoffLat, lng: bookings[0].dropoffLng }}
                 className="h-48"
-              />
+              /> : <p className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">Route map available when you reconnect. Your saved pickup and destination are below.</p>}
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-1 text-xs text-muted-foreground">
                 <span className="flex min-w-0 items-start gap-1.5">
                   <span className="h-4 w-4 shrink-0 rounded-full bg-emerald-600 text-white text-[9px] font-bold grid place-items-center">A</span>
@@ -358,7 +375,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
           </TabsList>
         </Tabs>
 
-<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{offline ? "Status updates paused — check your connection." : lastChecked ? "Status checked at " + lastChecked.toLocaleTimeString() : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading} onClick={() => void load()}>Refresh bookings</Button></div>
+<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{!online || offline || savedAt ? "Live updates paused. Saved statuses may be out of date." : lastChecked ? "Status checked at " + lastChecked.toLocaleTimeString() : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading || !online} onClick={() => void load()}>Refresh bookings</Button></div>
         {tab === "history" && <HistoryFilters value={filters} onChange={setFilters} />}
                 {/* List */}
         {loading ? (
@@ -377,6 +394,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
               <BookingCard
                 key={b.id}
                 booking={b}
+                readOnly={!online || offlineAccess || !!savedAt}
                 onTrack={() => setTrackingBooking(b)}
                 onRefresh={load}
                 onRepeat={() => { setRepeatBooking(b); setShowNew(true); }}
@@ -413,7 +431,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
               Choose your pickup and drop-off. Available {isRide ? "drivers" : "riders"} can accept your request.
             </DialogDescription>
           </DialogHeader>
-          {!mapsReady && !mapsFailed ? (
+          {online && !offlineAccess && !mapsReady && !mapsFailed ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
               <FetchItLoader className="h-6 w-6" />
               <p className="text-sm">Preparing map services…</p>
@@ -497,11 +515,13 @@ function EmptyState({ onNew, bookingType }: { onNew: () => void; bookingType: Bo
 // ------------------------------ Booking card ------------------------------
 function BookingCard({
   booking,
+  readOnly,
   onTrack,
   onRefresh,
   onRepeat,
 }: {
   booking: Booking;
+  readOnly: boolean;
   onTrack: () => void;
   onRefresh: () => void;
   onRepeat: () => void;
@@ -512,6 +532,7 @@ function BookingCard({
   const [cancelling, setCancelling] = useState(false);
 
   async function cancel() {
+    if (readOnly || !navigator.onLine) return;
     setCancelling(true);
     try {
       const res = await fetch(`/api/bookings/${booking.id}/cancel`, { method: "POST" });
@@ -600,7 +621,7 @@ function BookingCard({
 
         <BookingTimeline status={booking.status} type={booking.type} />
         <div className="flex flex-wrap gap-2 pt-1">
-          {canTrack && (
+          {canTrack && !readOnly && (
             <Button size="sm" className="flex-1" onClick={onTrack}>
               <Navigation className="h-3.5 w-3.5" /> Track
             </Button>
@@ -610,20 +631,20 @@ function BookingCard({
               size="sm"
               variant="outline"
               onClick={cancel}
-              disabled={cancelling}
+              disabled={cancelling || readOnly}
             >
               {cancelling ? <FetchItLoader className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
               Cancel
             </Button>
           )}
           {["DELIVERED", "CANCELLED"].includes(booking.status) && <Button size="sm" variant="outline" onClick={onRepeat}>Book again</Button>}
-          {isDelivered && booking.type === "DELIVERY" && (
+          {isDelivered && booking.type === "DELIVERY" && !readOnly && (
             <Button size="sm" variant="outline" className="flex-1" onClick={onTrack}>
               <ShieldCheck className="h-3.5 w-3.5" /> View proof
             </Button>
           )}
         </div>
-        <BookingActions booking={booking} />
+        <BookingActions booking={booking} readOnly={readOnly} />
       </CardContent>
     </Card>
   );
@@ -662,9 +683,12 @@ function BookingForm({
 }) {
   const { toast } = useToast();
   const userId = useAppStore((state) => state.user?.id ?? "anonymous");
+  const online = useOnlineStatus();
+  const offlineAccess = useAppStore(state => state.offlineAccess);
   const isRide = bookingType === "RIDE";
+  const connected = online && !offlineAccess;
   const emptyDraft = { pickupLabel: "", pickupLat: "", pickupLng: "", dropoffLabel: "", dropoffLat: "", dropoffLng: "", vehicleClass: "MOTORCYCLE" as VehicleClass, cargoWeightKg: "2", passengers: "1", cargoNotes: "", scheduledAt: "" };
-  const [draft, setDraft] = useCustomerData(userId, isRide ? "ride-booking-draft" : "delivery-draft", emptyDraft);
+  const [draft, setDraft] = useCustomerData(userId, isRide ? "ride-booking-draft" : "delivery-draft", emptyDraft, true);
   const { pickupLabel, pickupLat, pickupLng, dropoffLabel, dropoffLat, dropoffLng, cargoWeightKg, cargoNotes, scheduledAt } = draft;
   // Old drafts and repeat bookings may contain vehicle classes no longer offered.
   const vehicleClass = isBookingVehicle(draft.vehicleClass) ? draft.vehicleClass : "MOTORCYCLE";
@@ -707,7 +731,7 @@ function BookingForm({
   } | null>(null);
   const [estimating, setEstimating] = useState(false);
   const fareSequence = useRef(0);
-  const fareKey = JSON.stringify([pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, isRide ? passengers : cargoWeightKg, scheduledAt]);
+  const fareKey = JSON.stringify([online, offlineAccess, pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, isRide ? passengers : cargoWeightKg, scheduledAt]);
   const [estimatedKey, setEstimatedKey] = useState<string | null>(null);
   const estimate = estimatedKey === fareKey ? fareEstimate : null;
   const [estimateError, setEstimateError] = useState<string | null>(null);
@@ -785,7 +809,7 @@ function BookingForm({
   }
 
   async function fetchEstimate() {
-    if (!canEstimate()) return;
+    if (!online || offlineAccess || !canEstimate()) return;
     const sequence = ++fareSequence.current;
     setEstimating(true);
     setEstimate(null);
@@ -815,14 +839,15 @@ function BookingForm({
 
   // Auto-fetch estimate when all fields are present.
   useEffect(() => {
-    if (!canEstimate()) return;
+    if (!online || offlineAccess || !canEstimate()) return;
     const t = setTimeout(() => void fetchEstimate(), 350);
     return () => { clearTimeout(t); fareSequence.current++; };
-  }, [pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, cargoWeightKg, passengers, scheduledAt]);
+  }, [online, offlineAccess, pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, cargoWeightKg, passengers, scheduledAt]);
 
   async function handleConfirmBooking() {
     setError(null);
     if (submitting) return;
+    if (!navigator.onLine || offlineAccess) { setError("Your draft is saved. Reconnect to get a current fare and confirm it."); return; }
     if (!canEstimate() || !estimate || estimatedKey !== fareKey) {
       setError("Review your route and details, then wait for a current fare before confirming.");
       return;
@@ -855,8 +880,8 @@ function BookingForm({
   }
 
   const v = VEHICLES[vehicleClass];
-  const pickupChosen = !!(pickupLabel && pickupLat && pickupLng);
-  const dropoffChosen = !!(dropoffLabel && dropoffLat && dropoffLng);
+  const pickupChosen = !!pickupLabel && (!connected || !!(pickupLat && pickupLng));
+  const dropoffChosen = !!dropoffLabel && (!connected || !!(dropoffLat && dropoffLng));
   const stepLabels = ["Pickup", "Drop-off", "Details"];
 
   return (
@@ -872,7 +897,8 @@ function BookingForm({
       }}
       className="min-w-0 space-y-4"
     >
-      <p className="text-xs text-muted-foreground">Your draft is kept in this tab until you book. Review the route and current fare before confirming.</p>
+      <p className="text-xs text-muted-foreground">Your draft is saved on this device until you book or sign out. Review the route and current fare before confirming.</p>
+      {(!online || offlineAccess) && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">Offline draft · edit your details or choose saved places. Address search, maps, and fare quotes need a connection. Nothing will be booked automatically.</p>}
       {/* Step indicator */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-muted-foreground">
         {stepLabels.map((label, i) => (
@@ -909,6 +935,7 @@ function BookingForm({
               type="button"
               size="sm"
               variant="ghost"
+              disabled={!connected}
               onClick={() => fillCurrentLocation("pickup")}
               className="h-7 text-xs"
             >
@@ -916,7 +943,8 @@ function BookingForm({
             </Button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <PlaceAutocompleteInput
+            {connected ? <PlaceAutocompleteInput
+              onTextChange={setPickupLabel}
               placeholder="Search pickup address (e.g. Marina Bay Sands)"
               value={pickupLabel}
               onInvalid={() => { setPickupLat(""); setPickupLng(""); }}
@@ -926,7 +954,7 @@ function BookingForm({
                 setPickupLng(String(place.lng));
               }}
               required
-            />
+            /> : <Input aria-label="Pickup address" className="sm:col-span-3" placeholder="Type pickup address or choose a saved place" value={pickupLabel} onChange={(e) => { setPickupLabel(e.target.value); setPickupLat(""); setPickupLng(""); }} />}
             <Button
               type="button"
               variant="outline"
@@ -941,7 +969,7 @@ function BookingForm({
             </Button>
           </div>
           <SavedPlaces place={pickupLabel && pickupLat && pickupLng ? { label: pickupLabel, lat: Number(pickupLat), lng: Number(pickupLng) } : null} onSelect={(place) => { setPickupLabel(place.label); setPickupLat(String(place.lat)); setPickupLng(String(place.lng)); }} />
-          <LocationMap
+          {connected && <LocationMap
             lat={pickupLat ? Number(pickupLat) : null}
             lng={pickupLng ? Number(pickupLng) : null}
             pinColor="#16a34a"
@@ -951,7 +979,7 @@ function BookingForm({
               setPickupLat(String(place.lat));
               setPickupLng(String(place.lng));
             }}
-          />
+          />}
         </div>
       )}
 
@@ -966,6 +994,7 @@ function BookingForm({
               type="button"
               size="sm"
               variant="ghost"
+              disabled={!connected}
               onClick={() => fillCurrentLocation("dropoff")}
               className="h-7 text-xs"
             >
@@ -973,7 +1002,8 @@ function BookingForm({
             </Button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <PlaceAutocompleteInput
+            {connected ? <PlaceAutocompleteInput
+              onTextChange={setDropoffLabel}
               placeholder="Search drop-off address (e.g. Changi Airport)"
               value={dropoffLabel}
               onInvalid={() => { setDropoffLat(""); setDropoffLng(""); }}
@@ -983,7 +1013,7 @@ function BookingForm({
                 setDropoffLng(String(place.lng));
               }}
               required
-            />
+            /> : <Input aria-label="Drop-off address" className="sm:col-span-3" placeholder="Type drop-off address or choose a saved place" value={dropoffLabel} onChange={(e) => { setDropoffLabel(e.target.value); setDropoffLat(""); setDropoffLng(""); }} />}
             <Button
               type="button"
               variant="outline"
@@ -998,7 +1028,7 @@ function BookingForm({
             </Button>
           </div>
           <SavedPlaces place={dropoffLabel && dropoffLat && dropoffLng ? { label: dropoffLabel, lat: Number(dropoffLat), lng: Number(dropoffLng) } : null} onSelect={(place) => { setDropoffLabel(place.label); setDropoffLat(String(place.lat)); setDropoffLng(String(place.lng)); }} />
-          <LocationMap
+          {connected && <LocationMap
             lat={dropoffLat ? Number(dropoffLat) : null}
             lng={dropoffLng ? Number(dropoffLng) : null}
             pinColor="#dc2626"
@@ -1008,13 +1038,14 @@ function BookingForm({
               setDropoffLat(String(place.lat));
               setDropoffLng(String(place.lng));
             }}
-          />
+          />}
         </div>
       )}
 
       {/* Step 2: Details, fare, confirm */}
       {step === 2 && (
         <div className="space-y-4">
+          {connected && (!pickupChosen || !dropoffChosen) && <p className="rounded-lg border bg-muted/30 p-3 text-sm">Go back and select your typed addresses from search suggestions or saved places before requesting a fare.</p>}
           <div className="rounded-md border bg-muted/20 p-3 text-xs space-y-1">
             <div className="flex min-w-0 items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
@@ -1086,7 +1117,7 @@ function BookingForm({
           </div>
 
           {/* Fare estimate */}
-          {canEstimate() && (
+          {online && !offlineAccess && canEstimate() && (
             <Card className="bg-muted/30 border-dashed">
               <CardContent className="py-4">
                 {estimating ? (
@@ -1177,7 +1208,7 @@ function BookingForm({
             Next
           </Button>
         ) : (
-          <Button type="button" onClick={handleConfirmBooking} disabled={submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
+          <Button type="button" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
             {submitting ? <FetchItLoader className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             Confirm booking
           </Button>

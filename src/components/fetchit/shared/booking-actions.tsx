@@ -1,4 +1,6 @@
 "use client";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { useAppStore } from "@/lib/store";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,7 +10,10 @@ import { customerResponse } from "@/lib/customer-request";
 import { SupportCenter } from "./support-center";
 
 type Review = { rating: number; comment: string | null };
-export function BookingActions({ booking }: { booking: { id: string; refCode: string; status: string; riderId: string | null } }) {
+export function BookingActions({ booking, readOnly = false }: { readOnly?: boolean; booking: { id: string; refCode: string; status: string; riderId: string | null } }) {
+  const online = useOnlineStatus();
+  const offlineAccess = useAppStore(state => state.offlineAccess);
+  const unavailable = readOnly || !online || offlineAccess;
   const [dialog, setDialog] = useState<"review" | "help" | null>(null);
   const [review, setReview] = useState<Review | null>(null);
   const [rating, setRating] = useState(5);
@@ -30,7 +35,7 @@ export function BookingActions({ booking }: { booking: { id: string; refCode: st
   }
   return <>
     <div className="flex flex-wrap gap-2 pt-2 border-t">
-      <Button type="button" size="sm" variant="ghost" onClick={async () => {
+      <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={async () => {
         setError("");
         try {
           const response = await fetch(`/api/bookings/${booking.id}/receipt`, { cache: "no-store" });
@@ -39,8 +44,8 @@ export function BookingActions({ booking }: { booking: { id: string; refCode: st
           const link = document.createElement("a"); link.href = url; link.download = `fetchit-${booking.refCode}.txt`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         } catch { setError("Couldn’t download your receipt. Please retry."); }
       }}>Download receipt</Button>
-      {booking.status === "DELIVERED" && booking.riderId && <Button type="button" size="sm" variant="ghost" onClick={() => void open("review")}>Rate rider</Button>}
-      <Button type="button" size="sm" variant="ghost" onClick={() => void open("help")}>Get help</Button>
+      {booking.status === "DELIVERED" && booking.riderId && <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => void open("review")}>Rate rider</Button>}
+      <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => void open("help")}>Get help</Button>
     </div>
     {!dialog && error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     <Dialog open={!!dialog} onOpenChange={(open) => !open && setDialog(null)}>
@@ -59,7 +64,7 @@ export function BookingActions({ booking }: { booking: { id: string; refCode: st
         }}>
           <fieldset><legend className="text-sm font-medium mb-2">Choose a rating</legend><div className="flex gap-2">{[1, 2, 3, 4, 5].map((star) => <button key={star} type="button" aria-label={`${star} star${star === 1 ? "" : "s"}`} aria-pressed={rating === star} onClick={() => setRating(star)} className={`text-3xl ${star <= rating ? "text-amber-500" : "text-muted-foreground"}`}>★</button>)}</div></fieldset>
           <div className="space-y-2"><Label htmlFor="review-comment">Comment (optional)</Label><Textarea id="review-comment" maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
-          <Button disabled={busy} type="submit">{busy ? "Submitting…" : "Submit rating"}</Button>
+          <Button disabled={busy || unavailable} type="submit">{busy ? "Submitting…" : "Submit rating"}</Button>
         </form>)}
         {loaded && dialog === "help" && <SupportCenter key={booking.id} booking={booking} />}
       </DialogContent>

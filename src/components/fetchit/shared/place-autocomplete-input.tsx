@@ -18,6 +18,7 @@ export function PlaceAutocompleteInput({
   value,
   onChange,
   onInvalid,
+  onTextChange,
   required,
   className,
 }: {
@@ -25,19 +26,13 @@ export function PlaceAutocompleteInput({
   value: string;
   onChange: (place: PlaceValue) => void;
   onInvalid?: () => void;
+  onTextChange: (text: string) => void;
   required?: boolean;
   className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
-  const [text, setText] = useState(value);
-
-  // Keep the visible text in sync if the parent resets it (e.g. after
-  // submitting the form).
-  useEffect(() => {
-    setText(value);
-  }, [value]);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +51,6 @@ export function PlaceAutocompleteInput({
           const lng = place.geometry?.location?.lng();
           if (lat == null || lng == null) return; // user hit Enter with no selection
           const label = place.name || place.formatted_address || "";
-          setText(label);
           onChange({ label, lat, lng });
         });
         setReady(true);
@@ -69,7 +63,6 @@ export function PlaceAutocompleteInput({
       cancelled = true;
       if (listener) listener.remove();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -78,8 +71,8 @@ export function PlaceAutocompleteInput({
       <Input
         ref={inputRef}
         placeholder={failed ? "Type an address (autocomplete unavailable)" : placeholder}
-        value={text}
-        onChange={(e) => { setText(e.target.value); onInvalid?.(); }}
+        value={value}
+        onChange={(e) => { onTextChange(e.target.value); onInvalid?.(); }}
         required={required}
         className={`pl-9 ${className ?? ""}`}
         autoComplete="off"
