@@ -116,6 +116,60 @@
   --sidebar-ring: oklch(0.72 0.18 55);
 }
 
+/* Apply the service palette at body level so portaled booking dialogs,
+   selects, menus and alerts inherit the same colors as the dashboard. */
+body:has([data-booking-service="delivery"]) {
+  --service-surface: #f5e8d9;
+  --service-border: #e7d6c2;
+}
+
+body:has([data-booking-service="ride"]) {
+  --background: #f2f6f2;
+  --foreground: #163c34;
+  --card-foreground: #163c34;
+  --popover-foreground: #163c34;
+  --primary: #163c34;
+  --primary-foreground: #ffffff;
+  --secondary: #e0ebe3;
+  --secondary-foreground: #163c34;
+  --muted: #eaf0eb;
+  --muted-foreground: #576c61;
+  --accent: #dce8df;
+  --accent-foreground: #163c34;
+  --border: #d2dfd5;
+  --input: #c7d7cb;
+  --ring: #244e42;
+  --service-surface: #e0ebe3;
+  --service-border: #c7d9ce;
+}
+
+.dark body:has([data-booking-service="delivery"]) {
+  --service-surface: #38271f;
+  --service-border: #604231;
+}
+
+.dark body:has([data-booking-service="ride"]) {
+  --background: #10251e;
+  --foreground: #e6f1e9;
+  --card: #172f26;
+  --card-foreground: #e6f1e9;
+  --popover: #172f26;
+  --popover-foreground: #e6f1e9;
+  --primary: #9ccfb3;
+  --primary-foreground: #10251e;
+  --secondary: #203e30;
+  --secondary-foreground: #e6f1e9;
+  --muted: #20392e;
+  --muted-foreground: #afc5b7;
+  --accent: #2b4d3d;
+  --accent-foreground: #e6f1e9;
+  --border: #345444;
+  --input: #3b5e4d;
+  --ring: #9ccfb3;
+  --service-surface: #1c3d2d;
+  --service-border: #3b604b;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -142,6 +196,8 @@
   }
   .dashboard-welcome {
     @apply rounded-3xl border border-border bg-card p-5 sm:p-7;
+    background-color: var(--service-surface, var(--card));
+    border-color: var(--service-border, var(--border));
   }
 }
 

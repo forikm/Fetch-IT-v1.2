@@ -25,7 +25,7 @@ export function FetchItLogo({
       />
       {showWordmark && (
         <span className="font-semibold text-xl tracking-[-0.05em]">
-          Fetch<span className="text-primary">-It</span>
+          Fetch<span className="text-[#bd4c1d] dark:text-[#ef9459]">-It</span>
         </span>
       )}
     </div>

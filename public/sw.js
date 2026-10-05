@@ -1,6 +1,6 @@
 // Cache public UI only. Private booking data is saved per account by the app.
-const CACHE_VERSION = "fetchit-customer-v7";
-const APP_SHELL = ["/", "/help", "/manifest.webmanifest", "/fetch-icon-final-192.png", "/fetch-icon-final-512.png", "/fetch-logo-final.png", "/fetch-loading.gif"];
+const CACHE_VERSION = "fetchit-customer-v8";
+const APP_SHELL = ["/", "/help", "/manifest.webmanifest", "/pwa-icon-any-v2-192.png", "/pwa-icon-any-v2-512.png", "/pwa-icon-maskable-v2-192.png", "/pwa-icon-maskable-v2-512.png", "/fetch-logo-final.png", "/fetch-loading.gif"];
 
 function staticAssets(text) {
   return [...new Set(text.match(/\/_next\/static\/[^\s"'<>\\)]+/g) || [])];

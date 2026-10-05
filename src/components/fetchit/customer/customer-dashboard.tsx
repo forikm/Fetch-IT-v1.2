@@ -283,7 +283,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     });
   });
   return (
-    <div className="min-h-screen w-full min-w-0 overflow-x-clip flex flex-col bg-background pb-20 sm:pb-0">
+    <div data-booking-service={isRide ? "ride" : "delivery"} className="min-h-screen w-full min-w-0 overflow-x-clip flex flex-col bg-background pb-20 sm:pb-0">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">
         <div className="mx-auto w-full max-w-7xl min-w-0 px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
