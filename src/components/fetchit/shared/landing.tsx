@@ -7,6 +7,8 @@ import { FetchItLogo } from "./logo";
 import { BrandNavigation, ItMark } from "./brand-navigation";
 import { useAppStore, type Role } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
+import { SupportContact } from "./support-contact";
 
 const FEATURES = [
   { icon: MapPin, title: "Every stop, in sight.", desc: "Follow your booking from pickup to arrival with route maps and tracking updates." },
@@ -102,7 +104,7 @@ export function LandingView() {
         <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
           <div className="relative overflow-hidden rounded-[2rem] bg-[#163c34] px-6 py-12 text-white sm:px-12 sm:py-16"><div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-96 w-96 rounded-full border-[50px] border-white/5" /><div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-center"><div><p className="text-xs font-medium tracking-[0.15em] text-[#bed9ce]">WHERE TO NEXT?</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Let&apos;s make your next move.</h2><p className="mt-3 text-sm text-[#bed9ce]">Your deliveries and rides, together at last.</p></div><Button size="lg" onClick={start} className="self-start md:self-auto">{user ? "Dashboard" : "Get started"} <ArrowRight /></Button></div></div>
         </section>
-        <section id="contact-us" aria-label="Contact Us" className="mx-auto min-h-40 max-w-7xl scroll-mt-24 px-4 sm:px-6 lg:px-8" />
+        <section id="contact-us" aria-label="Contact Us" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-16 sm:px-6 lg:px-8"><div className="rounded-2xl border bg-card p-6 sm:p-8"><p className="eyebrow">HERE TO HELP</p><h2 className="mt-3 text-2xl font-semibold">Let’s get it sorted.</h2><p className="mb-5 mt-3 max-w-xl text-sm text-muted-foreground">Get help with a booking, ask an account question, or follow up on a support request.</p><Button asChild className="mb-5"><Link href="/help">Visit Help &amp; Support <ArrowRight /></Link></Button><SupportContact /></div></section>
       </main>
       <footer className="border-t border-border"><div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"><div><FetchItLogo size={32} /><p className="mt-3 text-xs text-muted-foreground">A little easier. A little closer. Every day.</p></div><p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Fetch-It. All rights reserved.</p></div></footer>
     </div>

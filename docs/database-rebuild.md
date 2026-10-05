@@ -32,8 +32,8 @@ shared helper copies remain checked in to the other apps for independent builds.
 - `CustomerReview`: one review per completed booking, rating constrained to 1–5,
   and owner/rider checked against that booking.
 - `SupportTicket`, `SupportMessage`, `AdminAudit`, `TicketCounter`: retained.
-  Replies live in messages; the customer API derives its latest `adminReply`
-  field instead of storing a second copy. Support messages and audit entries keep
+  Replies live in messages; the customer support detail API returns the two-way
+  conversation instead of storing a second copy of replies. Support messages and audit entries keep
   author-name snapshots even if their author is removed.
 
 PostgreSQL enums, checks, foreign keys, and role/ownership triggers enforce

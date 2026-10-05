@@ -13,8 +13,8 @@ export default function Home() {
   const { view, bootstrapped, bootstrap } = useAppStore();
 
   useEffect(() => {
-    void bootstrap();
-  }, [bootstrap]);
+    if (!bootstrapped) void bootstrap();
+  }, [bootstrap, bootstrapped]);
 
   if (!bootstrapped) {
     return <FetchItLoadingScreen />;

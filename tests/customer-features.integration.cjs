@@ -68,7 +68,7 @@ async function booking(customer, rider, number) {
     const duplicate = await request("/api/support", token, 409, "POST", { bookingId: first.id, category: "BOOKING", message: "Disposable support check" }); assert(duplicate.error.includes("open request"));
     assert.equal((await request("/api/support", cookie(other))).tickets.length, 0);
     await request(`/api/support/${sent.ticket.id}`, cookie(admin, true), 200, "PATCH", { status: "RESOLVED", reply: "Disposable reply check" }, true);
-    const replies = await request(`/api/support?bookingId=${first.id}`, token); assert.equal(replies.tickets[0].adminReply, "Disposable reply check");
+    const replies = await request(`/api/support/${sent.ticket.id}`, token); assert.equal(replies.messages[0].body, "Disposable reply check");
     console.log("PASS: customer ownership, role checks, reviews, concurrent averages, profile validation, filtered/paginated history, receipts, help requests, and admin replies.");
   } finally {
     if (bookings.length) { await db.supportTicket.deleteMany({ where: { bookingId: { in: bookings } } }); await db.customerReview.deleteMany({ where: { bookingId: { in: bookings } } }); await db.booking.deleteMany({ where: { id: { in: bookings } } }); }
