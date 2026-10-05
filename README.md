@@ -27,6 +27,10 @@ Next.js 16 · App Router · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma 
 
 Firebase's default verification email is handled by Firebase. The customer app does not need a separate email service, SMS service, Firebase database, for sending verification emails. Firebase proves the email/password identity; its UID is linked through `AuthIdentity` to an independent Fetch `User` ID and cookie session.
 
+Firebase creates the email/password identity before verification is sent; the Fetch-It customer record is created after verification. If signup is interrupted, retry with the same email and password to resume an unverified identity and send verification again. A restored unverified account also offers **Send verification email**. Delivery failures show the actual connection or quota error, and the app only reports an email as sent after Firebase accepts the request. Profile-saving failures do not block verification delivery. Verified accounts use normal sign-in.
+
+Run the signup regressions with `node --test tests/customer-signup*.test.mjs`. The SDK integration test uses a local REST fixture and does not create real Firebase users or send real emails.
+
 The legacy demo account still uses **Try the demo customer account**. Existing customer accounts can use **Have a pre-Firebase Fetch-It account?** on sign-in. New Firebase sign-ups cannot reuse an email already present in the shared database; existing accounts need an explicit migration if you want to move them to Firebase later.
 
 ## Run locally
