@@ -3,7 +3,7 @@
 // ModeSelect — the post-login hub. After signing in, the customer chooses
 // between the two Fetch-It products: Delivery (cargo) or Ride (passenger).
 // Picking a mode drops them into the matching dashboard; both dashboards
-// expose a "Switch mode" action that returns here.
+// provide a Back button in the page that returns here.
 
 import { NotificationInbox } from "../shared/notification-inbox";
 import { useBookingUpdates } from "@/hooks/use-booking-updates";
@@ -76,7 +76,7 @@ export function ModeSelect() {
             icon={<Package className="h-7 w-7" />}
             accent="delivery"
             features={[
-              { icon: MapPin, text: "Motorcycles to refrigerated vans" },
+              { icon: MapPin, text: "Motor, tricycle or car" },
               { icon: Calculator, text: "Upfront fare by weight & distance" },
               { icon: ShieldCheck, text: "OTP, signature & photo e-POD" },
             ]}
@@ -89,7 +89,7 @@ export function ModeSelect() {
             icon={<Car className="h-7 w-7" />}
             accent="ride"
             features={[
-              { icon: Bike, text: "Motorcycle, tricycle or sedan" },
+              { icon: Bike, text: "Motor, tricycle or car" },
               { icon: Users, text: "Up to 4 passengers, fare per trip" },
               { icon: Navigation, text: "Live map & driver ETA" },
             ]}

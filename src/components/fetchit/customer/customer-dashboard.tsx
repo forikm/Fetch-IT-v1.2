@@ -41,7 +41,8 @@ import {
   Phone,
   CheckCircle2,
   AlertCircle,
-  ArrowUpDown,
+  ArrowLeft,
+  Users,
   CircleDot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppStore, type AuthUser } from "@/lib/store";
 import {
   VEHICLE_LIST,
+  PASSENGER_CAPACITY,
+  isBookingVehicle,
+  type BookingType,
   VEHICLES,
   type VehicleClass,
   type BookingStatus,
@@ -93,9 +97,10 @@ import { LocationMap } from "../shared/location-map";
 import { ProfileMenu } from "../shared/profile-menu";
 import { BookingRouteMap } from "../shared/booking-route-map";
 import { LiveTrackingMap } from "../shared/live-tracking-map";
+import { RideTrackingView } from "./ride-tracking-view";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
-interface Booking {
+export interface Booking {
   id: string;
   refCode: string;
   type: "RIDE" | "DELIVERY";
@@ -142,7 +147,9 @@ interface Booking {
   }[];
 }
 
-export function CustomerDashboard() {
+export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: BookingType }) {
+  const isRide = bookingType === "RIDE";
+  const ServiceIcon = isRide ? Car : Package;
   const user = useAppStore((s) => s.user) as AuthUser | null;
   const logout = useAppStore((s) => s.logout);
   const setView = useAppStore((s) => s.setView);
@@ -191,7 +198,7 @@ export function CustomerDashboard() {
   }, []);
 
   function queryString(cursor?: string) {
-    const query = new URLSearchParams({ filter: tab, type: "DELIVERY" });
+    const query = new URLSearchParams({ filter: tab, type: bookingType });
     if (tab === "history") {
       if (filters.query.trim()) query.set("q", filters.query.trim());
       if (filters.status) query.set("status", filters.status);
@@ -227,10 +234,12 @@ export function CustomerDashboard() {
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [tab, filters]);
+  }, [tab, filters, bookingType]);
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) void load(); });
+    return () => { cancelled = true; };
   }, [load]);
 
   async function handleLogout() {
@@ -244,12 +253,12 @@ export function CustomerDashboard() {
     toast({
       title: "Booking created",
       description: `${b.refCode} · ₱${b.totalFare.toFixed(2)} · ${
-        b.rider ? "Rider matched!" : "Searching for a rider…"
+        b.rider ? (isRide ? "Driver matched!" : "Rider matched!") : (isRide ? "Searching for a driver…" : "Searching for a rider…")
       }`,
     });
   }
 
-  const { lastChecked, offline } = useBookingUpdates<Booking>(user?.id ?? "", "DELIVERY", (updated) => {
+  const { lastChecked, offline } = useBookingUpdates<Booking>(user?.id ?? "", bookingType, (updated) => {
     if (tab === "active" && !loading) setBookings(updated.filter((booking) => !["DELIVERED", "CANCELLED"].includes(booking.status)));
     setTrackingBooking((previous) => {
       const latest = updated.find((booking) => booking.id === previous?.id);
@@ -264,16 +273,6 @@ export function CustomerDashboard() {
         <div className="mx-auto w-full max-w-7xl min-w-0 px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
           <BrandNavigation />
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              aria-label="Switch mode"
-              onClick={() => setView("mode-select")}
-            >
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Switch mode</span>
-            </Button>
             <div className="hidden sm:flex flex-col items-end text-sm leading-tight">
               <span className="font-medium">{user?.name}</span>
               <span className="text-xs text-muted-foreground">{user?.email}</span>
@@ -282,7 +281,7 @@ export function CustomerDashboard() {
             <ProfileMenu
               name={user?.name}
               email={user?.email}
-              roleLabel="Customer · Delivery"
+              roleLabel={`Customer · ${isRide ? "Ride" : "Delivery"}`}
               onLogout={handleLogout}
             />
           </div>
@@ -290,16 +289,18 @@ export function CustomerDashboard() {
       </header>
 
       <main className="flex-1 mx-auto w-full min-w-0 max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+        <Button variant="ghost" className="-ml-3 gap-2" onClick={() => setView("mode-select")} aria-label="Back to services">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </Button>
         {/* Welcome */}
         <div className="dashboard-welcome flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <p className="eyebrow mb-3">YOUR DELIVERY DESK</p>
+            <p className="eyebrow mb-3">{isRide ? "YOUR RIDE DESK" : "YOUR DELIVERY DESK"}</p>
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
               Good to see you, {user?.name?.split(" ")[0] ?? "there"}.
             </h1>
             <p className="text-muted-foreground mt-1">
-              Ready to ship something today? Track your active deliveries or
-              book a new pickup.
+              {isRide ? "Ready to go somewhere? Track your active rides or book a new pickup." : "Ready to ship something today? Track your active deliveries or book a new pickup."}
             </p>
           </div>
           <Button size="lg" onClick={() => { setRepeatBooking(null); setShowNew(true); }} className="gap-2">
@@ -318,7 +319,7 @@ export function CustomerDashboard() {
                     · {bookings[0].refCode}
                   </span>
                 </div>
-                <StatusBadge status={bookings[0].status} />
+                <StatusBadge status={bookings[0].status} type={bookings[0].type} />
               </div>
               <BookingRouteMap
                 pickup={{ lat: bookings[0].pickupLat, lng: bookings[0].pickupLng }}
@@ -344,7 +345,7 @@ export function CustomerDashboard() {
         <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "history")}>
           <TabsList>
             <TabsTrigger value="active" className="gap-1.5">
-              <Package className="h-4 w-4" /> Active
+              <ServiceIcon className="h-4 w-4" /> Active
               {bookings.length > 0 && (
                 <span className="ml-1 rounded-full bg-primary/15 text-primary text-xs px-1.5">
                   {bookings.filter((b) => !["DELIVERED", "CANCELLED"].includes(b.status)).length}
@@ -363,12 +364,12 @@ export function CustomerDashboard() {
         {loading ? (
           <div role="status" className="flex flex-col items-center gap-3 py-16 text-sm text-muted-foreground">
             <FetchItLoader className="h-14 w-14" />
-            <p>Loading deliveries…</p>
+            <p>Loading {isRide ? "rides" : "deliveries"}…</p>
           </div>
         ) : loadError ? (
           <RequestError message={loadError} onRetry={() => void load()} />
         ) : bookings.length === 0 ? (
-          tab === "history" ? <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">No bookings match these filters.</p> : <EmptyState onNew={() => { setRepeatBooking(null); setShowNew(true); }} />
+          tab === "history" ? <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">No bookings match these filters.</p> : <EmptyState bookingType={bookingType} onNew={() => { setRepeatBooking(null); setShowNew(true); }} />
         ) : (
           <div className={tab === "history" ? "min-w-0 space-y-2" : "grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4"}>
             {bookings.map((b) => (
@@ -406,10 +407,10 @@ export function CustomerDashboard() {
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" /> Book a delivery
+              <ServiceIcon className="h-5 w-5 text-primary" /> Book a {isRide ? "ride" : "delivery"}
             </DialogTitle>
             <DialogDescription>
-              Choose your pickup and drop-off. Available riders can accept your request.
+              Choose your pickup and drop-off. Available {isRide ? "drivers" : "riders"} can accept your request.
             </DialogDescription>
           </DialogHeader>
           {!mapsReady && !mapsFailed ? (
@@ -419,6 +420,7 @@ export function CustomerDashboard() {
             </div>
           ) : (
             <BookingForm
+              bookingType={bookingType}
               initialBooking={repeatBooking}
               onCreate={onNewBookingCreated}
               onCancel={() => setShowNew(false)}
@@ -430,7 +432,9 @@ export function CustomerDashboard() {
       {/* Tracking modal */}
       <Dialog open={!!trackingBooking} onOpenChange={(o) => !o && setTrackingBooking(null)}>
         <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
-          {trackingBooking && (
+          {trackingBooking && (trackingBooking.type === "RIDE" ? (
+            <RideTrackingView ride={trackingBooking} onClose={() => setTrackingBooking(null)} onUpdated={(updated) => setTrackingBooking((prev) => prev ? { ...prev, ...updated } : prev)} />
+          ) : (
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
@@ -449,7 +453,7 @@ export function CustomerDashboard() {
                 }
               />
             </>
-          )}
+          ))}
         </DialogContent>
       </Dialog>
 
@@ -468,20 +472,22 @@ export function CustomerDashboard() {
 }
 
 // ------------------------------ Empty state ------------------------------
-function EmptyState({ onNew }: { onNew: () => void }) {
+function EmptyState({ onNew, bookingType }: { onNew: () => void; bookingType: BookingType }) {
+  const isRide = bookingType === "RIDE";
+  const ServiceIcon = isRide ? Car : Package;
   return (
     <Card className="border-2 border-dashed bg-card">
       <CardContent className="py-16 text-center">
         <div className="mx-auto h-14 w-14 rounded-full bg-primary/10 grid place-items-center mb-4">
-          <Package className="h-7 w-7 text-primary" />
+          <ServiceIcon className="h-7 w-7 text-primary" />
         </div>
-        <h3 className="font-semibold text-lg">No deliveries yet</h3>
+        <h3 className="font-semibold text-lg">No {isRide ? "rides" : "deliveries"} yet</h3>
         <p className="text-muted-foreground mt-1 max-w-sm mx-auto">
           Choose your pickup, destination and vehicle to get your first
-          delivery on its way.
+          {isRide ? "ride" : "delivery"} on its way.
         </p>
         <Button className="mt-5" onClick={onNew}>
-          <Plus className="h-4 w-4" /> Book a delivery
+          <Plus className="h-4 w-4" /> Book a {isRide ? "ride" : "delivery"}
         </Button>
       </CardContent>
     </Card>
@@ -539,7 +545,7 @@ function BookingCard({
               <span className="font-mono text-sm text-muted-foreground">
                 {booking.refCode}
               </span>
-              <StatusBadge status={booking.status} />
+              <StatusBadge status={booking.status} type={booking.type} />
             </div>
             <CardTitle className="text-base mt-1.5 [overflow-wrap:anywhere]">
               {booking.dropoffLabel}
@@ -562,7 +568,7 @@ function BookingCard({
             label="ETA"
             value={
               booking.status === "DELIVERED"
-                ? "Delivered"
+                ? (booking.type === "RIDE" ? "Completed" : "Delivered")
                 : booking.etaMinutes != null
                   ? `${booking.etaMinutes} min`
                   : "—"
@@ -592,7 +598,7 @@ function BookingCard({
           </div>
         )}
 
-        <BookingTimeline status={booking.status} type="DELIVERY" />
+        <BookingTimeline status={booking.status} type={booking.type} />
         <div className="flex flex-wrap gap-2 pt-1">
           {canTrack && (
             <Button size="sm" className="flex-1" onClick={onTrack}>
@@ -611,7 +617,7 @@ function BookingCard({
             </Button>
           )}
           {["DELIVERED", "CANCELLED"].includes(booking.status) && <Button size="sm" variant="outline" onClick={onRepeat}>Book again</Button>}
-          {isDelivered && (
+          {isDelivered && booking.type === "DELIVERY" && (
             <Button size="sm" variant="outline" className="flex-1" onClick={onTrack}>
               <ShieldCheck className="h-3.5 w-3.5" /> View proof
             </Button>
@@ -644,19 +650,26 @@ function Stat({
 
 // ------------------------------ Booking form ------------------------------
 function BookingForm({
+  bookingType,
   onCreate,
   onCancel,
   initialBooking,
 }: {
+  bookingType: BookingType;
   initialBooking: Booking | null;
   onCreate: (b: Booking) => void;
   onCancel: () => void;
 }) {
   const { toast } = useToast();
   const userId = useAppStore((state) => state.user?.id ?? "anonymous");
-  const emptyDraft = { pickupLabel: "", pickupLat: "", pickupLng: "", dropoffLabel: "", dropoffLat: "", dropoffLng: "", vehicleClass: "MOTORCYCLE" as VehicleClass, cargoWeightKg: "2", cargoNotes: "", scheduledAt: "" };
-  const [draft, setDraft] = useCustomerData(userId, "delivery-draft", emptyDraft);
-  const { pickupLabel, pickupLat, pickupLng, dropoffLabel, dropoffLat, dropoffLng, vehicleClass, cargoWeightKg, cargoNotes, scheduledAt } = draft;
+  const isRide = bookingType === "RIDE";
+  const emptyDraft = { pickupLabel: "", pickupLat: "", pickupLng: "", dropoffLabel: "", dropoffLat: "", dropoffLng: "", vehicleClass: "MOTORCYCLE" as VehicleClass, cargoWeightKg: "2", passengers: "1", cargoNotes: "", scheduledAt: "" };
+  const [draft, setDraft] = useCustomerData(userId, isRide ? "ride-booking-draft" : "delivery-draft", emptyDraft);
+  const { pickupLabel, pickupLat, pickupLng, dropoffLabel, dropoffLat, dropoffLng, cargoWeightKg, cargoNotes, scheduledAt } = draft;
+  // Old drafts and repeat bookings may contain vehicle classes no longer offered.
+  const vehicleClass = isBookingVehicle(draft.vehicleClass) ? draft.vehicleClass : "MOTORCYCLE";
+  const passengers = draft.passengers ?? "1";
+  const passengerCapacity = PASSENGER_CAPACITY[vehicleClass] ?? 1;
   const setPickupLabel = (value: typeof draft.pickupLabel) => setDraft((previous) => ({ ...previous, pickupLabel: value }));
   const setPickupLat = (value: typeof draft.pickupLat) => setDraft((previous) => ({ ...previous, pickupLat: value }));
   const setPickupLng = (value: typeof draft.pickupLng) => setDraft((previous) => ({ ...previous, pickupLng: value }));
@@ -664,18 +677,18 @@ function BookingForm({
   const setDropoffLat = (value: typeof draft.dropoffLat) => setDraft((previous) => ({ ...previous, dropoffLat: value }));
   const setDropoffLng = (value: typeof draft.dropoffLng) => setDraft((previous) => ({ ...previous, dropoffLng: value }));
   const setVehicleClass = (value: typeof draft.vehicleClass) => setDraft((previous) => ({ ...previous, vehicleClass: value }));
+  const setPassengers = (value: string) => setDraft((previous) => ({ ...previous, passengers: value }));
   const setCargoWeightKg = (value: typeof draft.cargoWeightKg) => setDraft((previous) => ({ ...previous, cargoWeightKg: value }));
   const setCargoNotes = (value: typeof draft.cargoNotes) => setDraft((previous) => ({ ...previous, cargoNotes: value }));
   const setScheduledAt = (value: typeof draft.scheduledAt) => setDraft((previous) => ({ ...previous, scheduledAt: value }));
   useEffect(() => {
     if (!initialBooking) return;
-    setDraft({ pickupLabel: initialBooking.pickupLabel, pickupLat: String(initialBooking.pickupLat), pickupLng: String(initialBooking.pickupLng), dropoffLabel: initialBooking.dropoffLabel, dropoffLat: String(initialBooking.dropoffLat), dropoffLng: String(initialBooking.dropoffLng), vehicleClass: initialBooking.vehicleClass, cargoWeightKg: String(initialBooking.cargoWeightKg), cargoNotes: initialBooking.cargoNotes ?? "", scheduledAt: "" });
+    setDraft({ pickupLabel: initialBooking.pickupLabel, pickupLat: String(initialBooking.pickupLat), pickupLng: String(initialBooking.pickupLng), dropoffLabel: initialBooking.dropoffLabel, dropoffLat: String(initialBooking.dropoffLat), dropoffLng: String(initialBooking.dropoffLng), vehicleClass: initialBooking.vehicleClass, cargoWeightKg: String(initialBooking.cargoWeightKg), passengers: String(initialBooking.passengers ?? 1), cargoNotes: initialBooking.cargoNotes ?? "", scheduledAt: "" });
     // Apply a repeat once on opening; subsequent edits belong to the draft.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialBooking]);
 
   // Fare estimate
-  const [estimate, setEstimate] = useState<{
+  const [fareEstimate, setEstimate] = useState<{
     distanceKm: number;
     straightLineKm?: number;
     surgeMultiplier: number;
@@ -694,8 +707,9 @@ function BookingForm({
   } | null>(null);
   const [estimating, setEstimating] = useState(false);
   const fareSequence = useRef(0);
-  const fareKey = JSON.stringify([pickupLat, pickupLng, dropoffLat, dropoffLng, vehicleClass, cargoWeightKg, scheduledAt]);
+  const fareKey = JSON.stringify([pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, isRide ? passengers : cargoWeightKg, scheduledAt]);
   const [estimatedKey, setEstimatedKey] = useState<string | null>(null);
+  const estimate = estimatedKey === fareKey ? fareEstimate : null;
   const [estimateError, setEstimateError] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -764,8 +778,9 @@ function BookingForm({
       dropoffLabel &&
       dropoffLat &&
       dropoffLng &&
-      cargoWeightKg &&
-      Number(cargoWeightKg) > 0
+      (isRide
+        ? Number.isInteger(Number(passengers)) && Number(passengers) >= 1 && Number(passengers) <= passengerCapacity
+        : Number.isFinite(Number(cargoWeightKg)) && Number(cargoWeightKg) > 0 && Number(cargoWeightKg) <= VEHICLES[vehicleClass].capacityKg)
     );
   }
 
@@ -780,10 +795,12 @@ function BookingForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          type: bookingType,
+          passengers: isRide ? Number(passengers) : undefined,
           pickup: { lat: Number(pickupLat), lng: Number(pickupLng), label: pickupLabel },
           dropoff: { lat: Number(dropoffLat), lng: Number(dropoffLng), label: dropoffLabel },
           vehicleClass,
-          cargoWeightKg: Number(cargoWeightKg),
+          cargoWeightKg: isRide ? undefined : Number(cargoWeightKg),
           scheduledAt: scheduledAt || undefined,
         }),
       });
@@ -798,20 +815,16 @@ function BookingForm({
 
   // Auto-fetch estimate when all fields are present.
   useEffect(() => {
-    if (!canEstimate()) {
-      setEstimate(null);
-      return;
-    }
-    setEstimate(null);
+    if (!canEstimate()) return;
     const t = setTimeout(() => void fetchEstimate(), 350);
     return () => { clearTimeout(t); fareSequence.current++; };
-  }, [pickupLat, pickupLng, dropoffLat, dropoffLng, vehicleClass, cargoWeightKg, scheduledAt]);
+  }, [pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, cargoWeightKg, passengers, scheduledAt]);
 
   async function handleConfirmBooking() {
     setError(null);
     if (submitting) return;
     if (!canEstimate() || !estimate || estimatedKey !== fareKey) {
-      setError("Please fill in all location fields.");
+      setError("Review your route and details, then wait for a current fare before confirming.");
       return;
     }
     setSubmitting(true);
@@ -820,12 +833,13 @@ function BookingForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "DELIVERY",
+          type: bookingType,
+          passengers: isRide ? Number(passengers) : undefined,
           pickup: { lat: Number(pickupLat), lng: Number(pickupLng), label: pickupLabel },
           dropoff: { lat: Number(dropoffLat), lng: Number(dropoffLng), label: dropoffLabel },
           vehicleClass,
-          cargoWeightKg: Number(cargoWeightKg),
-          cargoNotes: cargoNotes || undefined,
+          cargoWeightKg: isRide ? undefined : Number(cargoWeightKg),
+          cargoNotes: isRide ? undefined : cargoNotes || undefined,
           scheduledAt: scheduledAt || undefined,
         }),
       });
@@ -1020,25 +1034,29 @@ function BookingForm({
                 <SelectContent>
                   {VEHICLE_LIST.map((v) => (
                     <SelectItem key={v.id} value={v.id}>
-                      {v.label} · {v.capacityKg} kg · ₱{v.baseFare} for the first {v.includedKm} km
+                      {v.label} · {isRide ? `${PASSENGER_CAPACITY[v.id]} passenger${PASSENGER_CAPACITY[v.id] === 1 ? "" : "s"}` : `${v.capacityKg} kg`} · ₱{v.baseFare} for the first {v.includedKm} km
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {v && <p className="text-xs text-muted-foreground">{v.capacityKg} kg capacity · ₱{v.baseFare} for the first {v.includedKm} km. {v.description}</p>}
+              {v && <p className="text-xs text-muted-foreground">{isRide ? `Up to ${passengerCapacity} passenger${passengerCapacity === 1 ? "" : "s"}` : `${v.capacityKg} kg capacity`} · ₱{v.baseFare} for the first {v.includedKm} km. {!isRide && v.description}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="weight">Cargo weight (kg)</Label>
+              <Label htmlFor="booking-size">{isRide ? "Passengers" : "Cargo weight (kg)"}</Label>
               <Input
-                id="weight"
+                id="booking-size"
                 type="number"
-                step="0.1"
-                min="0.1"
-                value={cargoWeightKg}
-                onChange={(e) => setCargoWeightKg(e.target.value)}
+                step={isRide ? "1" : "0.1"}
+                min={isRide ? "1" : "0.1"}
+                max={isRide ? passengerCapacity : v.capacityKg}
+                value={isRide ? passengers : cargoWeightKg}
+                onChange={(e) => isRide ? setPassengers(e.target.value) : setCargoWeightKg(e.target.value)}
                 required
               />
-              {v && Number(cargoWeightKg) > v.capacityKg && (
+              {isRide && (!Number.isInteger(Number(passengers)) || Number(passengers) < 1 || Number(passengers) > passengerCapacity) && (
+                <p className="text-xs text-destructive">Choose 1{passengerCapacity > 1 ? `–${passengerCapacity}` : ""} passenger{passengerCapacity > 1 ? "s" : ""} for {v.label}, or choose a larger vehicle.</p>
+              )}
+              {!isRide && v && Number(cargoWeightKg) > v.capacityKg && (
                 <p className="text-xs text-destructive">
                   Exceeds {v.label} capacity ({v.capacityKg} kg).
                 </p>
@@ -1056,7 +1074,7 @@ function BookingForm({
                 onChange={(e) => setScheduledAt(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
+            {!isRide && <div className="space-y-2">
               <Label htmlFor="notes">Cargo notes (optional)</Label>
               <Input
                 id="notes"
@@ -1064,7 +1082,7 @@ function BookingForm({
                 onChange={(e) => setCargoNotes(e.target.value)}
                 placeholder="Fragile · handle with care"
               />
-            </div>
+            </div>}
           </div>
 
           {/* Fare estimate */}
@@ -1095,14 +1113,14 @@ function BookingForm({
                         label={`Distance charge (${estimate.fare.billableKm} km)`}
                         value={`₱${estimate.fare.distanceFare}`}
                       />
-                      <FareLine
+                      {!isRide && <FareLine
                         label={
                           estimate.fare.chargeableKg > 0
                             ? `Weight (${estimate.fare.chargeableKg} kg over free)`
                             : `Weight (within free ${v!.freeWeightKg} kg)`
                         }
                         value={`₱${estimate.fare.weightFare}`}
-                      />
+                      />}
                       <FareLine
                         label="Surge"
                         value={`×${estimate.surgeMultiplier.toFixed(2)} (+₱${estimate.fare.surgeFare})`}
@@ -1119,7 +1137,7 @@ function BookingForm({
                         <Clock className="h-3.5 w-3.5" /> ETA ~{estimate.etaMinutes} min
                       </span>
                       <span className="flex items-center gap-1">
-                        <Package className="h-3.5 w-3.5" /> {(Number(cargoWeightKg) / v!.capacityKg * 100).toFixed(0)}% of capacity
+                        {isRide ? <><Users className="h-3.5 w-3.5" /> {passengers} passenger{Number(passengers) === 1 ? "" : "s"}</> : <><Package className="h-3.5 w-3.5" /> {(Number(cargoWeightKg) / v!.capacityKg * 100).toFixed(0)}% of capacity</>}
                       </span>
                     </div>
                   </div>

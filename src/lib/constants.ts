@@ -20,12 +20,24 @@ export type VehicleClass =
   | "FLATBED"
   | "REFRIGERATED";
 
-/** Vehicle classes offered for the RIDE product (passenger transport). */
-export const RIDE_VEHICLE_CLASSES: VehicleClass[] = [
+/** Available for all new bookings; other classes remain for historical records. */
+export const BOOKING_VEHICLE_CLASSES: VehicleClass[] = [
   "MOTORCYCLE",
   "TRICYCLE",
   "SEDAN",
 ];
+
+export const RIDE_VEHICLE_CLASSES = BOOKING_VEHICLE_CLASSES;
+
+export function isBookingVehicle(value: unknown): value is VehicleClass {
+  return BOOKING_VEHICLE_CLASSES.includes(value as VehicleClass);
+}
+
+export const PASSENGER_CAPACITY: Partial<Record<VehicleClass, number>> = {
+  MOTORCYCLE: 1,
+  TRICYCLE: 2,
+  SEDAN: 4,
+};
 
 export type BookingStatus =
   | "PENDING"
@@ -81,7 +93,7 @@ export interface VehicleMeta {
 export const VEHICLES: Record<VehicleClass, VehicleMeta> = {
   MOTORCYCLE: {
     id: "MOTORCYCLE",
-    label: "Motorcycle",
+    label: "Motor",
     description: "Best for small parcels under 20 kg in dense urban traffic.",
     baseFare: 60,
     includedKm: 2,
@@ -98,7 +110,7 @@ export const VEHICLES: Record<VehicleClass, VehicleMeta> = {
   TRICYCLE: {
     id: "TRICYCLE",
     label: "Tricycle",
-    description: "Classic Philippine short-hop ride for one or two passengers.",
+    description: "For local deliveries and parcels up to 50 kg.",
     baseFare: 50,
     includedKm: 1,
     perKm: 12,
@@ -113,7 +125,7 @@ export const VEHICLES: Record<VehicleClass, VehicleMeta> = {
   },
   SEDAN: {
     id: "SEDAN",
-    label: "Sedan",
+    label: "Car",
     description: "Ideal for documents and boxed goods up to 200 kg.",
     baseFare: 130,
     includedKm: 2,
@@ -178,7 +190,7 @@ export const VEHICLES: Record<VehicleClass, VehicleMeta> = {
   },
 };
 
-export const VEHICLE_LIST = Object.values(VEHICLES);
+export const VEHICLE_LIST = BOOKING_VEHICLE_CLASSES.map((id) => VEHICLES[id]);
 
 export const BOOKING_STATUS_FLOW: BookingStatus[] = [
   "PENDING",

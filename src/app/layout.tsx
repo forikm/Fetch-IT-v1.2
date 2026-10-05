@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Fetch-It — Book & Track Deliveries",
   description:
-    "Fetch-It customer app: book a delivery in seconds, choose from motorcycles to refrigerated vans, watch live GPS tracking, and confirm receipt with digital proof of delivery.",
+    "Fetch-It customer app: book a delivery in seconds, choose a motor, tricycle or car, watch live GPS tracking, and confirm receipt with digital proof of delivery.",
   keywords: [
     "Fetch-It",
     "logistics",

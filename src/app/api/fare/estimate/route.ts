@@ -5,14 +5,14 @@
 //   dropoff:    { lat, lng, label? },
 //   vehicleClass,
 //   cargoWeightKg,                    (DELIVERY only)
-//   passengers?,                      (RIDE only, 1–4, informational)
+//   passengers?,                      (RIDE only, subject to vehicle capacity)
 //   scheduledAt?: ISO string          (changes surge based on scheduled hour)
 // }
 // Returns the FareBreakdown + distanceKm + etaMinutes.
 
 import { NextRequest, NextResponse } from "next/server";
 import { quoteFare, quoteRideFare } from "@/lib/fare";
-import { VEHICLES, type VehicleClass } from "@/lib/constants";
+import { VEHICLES, isBookingVehicle, PASSENGER_CAPACITY, type VehicleClass } from "@/lib/constants";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       dropoff,
       vehicleClass,
       cargoWeightKg,
+      passengers,
       scheduledAt,
     } = body as {
       type?: "DELIVERY" | "RIDE";
@@ -34,19 +35,30 @@ export async function POST(req: NextRequest) {
       scheduledAt?: string;
     };
 
-    if (!pickup || !dropoff || !vehicleClass || !VEHICLES[vehicleClass]) {
+    if (!pickup || !dropoff || !vehicleClass) {
       return NextResponse.json(
         { error: "Missing required fields." },
         { status: 400 },
       );
     }
 
+    if (type !== "RIDE" && type !== "DELIVERY") {
+      return NextResponse.json({ error: "Choose ride or delivery." }, { status: 400 });
+    }
+    if (!isBookingVehicle(vehicleClass)) {
+      return NextResponse.json({ error: "Choose Motor, Tricycle or Car." }, { status: 400 });
+    }
     const when = scheduledAt ? new Date(scheduledAt) : new Date();
     if (!Number.isFinite(when.getTime()) || (scheduledAt && when.getTime() <= Date.now())) {
       return NextResponse.json({ error: "Choose a future pickup time." }, { status: 400 });
     }
 
     if (type === "RIDE") {
+      const pax = Number(passengers ?? 1);
+      const capacity = PASSENGER_CAPACITY[vehicleClass] ?? 1;
+      if (!Number.isInteger(pax) || pax < 1 || pax > capacity) {
+        return NextResponse.json({ error: `Choose 1${capacity > 1 ? `–${capacity}` : ""} passenger${capacity > 1 ? "s" : ""} for ${VEHICLES[vehicleClass].label}.` }, { status: 400 });
+      }
       const quote = quoteRideFare({ pickup, dropoff, vehicleClass, when });
       return NextResponse.json({
         distanceKm: quote.distanceKm,
@@ -63,7 +75,7 @@ export async function POST(req: NextRequest) {
     }
 
     const weight = Number(cargoWeightKg ?? 1);
-    if (cargoWeightKg == null || !Number.isFinite(weight) || weight < 0) {
+    if (cargoWeightKg == null || !Number.isFinite(weight) || weight <= 0) {
       return NextResponse.json(
         { error: "Enter a valid cargo weight." },
         { status: 400 },
