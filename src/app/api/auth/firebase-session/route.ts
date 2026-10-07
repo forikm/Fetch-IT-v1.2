@@ -1,3 +1,4 @@
+import { withRequestLog, RateLimitError, limitRequests, clientAddress, safeErrorCode } from "@/lib/request-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCustomerAdminAuth } from "@/lib/firebase-admin";
@@ -5,8 +6,9 @@ import { createSessionToken, setSessionCookie } from "@/lib/session";
 import { normalizePhilippinePhone } from "@/lib/phone";
 
 // Exchange a verified Firebase ID token for the cookie used by booking APIs.
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
+    await limitRequests("customer:firebase-session-ip", clientAddress(req), 120, 15 * 60_000);
     const { idToken, phone } = (await req.json()) as {
       idToken?: string;
       phone?: string;
@@ -78,7 +80,10 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[firebase-session] error", err);
+    if (err instanceof RateLimitError) throw err;
+    console.error("[firebase-session] error", { code: safeErrorCode(err) });
     return NextResponse.json({ error: "Could not complete sign in." }, { status: 500 });
   }
 }
+
+export const POST = withRequestLog("customer:auth/firebase-session:POST", handlePOST);

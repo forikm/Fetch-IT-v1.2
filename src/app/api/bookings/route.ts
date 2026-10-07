@@ -1,3 +1,4 @@
+import { withRequestLog, RateLimitError, limitRequests, safeErrorCode } from "@/lib/request-guard";
 import { bookingView, riderSelect } from "@/lib/db-data";
 import type { Prisma } from "@prisma/client";
 // /api/bookings
@@ -23,7 +24,7 @@ import { quoteFare, quoteRideFare } from "@/lib/fare";
 import { omitTicket } from "@/lib/ticket";
 import { bookingAttemptId, findBookingAttempt, createBookingWithRetry } from "@/lib/booking-create";
 
-export async function GET(req: NextRequest) {
+async function handleGET(req: NextRequest) {
   try {
     const session = await requireCustomer();
 
@@ -71,10 +72,11 @@ export async function GET(req: NextRequest) {
     // here.
     const page = bookings.slice(0, 100);
     return NextResponse.json({ bookings: page.map(b => omitTicket(bookingView(b))), nextCursor: bookings.length > 100 ? page[page.length - 1].id : null }, { headers: { "Cache-Control": "private, no-store" } });
-  } catch (error) { return customerErrorResponse(error); }
+  } catch (error) {
+    if (error instanceof RateLimitError) throw error; return customerErrorResponse(error); }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     const session = await getSession();
     if (!session) {
@@ -142,6 +144,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Choose a future pickup time." }, { status: 400 });
     }
 
+    await limitRequests("customer:booking", session.uid, 30, 5 * 60_000);
     const isRide = type === "RIDE";
 
     if (isRide) {
@@ -240,11 +243,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
   } catch (err) {
+    if (err instanceof RateLimitError) throw err;
     if (err instanceof CustomerError) return customerErrorResponse(err);
-    console.error("[bookings POST] error", { code: (err as { code?: string }).code ?? "UNKNOWN" });
+    console.error("[bookings POST] error", { code: safeErrorCode(err) });
     return NextResponse.json(
       { error: "Failed to create booking." },
       { status: 500 },
     );
   }
 }
+
+export const GET = withRequestLog("customer:bookings:GET", handleGET);
+export const POST = withRequestLog("customer:bookings:POST", handlePOST);

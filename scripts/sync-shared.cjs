@@ -3,8 +3,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const root = path.resolve(__dirname, "..");
-const commonFiles = ["prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/booking-events.ts"];
-const riderFiles = ["src/lib/delivery-challenge.ts", "src/lib/ticket.ts"];
+const commonFiles = ["prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/booking-events.ts", "src/lib/session-secret.ts", "src/lib/request-guard.ts", "src/lib/password-policy.ts"];
+const riderFiles = ["src/lib/delivery-challenge.ts", "src/lib/ticket.ts", "src/hooks/use-visible-poll.ts"];
 let failed = false;
 for (const app of ["fetch-rider", "fetch-admin"]) {
   const target = path.resolve(root, "..", app);

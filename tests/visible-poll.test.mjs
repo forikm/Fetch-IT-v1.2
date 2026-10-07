@@ -6,7 +6,7 @@ import ts from "typescript";
 
 function harness() {
   const effects = [], refs = [], listeners = new Map();
-  let index = 0, nextTimer = 0;
+  let index = 0, nextTimer = 0, now = 0;
   const intervals = new Map(), timeouts = new Map();
   const react = {
     useRef(initial) { const slot = index++; return refs[slot] ??= { current: initial }; },
@@ -28,7 +28,7 @@ function harness() {
   }).outputText;
   vm.runInNewContext(source, {
     exports, require: () => react, window: surface, document: surface,
-    navigator: { onLine: true }, AbortController,
+    navigator: { onLine: true }, AbortController, Date: { now: () => now },
     setInterval(fn, ms) { const id = ++nextTimer; intervals.set(id, { fn, ms }); return id; },
     clearInterval(id) { intervals.delete(id); },
     setTimeout(fn) { const id = ++nextTimer; timeouts.set(id, fn); return id; },
@@ -37,6 +37,7 @@ function harness() {
   return {
     render(poll, key = "booking-1") { index = 0; exports.useVisiblePoll(key, poll); },
     tick() { for (const timer of intervals.values()) timer.fn(); },
+    advance(ms) { now += ms; this.tick(); },
     unmount() { effects.forEach((effect) => effect?.cleanup?.()); },
     surface, listeners, intervals,
   };
@@ -69,4 +70,25 @@ test("hidden pages pause checks and returning to the page refreshes immediately"
   h.surface.visibilityState = "visible";
   h.listeners.get("visibilitychange")(); await flush(); assert.equal(calls, 1);
   h.unmount(); assert.equal(h.listeners.size, 0);
+});
+
+test("idle polling waits thirty seconds and focus refreshes immediately", async () => {
+  const h = harness(); let calls = 0;
+  h.render(async () => { calls++; return 30000; }); await flush();
+  h.advance(27000); await flush(); assert.equal(calls, 1);
+  h.advance(3000); await flush(); assert.equal(calls, 2);
+  h.listeners.get("focus")(); await flush(); assert.equal(calls, 3);
+  h.unmount();
+});
+
+test("errors back off, online resumes immediately and success restores normal polling", async () => {
+  const h = harness(); let calls = 0, failing = true;
+  h.render(async () => { calls++; if (failing) throw new Error("offline"); }); await flush();
+  h.advance(3000); await flush(); assert.equal(calls, 1);
+  h.advance(3000); await flush(); assert.equal(calls, 2);
+  h.advance(9000); await flush(); assert.equal(calls, 2);
+  h.advance(3000); await flush(); assert.equal(calls, 3);
+  failing = false; h.listeners.get("online")(); await flush(); assert.equal(calls, 4);
+  h.advance(3000); await flush(); assert.equal(calls, 5);
+  h.unmount();
 });

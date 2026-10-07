@@ -9,7 +9,9 @@ async function main() {
       db.trackingUpdate.deleteMany({ where: { booking } }),
       db.bookingLocation.deleteMany({ where: { booking } }),
     ]);
+    const quotas = await db.$executeRaw`DELETE FROM "RateLimitBucket" WHERE "key" IN (SELECT "key" FROM "RateLimitBucket" WHERE "expiresAt" < CURRENT_TIMESTAMP LIMIT 5000)`;
     console.log(`Removed ${history.count} historical points and ${locations.count} latest locations from bookings finished over 30 days ago.`);
+    console.log(`Removed ${quotas} expired request-limit buckets.`);
   } finally { await db.$disconnect(); }
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

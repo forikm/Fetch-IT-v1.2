@@ -1,9 +1,10 @@
+import { withRequestLog, RateLimitError, limitRequests } from "@/lib/request-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CustomerError, requireCustomer, customerErrorResponse } from "@/lib/customer-access";
 import { supportInput } from "@/lib/support-input";
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function handleGET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireCustomer();
     const { id } = await params;
@@ -20,16 +21,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
     return NextResponse.json({ ticket, messages: messages.slice(0, 50).reverse(), nextCursor: messages.length > 50 ? messages[49].id : null },
       { headers: { "Cache-Control": "private, no-store" } });
-  } catch (error) { return customerErrorResponse(error); }
+  } catch (error) {
+    if (error instanceof RateLimitError) throw error;
+    return customerErrorResponse(error);
+  }
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function handlePOST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireCustomer();
     const { id } = await params;
+    await limitRequests("customer:support", session.uid, 30, 5 * 60_000);
     let input: ReturnType<typeof supportInput>;
     try { input = supportInput(await request.json().catch(() => null), true); }
-    catch (error) { throw new CustomerError((error as Error).message, 400); }
+    catch (error) {
+      throw new CustomerError((error as Error).message, 400);
+    }
     const result = await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "SupportTicket" WHERE "id" = ${id} AND "customerId" = ${session.uid} FOR UPDATE`;
       const ticket = await tx.supportTicket.findFirst({ where: { id, customerId: session.uid } });
@@ -44,5 +51,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return { message, reopened: ticket.status === "RESOLVED" };
     });
     return NextResponse.json(result, { status: 201 });
-  } catch (error) { return customerErrorResponse(error); }
+  } catch (error) {
+    if (error instanceof RateLimitError) throw error;
+    return customerErrorResponse(error);
+  }
 }
+
+export const GET = withRequestLog("customer:support/[id]:GET", handleGET);
+export const POST = withRequestLog("customer:support/[id]:POST", handlePOST);

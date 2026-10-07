@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import * as progress from "../src/lib/auth-progress.ts";
 import * as signup from "../src/lib/customer-signup.ts";
+import * as passwordPolicy from "../src/lib/password-policy.ts";
 import { normalizePhilippinePhone } from "../src/lib/phone.ts";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
@@ -58,6 +59,7 @@ function harness(firebaseUser) {
   vm.runInNewContext(compiled, { exports, process: { env: { NODE_ENV: "production" } },
     fetch: async (path, options) => { requests.push({ path, body: JSON.parse(options.body) }); return new Response(JSON.stringify({ user: { id: "fetch-user", role: "CUSTOMER" } })); },
     require(name) {
+      if (name === "@/lib/password-policy") return passwordPolicy;
       if (name === "react") return hooks;
       if (name === "react/jsx-runtime") return require(name);
       if (name === "firebase/auth") return sdk;

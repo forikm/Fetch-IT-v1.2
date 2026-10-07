@@ -14,7 +14,7 @@ const users = [];
 const bookings = [];
 function cookie(user, admin = false) {
   const value = Buffer.from(JSON.stringify({ uid: user.id, email: user.email, name: user.name, role: user.role, exp: Date.now() + 600000 })).toString("base64url");
-  const secret = admin ? adminEnv.ADMIN_SESSION_SECRET || "fetch-it-admin-dev-secret-please-rotate" : process.env.SESSION_SECRET || "fetch-it-dev-secret-please-rotate";
+  const secret = admin ? process.env.ADMIN_SESSION_SECRET || adminEnv.ADMIN_SESSION_SECRET : process.env.SESSION_SECRET;
   return `${admin ? "fetchit_admin_session" : "fetchit_session"}=${value}.${crypto.createHmac("sha256", secret).update(value).digest("base64url")}`;
 }
 async function request(path, token, expected = 200, method = "GET", data, admin = false) {

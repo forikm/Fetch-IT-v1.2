@@ -13,8 +13,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { quoteFare, quoteRideFare } from "@/lib/fare";
 import { VEHICLES, isBookingVehicle, PASSENGER_CAPACITY, type VehicleClass } from "@/lib/constants";
+import { withRequestLog, safeErrorCode } from "@/lib/request-guard";
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
@@ -115,10 +116,12 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[fare/estimate] error", err);
+    console.error("[fare/estimate] error", { code: safeErrorCode(err) });
     return NextResponse.json(
       { error: "Failed to compute fare." },
       { status: 500 },
     );
   }
 }
+
+export const POST = withRequestLog("customer:fare/estimate:POST", handlePOST);

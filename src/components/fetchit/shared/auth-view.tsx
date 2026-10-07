@@ -39,6 +39,7 @@ import { useAppStore, type AuthUser } from "@/lib/store";
 import { getCustomerAuth } from "@/lib/firebase-client";
 import { normalizePhilippinePhone } from "@/lib/phone";
 import { customerAuthMessage, startCustomerSignup } from "@/lib/customer-signup";
+import { validNewPassword, PASSWORD_REQUIREMENT } from "@/lib/password-policy";
 import { clearAuthProgress, readAuthProgress, saveAuthProgress } from "@/lib/auth-progress";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 
@@ -204,6 +205,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
         const auth = getCustomerAuth();
         signupEmail.current = email.trim().toLowerCase();
         setVerificationSent(false);
+        if (!validNewPassword(password)) throw new Error(PASSWORD_REQUIREMENT);
         const result = await startCustomerSignup({
           create: async (address, secret) => (await createUserWithEmailAndPassword(auth, address, secret)).user,
           signIn: async (address, secret) => (await signInWithEmailAndPassword(auth, address, secret)).user,
@@ -404,7 +406,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                         type="password"
                         autoComplete="current-password"
                         required
-                        minLength={6}
+                        minLength={mode === "signup" ? 15 : 1}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Your password"
@@ -493,10 +495,11 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                           type="password"
                           autoComplete="new-password"
                           required
-                          minLength={6}
+                          minLength={mode === "signup" ? 15 : 1}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="At least 6 characters"
+                          maxLength={128}
+                          placeholder="At least 15 characters"
                         />
                       </div>
                     </div>

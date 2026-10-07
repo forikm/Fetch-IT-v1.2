@@ -1,3 +1,4 @@
+import { withRequestLog, RateLimitError } from "@/lib/request-guard";
 import { recordBookingEvent } from "@/lib/booking-events";
 import { bookingView } from "@/lib/db-data";
 // POST /api/bookings/[id]/cancel
@@ -11,7 +12,7 @@ import { omitTicket } from "@/lib/ticket";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function POST(_req: NextRequest, { params }: Params) {
+async function handlePOST(_req: NextRequest, { params }: Params) {
   try {
     const session = await requireCustomer();
     if (!session) {
@@ -46,5 +47,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
     const updated = await db.booking.findUnique({ where: { id } });
     if (!updated) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
     return NextResponse.json({ booking: omitTicket(bookingView(updated)) });
-  } catch (error) { return customerErrorResponse(error); }
+  } catch (error) {
+    if (error instanceof RateLimitError) throw error;
+    return customerErrorResponse(error);
+  }
 }
+
+export const POST = withRequestLog("customer:bookings/[id]/cancel:POST", handlePOST);

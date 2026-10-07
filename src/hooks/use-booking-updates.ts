@@ -66,7 +66,8 @@ export function useBookingUpdates<T extends Update>(userId: string, type: string
         for (const booking of bookings) saveSnapshot(userId, `/api/bookings/${booking.id}`, { booking });
         callback.current(type === "ALL" ? bookings : bookings.filter((booking) => booking.type === type));
         setLastChecked(new Date()); setOffline(false);
-      } catch { if (!signal.aborted) setOffline(true); }
+        return bookings.some(booking => isActiveBooking(booking.status)) ? undefined : 30000;
+      } catch (error) { if (!signal.aborted) setOffline(true); throw error; }
   });
   return { lastChecked, offline };
 }

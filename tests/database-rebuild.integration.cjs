@@ -1,18 +1,27 @@
-// Runs production servers on separate test ports, creates disposable fixtures,
-// checks cross-app behaviour against Neon, then removes fixtures and servers.
+// Runs all three production servers in a newly created disposable DB schema.
+// Never changes application data; removes only the schema it owns.
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { parseEnv } = require("node:util");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { PrismaClient } = require("@prisma/client");
 if (process.env.RUN_DATABASE_INTEGRATION !== "1") throw new Error("Set RUN_DATABASE_INTEGRATION=1 to test the configured shared test database.");
 const root = path.resolve(__dirname, "..");
 process.loadEnvFile(path.join(root, ".env"));
+const schema = "fetch_security_test_" + crypto.randomUUID().replaceAll("-", "");
+const target = new URL(process.env.DATABASE_URL);
+target.searchParams.set("schema", schema);
+target.searchParams.set("options", `${target.searchParams.get("options") || ""} -c search_path=${schema},pg_catalog`.trim());
+process.env.DATABASE_URL = target.toString();
+process.env.SESSION_SECRET = crypto.randomBytes(32).toString("hex");
+process.env.ADMIN_SESSION_SECRET = crypto.randomBytes(32).toString("hex");
 const db = new PrismaClient();
+let ownsSchema = false;
 const marker = "db-rebuild-" + crypto.randomUUID();
-const password = "integration-only-password";
+// A legacy password shorter than the new signup minimum must still log in.
+const password = "legacy123";
 const actors = [];
 const servers = [];
 const apps = { customer: ["fetch-customer", 3100], rider: ["fetch-rider", 3101], admin: ["fetch-admin", 3102] };
@@ -28,11 +37,11 @@ async function request(app, route, auth, method = "GET", body, expected = 200) {
   const text = await res.text();
   assert((Array.isArray(expected) ? expected : [expected]).includes(res.status), `${app} ${method} ${route}: ${res.status} ${text.slice(0, 250)}`);
   let data; try { data = JSON.parse(text); } catch { data = text; }
-  return { status: res.status, data, cookie: res.headers.get("set-cookie")?.split(";")[0] };
+  return { status: res.status, data, headers: res.headers, cookie: res.headers.get("set-cookie")?.split(";")[0] };
 }
 async function account(role, suffix, firebase = false) {
   const email = `${marker}-${suffix}@example.invalid`;
-  const user = await db.user.create({ data: { email, name: "Disposable " + suffix, role,
+  const user = await db.user.create({ data: { email, name: "Disposable " + suffix, phone: "+639171234567", role,
     authIdentities: { create: firebase ? { provider: "FIREBASE", providerUserId: `${marker}-firebase` } : { provider: "PASSWORD", providerUserId: email, passwordHash: passwordHash() } },
     ...(role === "RIDER" ? { riderProfile: { create: { vehicleClass: "MOTORCYCLE", vehiclePlate: "TEST" } }, riderPresence: { create: { isOnline: true } } } : {}),
   } });
@@ -59,7 +68,9 @@ async function advance(booking, auth, statuses) {
 async function startServers() {
   for (const [app, port] of Object.values(apps)) {
     const cwd = path.resolve(root, "..", app);
-    const env = { ...process.env, ...parseEnv(fs.readFileSync(path.join(cwd, ".env"), "utf8")) };
+    const env = { ...process.env, ...parseEnv(fs.readFileSync(path.join(cwd, ".env"), "utf8")),
+      DATABASE_URL: process.env.DATABASE_URL, SESSION_SECRET: process.env.SESSION_SECRET,
+      ADMIN_SESSION_SECRET: process.env.ADMIN_SESSION_SECRET };
     const child = spawn(process.execPath, [path.join(cwd, "node_modules/next/dist/bin/next"), "start", "-p", String(port)], { cwd, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     const state = { child, logs: "" }; servers.push(state);
     child.stdout.on("data", data => { state.logs = (state.logs + data).slice(-4000); });
@@ -78,6 +89,17 @@ async function startServers() {
 }
 async function main() {
   try {
+    assert.equal((await db.$queryRaw`SELECT nspname FROM pg_namespace WHERE nspname = ${schema}`).length, 0);
+    ownsSchema = true;
+    const migration = spawnSync(process.execPath, [path.join(root, "node_modules/prisma/build/index.js"), "migrate", "deploy"], {
+      cwd: root, env: process.env, windowsHide: true, encoding: "utf8", timeout: 90000 });
+    assert.equal(migration.status, 0, "Disposable schema migrations must succeed.");
+    assert((await db.$queryRaw`SHOW search_path`)[0].search_path.includes(schema));
+    const functions = await db.$queryRaw`SELECT p.proname AS name FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = ${schema}`;
+    for (const fn of functions) {
+      assert(/^fetch_[a-z_]+$/.test(fn.name));
+      await db.$executeRawUnsafe(`ALTER FUNCTION "${schema}"."${fn.name}"() SET search_path TO "${schema}", pg_catalog`);
+    }
     await startServers();
     const customer = await account("CUSTOMER", "customer"), other = await account("CUSTOMER", "other");
     const rider = await account("RIDER", "rider"), second = await account("RIDER", "second");
@@ -94,6 +116,16 @@ async function main() {
     console.log("PASS: normalized password login, separate Firebase identity, role checks, safe account DTOs.");
 
     const booking = await createBooking(customerAuth);
+    const available = (await request("rider", "/api/rider/available", riderAuth)).data.jobs.find(job => job.id === booking.id);
+    assert(available);
+    assert.equal(available.customer.name, "Customer"); assert.equal(available.customer.phone, null);
+    for (const value of [customer.email, customer.name, customer.phone, customer.id, booking.ticketId]) assert(!JSON.stringify(available).includes(value));
+    assert.equal(available.ticket, null); assert.equal(available.cargoNotes, null);
+    await request("customer", `/api/bookings/${booking.id}`, otherAuth, "GET", undefined, 403);
+    await request("customer", `/api/bookings/${booking.id}/cancel`, otherAuth, "POST", undefined, 403);
+    await request("rider", `/api/bookings/${booking.id}`, secondAuth, "GET", undefined, 403);
+    const otherStatuses = await request("customer", `/api/bookings/status?ids=${booking.id}`, otherAuth);
+    assert.equal(otherStatuses.data.bookings.length, 0);
     assert.equal(await db.bookingEvent.count({ where: { bookingId: booking.id, action: "CREATED" } }), 1);
     await db.booking.update({ where: { id: booking.id }, data: { totalFare: "123.45" } });
     const detail = await request("customer", `/api/bookings/${booking.id}`, customerAuth); assert.equal(detail.data.booking.totalFare, 123.45);
@@ -104,13 +136,37 @@ async function main() {
     const owner = await db.booking.findUniqueOrThrow({ where: { id: booking.id } });
     const ownerAuth = owner.riderId === rider.id ? riderAuth : secondAuth;
     const unrelatedAuth = owner.riderId === rider.id ? secondAuth : riderAuth;
+    const acceptedDetails = (await request("rider", `/api/bookings/${booking.id}`, ownerAuth)).data.booking;
+    assert.equal(acceptedDetails.customer.phone, customer.phone); assert(acceptedDetails.ticket);
+    await request("rider", `/api/bookings/${booking.id}`, unrelatedAuth, "PATCH", { status: "PICKED_UP" }, 403);
     await advance(booking, ownerAuth, ["PICKED_UP", "IN_TRANSIT"]);
     assert.equal(await db.bookingEvent.count({ where: { bookingId: booking.id } }), 4);
     console.log("PASS: exact decimal storage, numeric API fares, concurrent rider claims, atomic booking events.");
+    const matched = await createBooking(customerAuth);
+    await db.booking.update({ where: { id: matched.id }, data: { riderId: rider.id, status: "MATCHED" } });
+    const matchedDetails = (await request("rider", `/api/bookings/${matched.id}`, riderAuth)).data.booking;
+    assert.equal(matchedDetails.customer.phone, null); assert.equal(matchedDetails.ticket, null);
+    const nativeMatched = await fetch(`http://localhost:3101/api/native/tickets/${matched.ticketId}`, {
+      headers: { authorization: `Bearer ${riderAuth.split("=")[1]}` } });
+    assert.equal(nativeMatched.status, 409);
+    await request("rider", `/api/bookings/${matched.id}`, riderAuth, "PATCH", { status: "ACCEPTED" });
+    const cancellationRace = await Promise.all([
+      request("customer", `/api/bookings/${matched.id}/cancel`, customerAuth, "POST", undefined, [200, 400, 409]),
+      request("rider", `/api/bookings/${matched.id}`, riderAuth, "PATCH", { status: "PICKED_UP" }, [200, 409]),
+    ]);
+    assert.equal(cancellationRace.filter(r => r.status === 200).length, 1);
+    const finalRace = await db.booking.findUniqueOrThrow({ where: { id: matched.id } });
+    assert(["PICKED_UP", "CANCELLED"].includes(finalRace.status));
+    assert.equal(await db.bookingEvent.count({ where: { bookingId: matched.id, toStatus: { in: ["PICKED_UP", "CANCELLED"] } } }), 1);
+    console.log("PASS: private pending/matched job feeds, customer ownership, assigned-rider contact details and cancellation/pickup race.");
 
     const ownerAccount = owner.riderId === rider.id ? rider : second;
     const native = await fetch("http://localhost:3101/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json", "x-client": "fetchit-android" }, body: JSON.stringify({ email: ownerAccount.email, password }) });
     const nativeToken = (await native.json()).token; assert(nativeToken);
+    const unrelatedGps = await fetch(`http://localhost:3101/api/native/tickets/${booking.ticketId}/location`, {
+      method: "POST", headers: { "Content-Type": "application/json", authorization: `Bearer ${unrelatedAuth.split("=")[1]}` },
+      body: JSON.stringify({ lat: 14.62, lng: 121 }) });
+    assert.equal(unrelatedGps.status, 403);
     async function gps(lat, expected = 200) {
       const res = await fetch(`http://localhost:3101/api/native/tickets/${booking.ticketId}/location`, { method: "POST", headers: { "Content-Type": "application/json", authorization: `Bearer ${nativeToken}` }, body: JSON.stringify({ lat, lng: 121, speedKph: 25, heading: 90 }) });
       assert.equal(res.status, expected); return res.json();
@@ -187,6 +243,36 @@ async function main() {
     let output = ""; features.stdout.on("data", data => { output += data; }); features.stderr.on("data", data => { output += data; });
     const featureCode = await new Promise(resolve => features.on("exit", resolve));
     assert.equal(featureCode, 0, output.slice(-2000)); console.log(output.trim());
+
+    // Concurrent requests use the same database quota across server instances.
+    for (const app of ["customer", "rider", "admin"]) {
+      const limitedEmail = `${marker}-rate-${app}@example.invalid`;
+      const failed = await Promise.all(Array.from({ length: 20 }, () => request(app, "/api/auth/login", null, "POST", {
+        email: limitedEmail, password: "incorrect-password" }, [401, 429])));
+      assert.equal(failed.filter(r => r.status === 401).length, 15);
+      assert.equal(failed.filter(r => r.status === 429).length, 5);
+      for (const result of failed) {
+        assert(result.headers.get("x-request-id"));
+        assert.equal(result.headers.get("cache-control"), "private, no-store");
+        if (result.status === 429) assert(Number(result.headers.get("retry-after")) > 0);
+      }
+      const key = crypto.createHmac("sha256", process.env.ADMIN_SESSION_SECRET).update(JSON.stringify([`${app}:login-account`, limitedEmail])).digest("hex");
+      await db.rateLimitBucket.update({ where: { key }, data: { expiresAt: new Date(0) } });
+      await request(app, "/api/auth/login", null, "POST", { email: limitedEmail, password: "incorrect-password" }, 401);
+      assert.equal((await db.rateLimitBucket.findUniqueOrThrow({ where: { key } })).hits, 1);
+    }
+    await request("rider", "/api/auth/signup", null, "POST", { name: "Short password check", email: `${marker}-short@example.invalid`, role: "RIDER", vehicleClass: "MOTORCYCLE", password: "1234" }, 400);
+    const expiredKey = "expired-test-bucket";
+    await db.rateLimitBucket.create({ data: { key: expiredKey, hits: 1, expiresAt: new Date(0) } });
+    const cleanupEnv = parseEnv(fs.readFileSync(path.resolve(root, "../fetch-rider/.env"), "utf8"));
+    const cleanupRate = await fetch("http://localhost:3101/api/maintenance/tracking", { headers: { authorization: `Bearer ${cleanupEnv.CRON_SECRET}` } });
+    assert.equal(cleanupRate.status, 200);
+    assert.equal(await db.rateLimitBucket.count({ where: { key: expiredKey } }), 0);
+    for (const state of servers) {
+      assert(!state.logs.includes(password)); assert(!state.logs.includes(customer.email));
+      assert(!state.logs.includes(process.env.DATABASE_URL));
+    }
+    console.log("PASS: atomic persistent login limits in all apps, Retry-After/request IDs, weak-password rejection, expired quota cleanup and safe logs.");
   } finally {
     try {
       if (actors.length) {
@@ -197,7 +283,14 @@ async function main() {
         await db.booking.deleteMany({ where: { id: { in: ids } } });
         await db.user.deleteMany({ where: { id: { in: actors } } });
       }
-    } finally { await db.$disconnect(); for (const server of servers) server.child.kill(); }
+    } finally {
+      for (const server of servers) server.child.kill();
+      if (ownsSchema) {
+        assert(/^fetch_security_test_[a-f0-9]{32}$/.test(schema));
+        await db.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+      }
+      await db.$disconnect();
+    }
   }
 }
 main().then(() => console.log("PASS: shared database rebuild integration complete; fixtures and test servers cleaned up.")).catch(error => { console.error(error.message); process.exitCode = 1; });

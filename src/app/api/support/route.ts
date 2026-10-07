@@ -1,9 +1,10 @@
+import { withRequestLog, RateLimitError } from "@/lib/request-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CustomerError, requireCustomer, customerErrorResponse } from "@/lib/customer-access";
 import { supportInput } from "@/lib/support-input";
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   try {
     const session = await requireCustomer();
     const bookingId = request.nextUrl.searchParams.get("bookingId");
@@ -19,14 +20,19 @@ export async function GET(request: NextRequest) {
       preview: messages[0]?.body ?? ticket.message,
       unread: !!ticket.lastAdminReplyAt && (!ticket.customerReadAt || ticket.lastAdminReplyAt > ticket.customerReadAt),
     })), nextCursor: tickets.length > 20 ? tickets[19].id : null }, { headers: { "Cache-Control": "private, no-store" } });
-  } catch (error) { return customerErrorResponse(error); }
+  } catch (error) {
+    if (error instanceof RateLimitError) throw error;
+    return customerErrorResponse(error);
+  }
 }
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const session = await requireCustomer();
     let input: ReturnType<typeof supportInput>;
     try { input = supportInput(await request.json().catch(() => null)); }
-    catch (error) { throw new CustomerError((error as Error).message, 400); }
+    catch (error) {
+      throw new CustomerError((error as Error).message, 400);
+    }
     const ticket = await db.$transaction(async (tx) => {
       // Serializes duplicate submissions, including general requests without a booking.
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${session.uid} FOR UPDATE`;
@@ -39,5 +45,11 @@ export async function POST(request: NextRequest) {
         priority: booking && !["DELIVERED", "CANCELLED"].includes(booking.status) ? "HIGH" : "NORMAL" } });
     });
     return NextResponse.json({ ticket }, { status: 201 });
-  } catch (error) { return customerErrorResponse(error); }
+  } catch (error) {
+    if (error instanceof RateLimitError) throw error;
+    return customerErrorResponse(error);
+  }
 }
+
+export const GET = withRequestLog("customer:support:GET", handleGET);
+export const POST = withRequestLog("customer:support:POST", handlePOST);
