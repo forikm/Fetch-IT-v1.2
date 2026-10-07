@@ -53,5 +53,5 @@ Builds do not establish that every live workflow works. No database integration 
 - Customer and rider GET /api stubs remain because external health checks may use them.
 - Customer /api/auth/signup still supports rider registration and remains executable API behavior.
 - Native rider tracking APIs, maintenance endpoints and demo seed routes remain.
-- Admin tests/operations.integration.cjs remains for its intended coverage but still needs an update for the current AuthIdentity and SupportMessage models before it is used. The current cross-app database-rebuild integration test remains available in customer.
+- Admin tests/operations.integration.cjs was subsequently updated for AuthIdentity/SupportMessage and passed on 2026-10-07. It now runs in a fresh temporary schema and removes only its own schema. The cross-app database-rebuild integration test remains available in customer.
 - Project documentation and animation authoring sources remain available locally. They were not removed merely because the runtime does not import them.

@@ -45,11 +45,16 @@ Production refuses missing/short session secrets and known sample/development
 values. Signatures use constant-time comparison; malformed and expired payloads
 are rejected. Rider/admin production cookies are Secure, HttpOnly and SameSite=Lax.
 New password signup uses 15–128 characters. Existing passwords still work for login.
-The Firebase customer form enforces this signup rule; the Firebase project password
-policy must also be set in Firebase Console to enforce it on direct SDK/API signup.
-Set minimum length 15, maximum length 128, and leave force upgrade on sign-in off
-to preserve existing account access. The console policy has not been changed by
-this code update. See [Firebase's password policy documentation](https://firebase.google.com/docs/auth/web/password-auth#recommended_set_a_password_policy).
+The Firebase customer form and Firebase project now enforce this signup rule.
+The project policy was applied and read back through the configured Firebase Admin
+SDK on 2026-10-07: ENFORCE, minimum 15, maximum 128, forceUpgradeOnSignin=false.
+The real Firebase web SDK rejected short/oversized passwords and accepted a compliant
+passphrase without creating users or sending emails. Existing password sign-ins are
+preserved. Email privacy protection remains enabled. No billing/services were upgraded.
+Check the policy with `node scripts/configure-firebase-security.cjs check`; explicitly
+apply it with `node scripts/configure-firebase-security.cjs apply`. The script preserves
+any stricter length/character requirements and snapshots the previous policy into an
+ignored local file. See [Firebase's password policy documentation](https://firebase.google.com/docs/auth/web/password-auth#recommended_set_a_password_policy).
 
 Customer booking polling uses three seconds while bookings are active and thirty
 seconds when idle. Customer and rider job polling pause while hidden/offline,
@@ -67,6 +72,7 @@ tokens and database URLs. Prisma query logging is disabled in all three apps.
    Vercel Project → Settings → Environment Variables:
    - Rider project: `rider.SESSION_SECRET` as `SESSION_SECRET`.
    - Admin project: `admin.ADMIN_SESSION_SECRET` as `ADMIN_SESSION_SECRET`.
+   - Rider project: `rider.CRON_SECRET` as `CRON_SECRET` to authenticate daily cleanup.
    Apply them to each environment you will deploy. The local `.env` files already
    contain these values; Vercel settings still require the project owner to enter them.
 2. Keep the customer project's existing strong `SESSION_SECRET` and the existing
@@ -125,3 +131,17 @@ cancel/pickup and completion/cancellation races, delivery-code locks/replays, sa
 logs, concurrent login limits and quota cleanup. The booking check also queues six
 bookings behind a busy counter and sends ten parallel submissions. These are bounded
 regressions, not a claim that 1,000 active users have been load tested.
+
+Additional checks completed on 2026-10-07:
+
+- `RUN_SUPPORT_INTEGRATION=1 node tests/support.integration.cjs`: passed the complete
+  conversation/reopening flow, duplicate requests, roles/ownership, stale forms,
+  admin queue, notifications/read state and paginated messages/requests.
+- From fetch-admin: `RUN_ADMIN_INTEGRATION=1 node tests/operations.integration.cjs`:
+  passed permissions, exports/date boundaries, pagination, attention filters,
+  support assignment/history, stale edits, restriction/unrestriction, cancellation
+  races, exactly-once audit entries, rider profiles and reports. This harness now
+  uses AuthIdentity/SupportMessage and always starts/removes its own temporary schema.
+- Live `/api/maintenance/tracking` currently returns 503 because Vercel lacks
+  `CRON_SECRET`. The secret is prepared locally; adding it to the rider project and
+  redeploying is still required. Unauthenticated checks never ran cleanup or deleted data.
