@@ -21,7 +21,11 @@ let server;
 function startServer() {
   const child = spawn(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "start", "-p", String(port)], {
     cwd: root, env: { ...process.env, DATABASE_URL: databaseUrl }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-  child.stdout.resume(); child.stderr.resume();
+  child.stdout.resume();
+  child.stderr.on('data', chunk => {
+    const codes = chunk.toString().match(/P\d{4}/g);
+    if (codes) console.log('Server database error codes:', [...new Set(codes)].join(', '));
+  });
   return child;
 }
 function cookie(user) {
@@ -29,9 +33,9 @@ function cookie(user) {
   const secret = process.env.SESSION_SECRET || "fetch-it-dev-secret-please-rotate";
   return `fetchit_session=${value}.${crypto.createHmac("sha256", secret).update(value).digest("base64url")}`;
 }
-async function request(route, token, expected = 200, method = "POST", body) {
-  const res = await fetch(`http://localhost:${port}${route}`, { method, headers: { "Content-Type": "application/json", ...(token ? { cookie: token } : {}) },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000) });
+async function request(route, token, expected = 200, method = "POST", body, headers = {}) {
+  const res = await fetch(`http://localhost:${port}${route}`, { method, headers: { "Content-Type": "application/json", ...(token ? { cookie: token } : {}), ...headers },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(45000) });
   const data = await res.json();
   assert.equal(res.status, expected, `${method} ${route}: ${res.status} ${JSON.stringify(data).slice(0, 250)}`);
   return data;
@@ -43,7 +47,8 @@ async function main() {
     ownsSchema = true;
     const migration = spawnSync(process.execPath, [path.join(root, "node_modules/prisma/build/index.js"), "migrate", "deploy"], {
       cwd: root, env: { ...process.env, DATABASE_URL: databaseUrl }, windowsHide: true, encoding: "utf8", timeout: 90000 });
-    assert.equal(migration.status, 0, "Isolated migrations must succeed.");
+    const migrationLog = `${migration.stdout || ''}\n${migration.stderr || ''}`.replace(/postgres(?:ql)?:\/\/\S+/g, '[database URL redacted]');
+    assert.equal(migration.status, 0, `Isolated migrations must succeed. ${migrationLog.slice(-2500)}`);
     assert((await db.$queryRaw`SHOW search_path`)[0].search_path.includes(schema));
     const functions = await db.$queryRaw`SELECT p.proname AS name FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = ${schema}`;
     for (const fn of functions) {
@@ -102,6 +107,47 @@ async function main() {
     await db.booking.create({ data: { customerId: customer.id, refCode: "OLD-VAN-TEST", type: "DELIVERY", status: "DELIVERED", pickupLabel: "Historical pickup", pickupLat: 14.6, pickupLng: 120.98, dropoffLabel: "Historical destination", dropoffLat: 14.62, dropoffLng: 121.01, vehicleClass: "CLOSED_VAN", cargoWeightKg: 100, distanceKm: 5, baseFare: 600, totalFare: 650 } });
     const history = await request("/api/bookings?filter=history&type=DELIVERY", token, 200, "GET");
     assert(history.bookings.some(b => b.vehicleClass === "CLOSED_VAN"));
+    const customers = await Promise.all(Array.from({ length: 6 }, (_, i) => db.user.create({ data: {
+      name: `Concurrent customer ${i}`, email: `concurrent${i}@booking-test.invalid`, role: 'CUSTOMER',
+    } })));
+    const payload = { ...route, type: 'DELIVERY', vehicleClass: 'MOTORCYCLE', cargoWeightKg: 2 };
+    // A busy ticket-counter row reproduces the queue that simultaneous bookings use.
+    let signalLocked;
+    const locked = new Promise(resolve => { signalLocked = resolve; });
+    const hold = db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "value" FROM "TicketCounter" WHERE "type" = 'DELIVERY' FOR UPDATE`;
+      signalLocked();
+      await new Promise(resolve => setTimeout(resolve, 6500));
+    }, { timeout: 20000 });
+    await locked;
+    const started = Date.now();
+    const attempts = await Promise.allSettled(customers.map(user => request('/api/bookings', cookie(user), 200, 'POST', payload,
+      { 'Idempotency-Key': crypto.randomUUID() })));
+    await hold;
+    console.log(`Concurrent test: ${attempts.filter(a => a.status === 'fulfilled').length}/6 confirmed in ${Date.now() - started}ms.`);
+    for (const result of attempts) if (result.status === 'rejected') throw result.reason;
+    assert.equal(await db.booking.count({ where: { customerId: { in: customers.map(u => u.id) } } }), 6);
+    // A response lost after commit must not create another booking or event.
+    for (const type of ['DELIVERY', 'RIDE']) {
+      const keyedPayload = { ...payload, type, ...(type === 'RIDE' ? { passengers: 1 } : {}) };
+      const headers = { 'Idempotency-Key': crypto.randomUUID() };
+      const before = await db.booking.count();
+      const responses = await Promise.all(Array.from({ length: 6 }, () => request('/api/bookings', token, 200, 'POST', keyedPayload, headers)));
+      assert.equal(new Set(responses.map(r => r.booking.id)).size, 1);
+      assert.equal(await db.booking.count(), before + 1);
+      const id = responses[0].booking.id;
+      assert.equal(await db.bookingEvent.count({ where: { bookingId: id, action: 'CREATED' } }), 1);
+      assert.equal((await request('/api/bookings', token, 200, 'POST', keyedPayload, headers)).booking.id, id);
+      await request('/api/bookings', token, 409, 'POST', { ...keyedPayload, cargoWeightKg: 3, passengers: 2 }, headers);
+      // The same key belongs to this customer only.
+      const other = await request('/api/bookings', cookie(customers[0]), 200, 'POST', keyedPayload, headers);
+      assert.notEqual(other.booking.id, id);
+      assert(!('ticketId' in responses[0].booking));
+    }
+    await request('/api/bookings', token, 400, 'POST', payload, { 'Idempotency-Key': 'invalid' });
+    const ten = await Promise.all(Array.from({ length: 10 }, (_, i) => request('/api/bookings', cookie(customers[i % 6]), 200, 'POST', payload, { 'Idempotency-Key': crypto.randomUUID() })));
+    assert.equal(new Set(ten.map(r => r.booking.id)).size, 10);
+    console.log('PASS: queued simultaneous bookings, ten parallel submissions, retry recovery, same-key races for ride/delivery, customer isolation, and one creation event per booking.');
     console.log("PASS: ride/delivery booking creation and quotes for all three vehicles, passenger/cargo validation, retired vehicle rejection, separate service lists, and historical booking compatibility.");
     if (process.env.BOOKING_PREVIEW === "1") {
       console.log(`Isolated preview: http://localhost:${port}. Older account login: ${email}, password: ${password}. Commands: offline stops the server, online restarts it, done cleans up.`);

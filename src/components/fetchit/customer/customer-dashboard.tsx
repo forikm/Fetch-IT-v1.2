@@ -689,6 +689,8 @@ function BookingForm({
   const connected = online && !offlineAccess;
   const emptyDraft = { pickupLabel: "", pickupLat: "", pickupLng: "", dropoffLabel: "", dropoffLat: "", dropoffLng: "", vehicleClass: "MOTORCYCLE" as VehicleClass, cargoWeightKg: "2", passengers: "1", cargoNotes: "", scheduledAt: "" };
   const [draft, setDraft] = useCustomerData(userId, isRide ? "ride-booking-draft" : "delivery-draft", emptyDraft, true);
+  const [pendingSubmission, setPendingSubmission] = useCustomerData<{ key: string; body: string } | null>(userId, isRide ? "ride-booking-submission" : "delivery-booking-submission", null, true);
+  const submissionRunning = useRef(false);
   const { pickupLabel, pickupLat, pickupLng, dropoffLabel, dropoffLat, dropoffLng, cargoWeightKg, cargoNotes, scheduledAt } = draft;
   // Old drafts and repeat bookings may contain vehicle classes no longer offered.
   const vehicleClass = isBookingVehicle(draft.vehicleClass) ? draft.vehicleClass : "MOTORCYCLE";
@@ -846,18 +848,16 @@ function BookingForm({
 
   async function handleConfirmBooking() {
     setError(null);
-    if (submitting) return;
+    if (submissionRunning.current) return;
     if (!navigator.onLine || offlineAccess) { setError("Your draft is saved. Reconnect to get a current fare and confirm it."); return; }
     if (!canEstimate() || !estimate || estimatedKey !== fareKey) {
       setError("Review your route and details, then wait for a current fare before confirming.");
       return;
     }
+    submissionRunning.current = true;
     setSubmitting(true);
     try {
-      const res = await fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const body = JSON.stringify({
           type: bookingType,
           passengers: isRide ? Number(passengers) : undefined,
           pickup: { lat: Number(pickupLat), lng: Number(pickupLng), label: pickupLabel },
@@ -866,15 +866,25 @@ function BookingForm({
           cargoWeightKg: isRide ? undefined : Number(cargoWeightKg),
           cargoNotes: isRide ? undefined : cargoNotes || undefined,
           scheduledAt: scheduledAt || undefined,
-        }),
+      });
+      // Reuse the key after a lost response, including after reopening this
+      // saved draft. Changed details start a separate explicit request.
+      const submission = pendingSubmission?.body === body ? pendingSubmission : { key: crypto.randomUUID(), body };
+      setPendingSubmission(submission);
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": submission.key },
+        body,
       });
       const data = await customerResponse<{ booking: Booking }>(res, "We couldn’t confirm your booking. Check Active bookings before trying again. Your details are saved.");
       if (!data.booking?.id) throw new Error("We couldn’t confirm your booking. Check Active bookings before trying again. Your details are saved.");
       setDraft(emptyDraft);
+      setPendingSubmission(null);
       onCreate(data.booking);
     } catch (e) {
       setError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check Active bookings before trying again. Your details are saved.");
     } finally {
+      submissionRunning.current = false;
       setSubmitting(false);
     }
   }

@@ -7,6 +7,6 @@
   },
   "functions": {
     "src/app/api/auth/seed/route.ts": { "maxDuration": 30 },
-    "src/app/api/bookings/route.ts": { "maxDuration": 30 }
+    "src/app/api/bookings/route.ts": { "maxDuration": 60 }
   }
 }

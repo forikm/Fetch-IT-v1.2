@@ -19,8 +19,9 @@ import {
   PASSENGER_CAPACITY,
   type VehicleClass,
 } from "@/lib/constants";
-import { quoteFare, quoteRideFare, generateRefCode } from "@/lib/fare";
-import { generateTicketId, omitTicket } from "@/lib/ticket";
+import { quoteFare, quoteRideFare } from "@/lib/fare";
+import { omitTicket } from "@/lib/ticket";
+import { bookingAttemptId, findBookingAttempt, createBookingWithRetry } from "@/lib/booking-create";
 
 export async function GET(req: NextRequest) {
   try {
@@ -86,14 +87,18 @@ export async function POST(req: NextRequest) {
       );
     }
     const requester = await db.user.findUnique({ where: { id: session.uid } });
-    if (requester?.isBanned) {
+    if (!requester || requester.role !== "CUSTOMER" || requester.isBanned) {
       return NextResponse.json(
-        { error: "Your account has been restricted and can't create new bookings." },
+        { error: "Your account is unavailable. Please contact support." },
         { status: 403 },
       );
     }
 
     const body = await req.json();
+    if (!body || typeof body !== "object") throw new CustomerError("Booking details are required.", 400);
+    const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
+    const previous = await findBookingAttempt(db, attemptId, body);
+    if (previous) return NextResponse.json({ booking: omitTicket(bookingView(previous)) });
     const {
       type = "DELIVERY",
       pickup,
@@ -157,39 +162,29 @@ export async function POST(req: NextRequest) {
         when: scheduledDate ?? new Date(),
       });
 
-      const booking = await db.$transaction(async (tx) => {
-        const ticketId = await generateTicketId(tx, "RIDE");
-        return tx.booking.create({
-          data: {
-            refCode: generateRefCode("RIDE"),
-            ticketId,
-            type: "RIDE",
-            customerId: session.uid,
-            pickupLabel: pickup.label,
-            pickupLat: pickup.lat,
-            pickupLng: pickup.lng,
-            dropoffLabel: dropoff.label,
-            dropoffLat: dropoff.lat,
-            dropoffLng: dropoff.lng,
-            vehicleClass,
-            cargoWeightKg: 0,
-            passengers: pax,
-            scheduledAt: scheduledDate,
-            distanceKm: quote.distanceKm,
-            baseFare: quote.fare.baseFare,
-            surgeMultiplier: quote.surgeMultiplier,
-            totalFare: quote.fare.totalFare,
-            currency: quote.fare.currency,
-            status: "PENDING",
-            events: { create: { actorId: session.uid, actorName: session.name, actorRole: "CUSTOMER", action: "CREATED", toStatus: "PENDING" } },
-            etaMinutes: quote.etaMinutes,
-          },
-          include: {
-            customer: { select: { id: true, name: true, phone: true } },
-            rider: { select: riderSelect },
-          },
-        });
-      });
+      const booking = await createBookingWithRetry(db, "RIDE", {
+        id: attemptId,
+        type: "RIDE",
+        customerId: session.uid,
+        pickupLabel: pickup.label,
+        pickupLat: pickup.lat,
+        pickupLng: pickup.lng,
+        dropoffLabel: dropoff.label,
+        dropoffLat: dropoff.lat,
+        dropoffLng: dropoff.lng,
+        vehicleClass,
+        cargoWeightKg: 0,
+        passengers: pax,
+        scheduledAt: scheduledDate,
+        distanceKm: quote.distanceKm,
+        baseFare: quote.fare.baseFare,
+        surgeMultiplier: quote.surgeMultiplier,
+        totalFare: quote.fare.totalFare,
+        currency: quote.fare.currency,
+        status: "PENDING",
+        events: { create: { actorId: session.uid, actorName: session.name, actorRole: "CUSTOMER", action: "CREATED", toStatus: "PENDING" } },
+        etaMinutes: quote.etaMinutes,
+      }, body);
 
       return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
     }
@@ -219,43 +214,34 @@ export async function POST(req: NextRequest) {
     const { distanceKm, surgeMultiplier, fare } = quote;
     const eta = quote.etaMinutes;
 
-    const booking = await db.$transaction(async (tx) => {
-      const ticketId = await generateTicketId(tx, "DELIVERY");
-      return tx.booking.create({
-        data: {
-          refCode: generateRefCode("FIT"),
-          ticketId,
-          type: "DELIVERY",
-          customerId: session.uid,
-          pickupLabel: pickup.label,
-          pickupLat: pickup.lat,
-          pickupLng: pickup.lng,
-          dropoffLabel: dropoff.label,
-          dropoffLat: dropoff.lat,
-          dropoffLng: dropoff.lng,
-          vehicleClass,
-          cargoWeightKg: weight,
-          cargoNotes: cargoNotes ?? null,
-          scheduledAt: scheduledDate,
-          distanceKm,
-          baseFare: fare.baseFare,
-          surgeMultiplier,
-          totalFare: fare.totalFare,
-          currency: fare.currency,
-          status: "PENDING",
-          events: { create: { actorId: session.uid, actorName: session.name, actorRole: "CUSTOMER", action: "CREATED", toStatus: "PENDING" } },
-          etaMinutes: eta,
-        },
-        include: {
-          customer: { select: { id: true, name: true, phone: true } },
-          rider: { select: riderSelect },
-        },
-      });
-    });
+    const booking = await createBookingWithRetry(db, "DELIVERY", {
+      id: attemptId,
+      type: "DELIVERY",
+      customerId: session.uid,
+      pickupLabel: pickup.label,
+      pickupLat: pickup.lat,
+      pickupLng: pickup.lng,
+      dropoffLabel: dropoff.label,
+      dropoffLat: dropoff.lat,
+      dropoffLng: dropoff.lng,
+      vehicleClass,
+      cargoWeightKg: weight,
+      cargoNotes: cargoNotes ?? null,
+      scheduledAt: scheduledDate,
+      distanceKm,
+      baseFare: fare.baseFare,
+      surgeMultiplier,
+      totalFare: fare.totalFare,
+      currency: fare.currency,
+      status: "PENDING",
+      events: { create: { actorId: session.uid, actorName: session.name, actorRole: "CUSTOMER", action: "CREATED", toStatus: "PENDING" } },
+      etaMinutes: eta,
+    }, body);
 
     return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
   } catch (err) {
-    console.error("[bookings POST] error", err);
+    if (err instanceof CustomerError) return customerErrorResponse(err);
+    console.error("[bookings POST] error", { code: (err as { code?: string }).code ?? "UNKNOWN" });
     return NextResponse.json(
       { error: "Failed to create booking." },
       { status: 500 },
