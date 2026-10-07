@@ -44,16 +44,16 @@ ticket after acceptance. Unrelated riders cannot fetch private booking/ticket da
 Production refuses missing/short session secrets and known sample/development
 values. Signatures use constant-time comparison; malformed and expired payloads
 are rejected. Rider/admin production cookies are Secure, HttpOnly and SameSite=Lax.
-New password signup uses 15–128 characters. Existing passwords still work for login.
+New password signup uses 6–128 characters. Existing passwords still work for login.
 The Firebase customer form and Firebase project now enforce this signup rule.
 The project policy was applied and read back through the configured Firebase Admin
-SDK on 2026-10-07: ENFORCE, minimum 15, maximum 128, forceUpgradeOnSignin=false.
+SDK on 2026-10-07: ENFORCE, minimum 6, maximum 128, forceUpgradeOnSignin=false.
 The real Firebase web SDK rejected short/oversized passwords and accepted a compliant
 passphrase without creating users or sending emails. Existing password sign-ins are
 preserved. Email privacy protection remains enabled. No billing/services were upgraded.
 Check the policy with `node scripts/configure-firebase-security.cjs check`; explicitly
 apply it with `node scripts/configure-firebase-security.cjs apply`. The script preserves
-any stricter length/character requirements and snapshots the previous policy into an
+any stricter maximum length/character requirements and snapshots the previous policy into an
 ignored local file. See [Firebase's password policy documentation](https://firebase.google.com/docs/auth/web/password-auth#recommended_set_a_password_policy).
 
 Customer booking polling uses three seconds while bookings are active and thirty

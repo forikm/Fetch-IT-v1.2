@@ -44,7 +44,9 @@ test("customer, rider and admin sessions reject forged, malformed and expired co
 test("new password policy keeps existing login passwords separate from signup", () => {
   const policy = load("../src/lib/password-policy.ts");
   assert.equal(policy.validNewPassword("1234"), false);
-  assert.equal(policy.validNewPassword("a".repeat(14)), false);
+  assert.equal(policy.validNewPassword("a".repeat(5)), false);
+  assert.equal(policy.validNewPassword("a".repeat(6)), true);
+  assert.equal(policy.validNewPassword("a".repeat(128)), true);
   assert.equal(policy.validNewPassword("a good long passphrase"), true);
   assert.equal(policy.validNewPassword("a".repeat(129)), false);
 });

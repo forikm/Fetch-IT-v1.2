@@ -39,7 +39,7 @@ import { useAppStore, type AuthUser } from "@/lib/store";
 import { getCustomerAuth } from "@/lib/firebase-client";
 import { normalizePhilippinePhone } from "@/lib/phone";
 import { customerAuthMessage, startCustomerSignup } from "@/lib/customer-signup";
-import { validNewPassword, PASSWORD_REQUIREMENT } from "@/lib/password-policy";
+import { validNewPassword, PASSWORD_REQUIREMENT, PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 import { clearAuthProgress, readAuthProgress, saveAuthProgress } from "@/lib/auth-progress";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 
@@ -406,7 +406,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                         type="password"
                         autoComplete="current-password"
                         required
-                        minLength={mode === "signup" ? 15 : 1}
+                        minLength={mode === "signup" ? PASSWORD_MIN_LENGTH : 1}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Your password"
@@ -495,11 +495,11 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                           type="password"
                           autoComplete="new-password"
                           required
-                          minLength={mode === "signup" ? 15 : 1}
+                          minLength={mode === "signup" ? PASSWORD_MIN_LENGTH : 1}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           maxLength={128}
-                          placeholder="At least 15 characters"
+                          placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
                         />
                       </div>
                     </div>

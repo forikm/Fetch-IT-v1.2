@@ -17,7 +17,7 @@ async function main() {
   const before = await manager.getProjectConfig();
   const constraints = before.passwordPolicyConfig?.constraints || {};
   const desired = { enforcementState: 'ENFORCE', forceUpgradeOnSignin: false,
-    constraints: { ...constraints, minLength: Math.max(15, constraints.minLength || 6), maxLength: Math.min(128, constraints.maxLength || 4096) } };
+    constraints: { ...constraints, minLength: 6, maxLength: Math.min(128, constraints.maxLength || 4096) } };
   if (desired.constraints.maxLength < desired.constraints.minLength) throw new Error('Existing password constraints need review.');
   if (mode === 'apply') {
     const backup = path.join(root, 'local-firebase-policy-before.json');
@@ -27,7 +27,7 @@ async function main() {
   const after = mode === 'apply' ? await manager.getProjectConfig() : before;
   const policy = after.passwordPolicyConfig;
   const verified = policy?.enforcementState === 'ENFORCE' && policy.forceUpgradeOnSignin === false
-    && policy.constraints?.minLength >= 15 && policy.constraints?.maxLength <= 128;
+    && policy.constraints?.minLength === 6 && policy.constraints?.maxLength <= 128;
   console.log(JSON.stringify({ mode, policy: policy || null, verified, existingSigninsPreserved: policy?.forceUpgradeOnSignin === false }));
   if (mode === 'apply' && !verified) throw new Error('Password policy verification failed.');
 }
