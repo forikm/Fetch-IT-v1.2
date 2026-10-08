@@ -1,0 +1,262 @@
+.root { --ink:#203b38;--orange:#ef7b30;--muted:#7b8580;--ease:cubic-bezier(.2,.7,.2,1) }
+.root * { box-sizing:border-box }
+.root { margin:0;min-height:100vh;padding:0;background:#fffefa;color:var(--ink);font-family:var(--font-geist-sans), sans-serif }
+.root button, .root input { font:inherit }
+.root button, .root a { -webkit-tap-highlight-color:transparent }
+.root button { cursor:pointer }
+.root button { border:0 }
+.root a { color:inherit;text-decoration:none }
+.root svg { display:block }
+.root button svg, .root .trust-check svg, .root .success-icon svg { width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round }
+.root .icon-library { position:absolute;width:0;height:0;overflow:hidden }
+.root button:focus-visible, .root a:focus-visible, .root input:focus-visible { outline:3px solid #258d8c;outline-offset:5px }
+.root { position:relative;isolation:isolate;width:100%;min-height:100svh;display:flex;flex-direction:column;background:#fffefa;overflow:hidden }
+.root .orange-field { position:absolute;z-index:-1;width:58%;height:105%;right:-5%;top:-25%;border-radius:38% 0 29% 54% / 58% 0 25% 47%;background:linear-gradient(153deg,#ffa31d 4%,#ff8c2d 55%,#fa7750 100%);transform:rotate(-7deg) }
+.root .header { flex-shrink:0;height:132px;padding:0 6%;display:flex;align-items:center;justify-content:space-between;gap:30px }
+.root .header nav { display:flex;gap:30px;align-items:center }
+.root .nav-link { background:none;padding:10px 0;color:#fff8eb;font-size:12px;font-weight:600;position:relative }
+.root .nav-link.active:after { content:'';position:absolute;height:3px;bottom:1px;left:0;width:16px;border-radius:3px;background:currentColor }
+.root .nav-link:hover { color:var(--ink) }
+.root .nav-link span { padding-left:5px }
+.root .menu-button { display:none }
+.root .hero { flex:1;display:grid;grid-template-columns:1fr 1fr;min-height:575px;padding:8px 6% 25px;position:relative }
+.root .hero-copy { align-self:center;padding:0 0 42px;position:relative;z-index:2 }
+.root .eyebrow { font-size:9px;font-weight:700;letter-spacing:1.85px;display:flex;align-items:center;gap:8px }
+.root .eyebrow>span { width:6px;height:6px;background:var(--orange);border-radius:50% }
+.root h1 { font-family:var(--font-geist-sans), sans-serif;font-size:clamp(42px,4.9vw,73px);font-weight:800;letter-spacing:-3.8px;line-height:1.1;margin:25px 0 23px }
+.root h1 span { color:var(--orange);position:relative }
+.root h1 span:after { content:'';position:absolute;left:0;bottom:-6px;width:100%;height:8px;border-top:2px solid #ed9f6688;border-radius:50%;transform:rotate(-3deg) }
+.root .intro { font-size:14px;color:#7b827c;line-height:1.85;margin:0 0 26px }
+.root .service-picker { display:flex;gap:8px;margin-bottom:26px }
+.root .service { border:1px solid transparent;border-radius:9px;background:none;color:#7b827c;font-size:11px;display:flex;gap:8px;align-items:center;padding:10px 12px;transition:background .25s,border-color .25s,color .25s }
+.root .service svg { width:17px;height:17px }
+.root .service.selected { color:#b7602a;background:#fff1df;border-color:#f8ddbf }
+.root .service:hover { background:#fff0df }
+.root .hero-actions { display:flex;gap:20px;align-items:center }
+.root .primary-button { background:var(--ink);color:#fff;border-radius:50px;display:flex;justify-content:center;align-items:center;gap:28px;padding:17px 23px;font-size:12px;font-weight:600;box-shadow:0 8px 15px #203b3812;transition:transform .25s,box-shadow .25s,background .25s }
+.root .primary-button:hover { transform:translateY(-3px);background:#31534b;box-shadow:0 12px 25px #203b3826 }
+.root .primary-button:active { transform:translateY(0) }
+.root .primary-button svg { width:18px;height:18px;transition:transform .25s }
+.root .primary-button:hover svg { transform:translateX(4px) }
+.root .how-button { display:flex;align-items:center;gap:8px;background:none;color:#52615a;font-size:10px;font-weight:600;padding:10px 0 }
+.root .play-icon { width:24px;height:24px;display:grid;place-items:center;border:1px solid #cdd2c9;border-radius:50%;font-size:7px;padding-left:2px }
+.root .trust-line { display:flex;gap:8px;align-items:center;font-size:10px;color:#8c928b;margin-top:30px }
+.root .trust-check { width:16px;height:16px;background:#e9eee5;border-radius:50%;display:grid;place-items:center;color:#6f8468 }
+.root .trust-check svg { width:10px;height:10px;stroke-width:2.5 }
+.root .hero-art { position:relative;min-width:0;height:545px;align-self:center;perspective:1000px }
+.root .availability { position:absolute;right:18%;top:7px;display:flex;gap:7px;align-items:center;color:#fff9ee;font-size:10px;letter-spacing:.3px }
+.root .availability>span { width:5px;height:5px;border-radius:50%;background:#fff3d6;box-shadow:0 0 0 4px #ffffff15 }
+.root .map-card { position:absolute;width:85%;max-width:436px;right:-1%;top:92px;border:1px solid #ffffff8a;border-radius:21px;background:#fffefb;box-shadow:0 25px 45px -15px #aa55105c;overflow:hidden;animation:fi-landing-float-map 7s ease-in-out infinite;z-index:2 }
+.root .map-header { height:81px;padding:20px 23px;display:flex;align-items:center;justify-content:space-between }
+.root .tiny-label { font-size:7px;letter-spacing:1.6px;font-weight:700;color:#99a095 }
+.root h2 { font:800 18px var(--font-geist-sans), sans-serif;letter-spacing:-.6px;margin:5px 0 0 }
+.root .live-pill { display:flex;align-items:center;gap:5px;border:1px solid #e6ecdf;background:#f6f8f1;border-radius:20px;padding:5px 9px;font-size:8px;color:#6f8564 }
+.root .live-pill i { width:4px;height:4px;border-radius:50%;background:#80a771;animation:fi-landing-blink 2s infinite }
+.root .map-surface { height:235px;overflow:hidden;background:#f4f1e9 }
+.root .route-map { width:100%;height:100%;object-fit:cover }
+.root .map-label { font:600 8px var(--font-geist-sans), sans-serif;fill:#acafa2;letter-spacing:2px }
+.root .you-label { font:600 10px var(--font-geist-sans), sans-serif;fill:#43554b }
+.root .draw-route { stroke-dasharray:430;stroke-dashoffset:430;animation:fi-landing-draw-route 2s 1s var(--ease) forwards }
+.root .destination-pulse { transform-origin:311px 168px;animation:fi-landing-pulse 2.8s ease-out infinite }
+.root .map-footer { height:76px;display:flex;align-items:center;padding:15px 20px;gap:10px }
+.root .rider-avatar { width:36px;height:36px;background:#e8ebdb;border-radius:50%;display:grid;place-items:center;color:#687856;font:700 15px var(--font-geist-sans), sans-serif;position:relative }
+.root .rider-avatar>span { position:absolute;right:0;bottom:0;width:10px;height:10px;border:2px solid white;background:#8aa473;border-radius:50% }
+.root .rider-info { display:grid;gap:4px }
+.root .rider-info strong { font-size:10px }
+.root .rider-info>span { font-size:8px;color:#969a90 }
+.root .eta { margin-left:auto;display:grid;text-align:right;gap:2px }
+.root .eta strong { font:800 22px var(--font-geist-sans), sans-serif;letter-spacing:-1px }
+.root .eta small { font:500 10px var(--font-geist-sans), sans-serif;letter-spacing:0 }
+.root .eta>span { font-size:7px;color:#969a90 }
+.root .parcel-card { position:absolute;width:158px;height:169px;left:-8%;top:36px;background:#fffefa;z-index:3;border-radius:22px;box-shadow:0 22px 36px -16px #bd62294d;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:fi-landing-float-parcel 6s ease-in-out infinite;transform:rotate(-8deg) }
+.root .parcel-illustration { width:106px;height:110px;position:relative }
+.root .parcel-halo { position:absolute;width:96px;height:96px;border-radius:50%;background:#fff2e2;top:22px }
+.root .parcel-check { position:absolute;right:14px;top:15px;background:#ecf0e2;color:#839567;border:4px solid #fffefa;width:29px;height:29px;display:grid;place-items:center;border-radius:50% }
+.root .parcel-check svg { width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.5 }
+.root .parcel-label { font-size:8px;color:#8d938a;margin-top:4px }
+.root .delivered-card { display:flex;align-items:center;gap:12px;position:absolute;z-index:4;bottom:-8px;left:-4%;background:#fffefa;box-shadow:0 20px 35px -15px #99522740;border-radius:16px;padding:19px 22px;animation:fi-landing-float-delivered 6s ease-in-out -2s infinite }
+.root .success-icon { width:35px;height:35px;background:#f0f3e5;border-radius:50%;display:grid;place-items:center;color:#839768 }
+.root .success-icon svg { width:17px;height:17px }
+.root .delivered-card strong { font-size:11px;font-weight:700 }
+.root .delivered-card div { display:grid;gap:5px }
+.root .delivered-card div>span { font-size:9px;color:#969a90 }
+.root .confetti-dot { width:5px;height:5px;background:#e4ae6a;border-radius:50%;margin-left:12px }
+.root .ornament { position:absolute;pointer-events:none }
+.root .orb { border-radius:50%;background:#ffc283;animation:fi-landing-bob 8s ease-in-out infinite }
+.root .orb-one { width:31px;height:31px;top:-15px;right:4%;opacity:.75 }
+.root .orb-two { width:26px;height:26px;bottom:5px;left:38%;background:#ffb692 }
+.root .triangle { width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:17px solid #ffd096;right:-7%;top:64%;transform:rotate(14deg);animation:fi-landing-spin-soft 9s ease-in-out infinite }
+.root .small-spark { color:#ffdca2;top:57%;left:1%;font-size:22px }
+.root .canvas-footer { display:flex;gap:16px;align-items:center;padding:22px 6% 29px;font-size:9px;color:#9aa095 }
+.root .footer-line { width:24px;height:1px;background:#d9ddd1 }
+.root .hero-copy>* { animation:fi-landing-rise-in .9s var(--ease) both }
+.root .hero-copy>:nth-child(2) { animation-delay:.1s }
+.root .hero-copy>:nth-child(3) { animation-delay:.2s }
+.root .hero-copy>:nth-child(4) { animation-delay:.3s }
+.root .hero-copy>:nth-child(5) { animation-delay:.4s }
+.root .hero-copy>:nth-child(6) { animation-delay:.5s }
+@keyframes fi-landing-rise-in { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+@keyframes fi-landing-float-map { 0%,100%{transform:translateY(0) rotate(1deg)}50%{transform:translateY(-9px) rotate(0)} }
+@keyframes fi-landing-float-parcel { 0%,100%{transform:translateY(0) rotate(-8deg)}50%{transform:translateY(-13px) rotate(-4deg)} }
+@keyframes fi-landing-float-delivered { 0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(7px) rotate(0)} }
+@keyframes fi-landing-bob { 50%{transform:translateY(-14px)} }
+@keyframes fi-landing-spin-soft { 50%{transform:translateY(-14px) rotate(45deg)} }
+@keyframes fi-landing-blink { 50%{opacity:.35} }
+@keyframes fi-landing-pulse { 0%{transform:scale(.75);opacity:.2}100%{transform:scale(1.8);opacity:0} }
+@keyframes fi-landing-draw-route { to{stroke-dashoffset:0} }
+@media(min-width:1600px) { .root .hero { min-height:640px }
+.root .hero-art { transform:scale(1.06);transform-origin:center }
+.root .header { height:145px }
+ }
+@media(max-width:1100px) { .root .header { padding:0 5%;height:108px }
+.root .header nav { gap:20px }
+.root .hero { padding:8px 5% 20px;min-height:560px }
+.root .hero-actions { gap:13px }
+.root .primary-button { padding:16px 19px;gap:18px }
+.root .how-button { font-size:9px }
+.root .parcel-card { width:125px;height:138px;left:-6%;top:64px }
+.root .parcel-illustration { width:90px;height:95px }
+.root .parcel-halo { width:75px;height:75px }
+.root .map-card { top:113px;width:91% }
+.root .map-header { padding:17px;height:74px }
+.root .map-surface { height:218px }
+.root .map-footer { padding:12px 15px }
+.root .delivered-card { bottom:-8px;left:-2%;padding:16px;gap:9px }
+.root .hero-art { height:545px }
+.root .hero-copy { padding-bottom:25px }
+.root .availability { right:7%;top:24px }
+.root .rider-info strong { font-size:9px }
+.root .hero-copy h1 { letter-spacing:-2.5px }
+.root .service { padding:10px 8px;font-size:10px }
+.root .orange-field { right:-8%;width:60% }
+.root .canvas-footer { padding-left:5%;padding-right:5% }
+ }
+@media(max-width:800px) { .root .header { height:96px }
+.root .header nav { gap:14px }
+.root .nav-link { font-size:10px }
+.root .hero { min-height:500px }
+.root .hero-art { height:490px }
+.root .hero-copy h1 { font-size:45px }
+.root .intro { font-size:12px }
+.root .eyebrow { font-size:7px;letter-spacing:1.3px }
+.root .hero-actions { align-items:flex-start;flex-direction:column;gap:10px }
+.root .trust-line { margin-top:18px;font-size:8px }
+.root .map-card { top:100px;width:96% }
+.root .map-header { height:65px;padding:12px }
+.root .map-header h2 { font-size:15px }
+.root .tiny-label { font-size:6px }
+.root .map-surface { height:185px }
+.root .map-footer { gap:7px;height:65px;padding:10px }
+.root .rider-avatar { width:27px;height:27px;font-size:12px }
+.root .rider-info>span { font-size:6px }
+.root .rider-info strong { font-size:8px }
+.root .eta strong { font-size:18px }
+.root .eta>span { font-size:6px }
+.root .parcel-card { left:-4%;top:30px;width:109px;height:119px;border-radius:17px }
+.root .parcel-illustration { width:78px;height:80px }
+.root .parcel-halo { width:65px;height:65px;top:17px }
+.root .parcel-label { font-size:6px }
+.root .parcel-check { right:7px;top:8px }
+.root .delivered-card { bottom:0;padding:13px;left:-3%;gap:8px }
+.root .delivered-card strong { font-size:9px }
+.root .delivered-card div>span { font-size:7px }
+.root .success-icon { width:29px;height:29px }
+.root .confetti-dot { display:none }
+.root .orb-one { right:0 }
+.root .availability { font-size:8px;right:2%;top:-3px }
+.root .canvas-footer { font-size:8px;padding-top:8px }
+ }
+@media(max-width:620px) { .root .orange-field { top:500px;right:-20%;height:660px;width:135%;border-radius:48% 30% 0 0 / 23% 24% 0 0;transform:rotate(-9deg) }
+.root .header { padding:0 7%;height:100px }
+.root .menu-button { display:grid;gap:5px;place-content:center;width:37px;height:37px;border-radius:50%;background:#fff0dd }
+.root .menu-button span { height:2px;width:15px;background:var(--ink) }
+.root .header nav { display:none;position:absolute;z-index:10;top:78px;right:7%;background:#fffefa;border:1px solid #e9e5db;box-shadow:0 10px 30px #203b381a;border-radius:14px;padding:15px 24px;align-items:flex-start;min-width:170px }
+.root .header nav.open { display:flex;flex-direction:column;gap:7px }
+.root .nav-link { color:var(--ink);font-size:12px }
+.root .hero { grid-template-columns:1fr;padding:12px 7% 10px;min-height:0 }
+.root .hero-copy { padding-bottom:0 }
+.root .hero-copy h1 { font-size:clamp(48px,12vw,67px);letter-spacing:-3px;margin:22px 0 }
+.root .eyebrow { font-size:8px }
+.root .intro { font-size:13px;margin-bottom:20px }
+.root .service { font-size:11px;padding:10px }
+.root .service-picker { margin-bottom:23px;gap:8px }
+.root .hero-actions { flex-direction:row;align-items:center;gap:15px }
+.root .primary-button { padding:17px 19px;font-size:11px;gap:15px }
+.root .how-button { font-size:9px }
+.root .trust-line { font-size:9px;margin-top:24px }
+.root .hero-art { height:590px;margin-top:80px }
+.root .map-card { right:0;top:140px;width:92%;max-width:none }
+.root .map-header { height:73px;padding:16px }
+.root .map-header h2 { font-size:18px }
+.root .tiny-label { font-size:7px }
+.root .map-surface { height:218px }
+.root .map-footer { height:71px;padding:14px;gap:9px }
+.root .rider-info strong { font-size:10px }
+.root .rider-info>span { font-size:8px }
+.root .rider-avatar { width:31px;height:31px }
+.root .eta strong { font-size:23px }
+.root .eta>span { font-size:7px }
+.root .parcel-card { width:121px;height:133px;left:-3%;top:7px }
+.root .parcel-illustration { width:86px;height:90px }
+.root .parcel-label { font-size:7px }
+.root .parcel-halo { width:80px;height:80px }
+.root .delivered-card { bottom:0;left:-1%;padding:16px }
+.root .delivered-card strong { font-size:11px }
+.root .delivered-card div>span { font-size:9px }
+.root .success-icon { width:34px;height:34px }
+.root .availability { top:19px;right:-2%;font-size:8px }
+.root .orb-one { top:-21px;right:8%;width:21px;height:21px }
+.root .orb-two { bottom:5px;left:22%;width:18px;height:18px }
+.root .triangle { right:-6% }
+.root .canvas-footer { padding:13px 7% 25px;flex-wrap:wrap;gap:10px;color:#835333;position:relative }
+.root .footer-line { background:#b9885d }
+.root .small-spark { left:-6% }
+.root .confetti-dot { display:block }
+ }
+@media(max-width:360px) { .root .hero-actions { gap:9px }
+.root .how-button { font-size:8px }
+.root .primary-button { padding:16px 14px;font-size:10px;gap:12px }
+.root .availability { font-size:7px }
+.root .service { font-size:10px;padding:9px }
+.root .hero-copy h1 { font-size:46px }
+.root .rider-info strong { font-size:9px }
+.root .map-footer { gap:6px;padding:10px }
+.root .delivered-card strong { font-size:10px }
+.root .canvas-footer { font-size:7px }
+.root dialog { padding:28px }
+ }
+@media(prefers-reduced-motion:reduce) { .root *, .root *:before, .root *:after { animation:none!important;transition:none!important;scroll-behavior:auto!important }
+.root .draw-route { stroke-dashoffset:0 }
+.root .moving-rider { transform:translate(180px,105px) }
+.root .hero-copy>* { opacity:1 }
+ }
+
+/* Hero styles stay local: authenticated screens retain their existing theme. */
+.root { color-scheme: light; color: #203b38; }
+.root .header { position: relative; z-index: 5; }
+.root .landing-logo { color: #203b38; }
+.root .landing-logo span { color: #203b38; }
+.root .landing-logo span span { color: #bd4c1d; }
+.root .explore-link { margin-left: auto; color: #5d6e61; font-size: 11px; }
+.root .rider-avatar > svg { width: 17px; height: 17px; stroke: currentColor; fill: none; }
+.root .login-link { border: 1px solid currentColor; border-radius: 30px; padding: 10px 20px; }
+.root .hero-copy .intro { font-size: 16px; }
+.root .service { font-size: 12px; }
+.root .primary-button { font-size: 14px; }
+.root .nav-link { font-size: 13px; }
+.root .how-button { font-size: 11px; }
+@media (max-width: 620px) {
+  .root .hero-copy .intro { font-size: 14px; }
+  .root .primary-button { font-size: 12px; }
+  .root .hero-actions { flex-wrap: wrap; }
+  .root .service { font-size: 11px; }
+  .root .explore-link { color: #835333; }
+}
+
+/* Preserve the existing landing-page sections in the mobile navigation. */
+.root .secondary-nav-link { display: none; }
+.root .nav-link { color: #203b38; }
+.root .nav-link:hover { color: #38594e; }
+@media (max-width: 620px) {
+  .root .secondary-nav-link { display: block; }
+}

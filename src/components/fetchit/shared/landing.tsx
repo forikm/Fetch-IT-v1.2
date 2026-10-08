@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, Car, Check, ChevronRight, Clock, MapPin, Navigation, Package, Play, ShieldCheck, Truck } from "lucide-react";
+import { ArrowRight, Car, Clock, MapPin, Navigation, Package, Play, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FetchItLogo } from "./logo";
-import { BrandNavigation, ItMark } from "./brand-navigation";
+import { ItMark } from "./brand-navigation";
 import { useAppStore, type Role } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { SupportContact } from "./support-contact";
+import { LandingHero } from "./landing-hero";
 
 const FEATURES = [
   { icon: MapPin, title: "Every stop, in sight.", desc: "Follow your booking from pickup to arrival with route maps and tracking updates." },
@@ -26,7 +27,6 @@ export function LandingView() {
   useEffect(() => { const id = location.hash.slice(1); if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" })); }, []);
   const setPendingRole = useAppStore((s) => s.setPendingRole);
   const [seeded, setSeeded] = useState(false);
-  const [preview, setPreview] = useState<"delivery" | "ride">("delivery");
 
   useEffect(() => {
     if (!demoEnabled || user) return;
@@ -55,30 +55,13 @@ export function LandingView() {
 
   return (
     <div className="min-h-screen overflow-x-clip bg-background">
-      <header className="sticky top-0 z-40 border-b border-foreground/5 bg-background/95 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-20 max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3 sm:flex-nowrap sm:px-6 lg:px-8">
-          <BrandNavigation />
-          <div className="flex w-full shrink-0 items-center justify-between gap-1 sm:w-auto sm:gap-2">
-            <Button asChild variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm"><a href={riderAppUrl}>Become a rider <ArrowRight className="hidden sm:block" /></a></Button>
-            {!user && <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm" onClick={() => pickRole("CUSTOMER", "login")}>Login</Button>}
-            <Button size="sm" className="px-2 text-xs sm:px-4 sm:text-sm" onClick={start}>{user ? "Dashboard" : "Get started"}</Button>
-          </div>
-        </div>
-      </header>
       <main>
-        <section>
-          <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 pb-12 pt-12 sm:px-6 sm:pb-20 sm:pt-20 lg:grid-cols-2 lg:gap-14 lg:px-8">
-            <div>
-              <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary"><span className="h-1.5 w-1.5 rounded-full bg-primary" /> YOUR EVERYDAY, ON THE MOVE</div>
-              <h1 className="max-w-xl text-[clamp(2.8rem,5.5vw,5rem)] font-semibold leading-[1.04] tracking-[-0.055em]">Good things.<br />Going places.<span className="text-primary">↗</span></h1>
-              <p className="mt-6 max-w-md text-base leading-relaxed text-muted-foreground sm:text-lg">A parcel across town. A ride to your next stop. Make your everyday moves a little easier with Fetch-It.</p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Button size="lg" onClick={start}>Let&apos;s get moving <ArrowRight /></Button>
-              </div>
-            </div>
-            <TripPreview mode={preview} onModeChange={setPreview} />
-          </div>
-        </section>
+        <LandingHero
+          signedIn={!!user}
+          riderAppUrl={riderAppUrl}
+          onStart={(mode) => user ? chooseMode(mode) : pickRole("CUSTOMER", "signup")}
+          onLogin={() => user ? setView("mode-select") : pickRole("CUSTOMER", "login")}
+        />
         <div className="border-y border-foreground/5 bg-white/50 dark:bg-card/50">
           <div className="mx-auto grid max-w-7xl grid-cols-2 gap-5 px-4 py-6 text-xs font-medium text-muted-foreground sm:grid-cols-4 sm:px-6 sm:text-sm lg:px-8">
             {[{ icon: Package, text: "Parcels to heavy cargo" }, { icon: Car, text: "Rides for your everyday" }, { icon: Navigation, text: "Follow your route" }, { icon: ShieldCheck, text: "Proof of delivery" }].map(({ icon: Icon, text: label }) => <div key={label} className="flex items-center justify-center gap-2"><Icon className="h-4 w-4 shrink-0 text-foreground/60" />{label}</div>)}
@@ -107,35 +90,6 @@ export function LandingView() {
         <section id="contact-us" aria-label="Contact Us" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-16 sm:px-6 lg:px-8"><div className="rounded-2xl border bg-card p-6 sm:p-8"><p className="eyebrow">HERE TO HELP</p><h2 className="mt-3 text-2xl font-semibold">Let’s get it sorted.</h2><p className="mb-5 mt-3 max-w-xl text-sm text-muted-foreground">Get help with a booking, ask an account question, or follow up on a support request.</p><Button asChild className="mb-5"><Link href="/help">Visit Help &amp; Support <ArrowRight /></Link></Button><SupportContact /></div></section>
       </main>
       <footer className="border-t border-border"><div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"><div><FetchItLogo size={32} /><p className="mt-3 text-xs text-muted-foreground">A little easier. A little closer. Every day.</p></div><p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Fetch-It. All rights reserved.</p></div></footer>
-    </div>
-  );
-}
-
-function TripPreview({ mode, onModeChange }: { mode: "delivery" | "ride"; onModeChange: (mode: "delivery" | "ride") => void }) {
-  const Icon = mode === "delivery" ? Truck : Car;
-  return (
-    <div className="relative rounded-[2rem] bg-[#dde9df] p-5 sm:p-8">
-      <div className="mb-5 flex items-center justify-between gap-3"><span className="text-xs font-medium tracking-wide text-[#446358]">YOUR NEXT MOVE</span><span className="rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#446358]">Preview</span></div>
-      <div className="overflow-hidden rounded-2xl bg-card shadow-[0_16px_50px_-20px_rgba(22,60,52,0.3)]">
-        <div className="flex items-center gap-1 border-b p-3" role="group" aria-label="Service preview">{(["delivery", "ride"] as const).map((item) => { const TabIcon = item === "delivery" ? Package : Car; return <button key={item} type="button" aria-pressed={mode === item} onClick={() => onModeChange(item)} className={cn("flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", mode === item ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted")}><TabIcon className="h-4 w-4" />{item === "delivery" ? "Delivery" : "Ride"}</button>; })}</div>
-        <div className="relative aspect-[1.45] overflow-hidden bg-[#f0f1e9]">
-          <svg viewBox="0 0 500 345" className="absolute h-full w-full" aria-label="Illustration of a route from pickup to destination" role="img">
-            <rect width="500" height="345" fill="#f0f1e9" />
-            <path d="M0 20H110V112H0ZM155 0H290V90H155ZM338 0H500V109H338ZM0 161H98V272H0ZM157 146H274V247H157ZM328 153H500V246H328ZM144 294H291V345H144ZM332 283H500V345H332Z" fill="#e2e7da" />
-            <path d="M0 139H500M127 0V345M306 0V345M0 269H500" stroke="#fffdf6" strokeWidth="22" />
-            <path d="M414 -10C371 61 389 161 451 220S534 318 520 355" stroke="#c5dcd6" strokeWidth="33" fill="none" />
-            <path d="M65 218H127V139H306V71H353" stroke="#ec7139" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            <circle cx="65" cy="218" r="15" fill="#fff" /><circle cx="65" cy="218" r="6" fill="#ec7139" />
-            <circle cx="353" cy="71" r="15" fill="#163c34" /><circle cx="353" cy="71" r="5" fill="#fff" />
-            <g fill="#b9d0b8"><circle cx="215" cy="199" r="18" /><circle cx="235" cy="210" r="12" /><circle cx="45" cy="50" r="14" /><circle cx="375" cy="316" r="12" /></g>
-            <text x="67" y="251" textAnchor="middle" fill="#446358" fontSize="11" fontWeight="600">PICKUP</text><text x="354" y="42" textAnchor="middle" fill="#446358" fontSize="11" fontWeight="600">DESTINATION</text>
-          </svg>
-          <div className="absolute left-[39%] top-[32%] grid h-12 w-12 place-items-center rounded-2xl border-4 border-white bg-primary text-white shadow-lg"><Icon className="h-6 w-6" /></div>
-          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[10px] font-medium text-[#446358]"><Navigation className="h-3 w-3" /> Your route at a glance</div>
-        </div>
-        <div className="flex items-center gap-3 p-4 sm:p-5"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{mode === "delivery" ? "Room for the things that matter" : "A ride that fits your day"}</p><p className="mt-1 text-xs text-muted-foreground">{mode === "delivery" ? "Motor, tricycle & car" : "Motor, tricycle & car"}</p></div><ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" /></div>
-      </div>
-      <div className="mt-5 flex items-center gap-2 text-xs text-[#446358]"><span className="grid h-5 w-5 place-items-center rounded-full bg-[#163c34] text-white"><Check className="h-3 w-3" /></span> From your first tap to the final stop.</div>
     </div>
   );
 }
