@@ -260,3 +260,43 @@
 @media (max-width: 620px) {
   .root .secondary-nav-link { display: block; }
 }
+
+/* The transparent mascot shares the illustration canvas with the parcel and map. */
+.root .hero-art { height: 610px; }
+.root .mascot {
+  position: absolute;
+  right: 1%;
+  top: -36px;
+  width: 190px;
+  z-index: 3;
+  pointer-events: none;
+  filter: drop-shadow(0 12px 16px #99522725);
+  animation: fi-landing-mascot-float 6.5s ease-in-out -1s infinite;
+}
+.root .mascot img { display: block; width: 100%; height: auto; }
+.root .map-card { top: 150px; }
+.root .availability { left: 18%; right: auto; top: 8px; }
+@keyframes fi-landing-mascot-float {
+  0%, 100% { transform: translateY(0) rotate(3deg); }
+  50% { transform: translateY(-9px) rotate(-1deg); }
+}
+@media (max-width: 1100px) {
+  .root .mascot { width: 165px; top: -12px; right: -1%; }
+  .root .map-card { top: 166px; }
+  .root .availability { left: 3%; top: -9px; }
+}
+@media (max-width: 800px) {
+  .root .hero-art { height: 520px; }
+  .root .mascot { width: 140px; top: -15px; }
+  .root .map-card { top: 140px; }
+  .root .availability { left: 0; top: -24px; }
+}
+@media (max-width: 620px) {
+  .root .hero-art { height: 590px; }
+  .root .mascot { width: 156px; top: -20px; right: -2%; }
+  .root .map-card { top: 160px; }
+  .root .availability { top: -35px; left: 0; }
+}
+@media (max-width: 360px) {
+  .root .mascot { width: 140px; }
+}

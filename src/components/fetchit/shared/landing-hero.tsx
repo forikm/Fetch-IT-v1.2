@@ -5,6 +5,7 @@ import { FetchItLogo } from "./logo";
 import type { AppMode } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import Image from "next/image";
 import styles from "./landing-hero.module.css";
 
 type Props = { onStart: (mode: AppMode) => void; onLogin: () => void; signedIn: boolean; riderAppUrl: string };
@@ -64,6 +65,9 @@ export function LandingHero({ onStart, onLogin, signedIn, riderAppUrl }: Props) 
         <div className={styles["trust-line"]}><div className={styles["trust-check"]}><svg><use href="#fi-landing-check"/></svg></div><span>Local riders. Live updates. Less worry.</span></div>
       </div>
       <div className={styles["hero-art"]} aria-label="Illustrated delivery route preview">
+        <div className={styles["mascot"]}>
+          <Image src="/images/fetch-it-mascot.png" alt="Fetch-It dog mascot wearing an orange delivery cap" width={1254} height={1254} sizes="(max-width: 800px) 156px, 190px" />
+        </div>
         <span className={cn(styles["ornament"], styles["orb"], styles["orb-one"])} aria-hidden="true"></span><span className={cn(styles["ornament"], styles["triangle"])} aria-hidden="true"></span><span className={cn(styles["ornament"], styles["small-spark"])} aria-hidden="true">✦</span>
         <div className={styles["availability"]}><span></span> A good day to get moving</div>
         <div className={cn(styles["parcel-card"], styles["floating"])}><div className={styles["parcel-halo"]}></div><svg className={styles["parcel-illustration"]} viewBox="0 0 140 130" aria-hidden="true"><path d="m70 15 51 28-51 29-51-29Z" fill="#ffbd72"/><path d="m19 43 51 29v49l-51-29Z" fill="#f69537"/><path d="m70 72 51-29v49l-51 29Z" fill="#df6c22"/><path d="m46 28 51 29v25l-15 8V65L32 36Z" fill="#ffdcac"/><path d="m33 78 19 11v5L33 83Z" fill="#fff3de"/><path d="m77 104 13-8" stroke="#ffb76e" strokeWidth="3" strokeLinecap="round"/></svg><span className={styles["parcel-check"]}><svg><use href="#fi-landing-check"/></svg></span><span className={styles["parcel-label"]}>Handled with care.</span></div>
