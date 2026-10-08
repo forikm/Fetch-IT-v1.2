@@ -1,5 +1,7 @@
 # Verification email delivery
 
+An optional Gmail code flow is now implemented; see [customer email codes](email-code-auth.md) for configuration and tests. Until its sender is configured and the feature flag is enabled in a new deployment, the Firebase link flow described below remains active.
+
 The customer app uses Firebase's default email service. Firebase accepting a send request does not guarantee placement in a recipient's inbox. The app offers resend and tells customers to check spam, while preserving the verification screen when they leave for their email app.
 
 ## Current configuration

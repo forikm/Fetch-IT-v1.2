@@ -67,8 +67,12 @@ async function handlePOST(req: NextRequest) {
       return NextResponse.json({ error: "This account is restricted. Contact support." }, { status: 403 });
     }
 
+    if (user.authInvalidBefore && identity.auth_time * 1000 <= user.authInvalidBefore.getTime()) {
+      return NextResponse.json({ error: "Sign in again with your current password." }, { status: 401 });
+    }
+
     await setSessionCookie(
-      createSessionToken({ uid: user.id, email: user.email, name: user.name, role: "CUSTOMER" }),
+      createSessionToken({ uid: user.id, email: user.email, name: user.name, role: "CUSTOMER", iat: identity.auth_time * 1000 }),
     );
     return NextResponse.json({
       user: {

@@ -11,6 +11,8 @@ const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const compiled = ts.transpileModule(fs.readFileSync(new URL("../src/components/fetchit/shared/auth-view.tsx", import.meta.url), "utf8"),
   { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+const compiledClient = ts.transpileModule(fs.readFileSync(new URL("../src/lib/email-code-client.ts", import.meta.url), "utf8"),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 class Storage {
   items = new Map();
   getItem(key) { return this.items.get(key) ?? null; }
@@ -19,7 +21,7 @@ class Storage {
 }
 beforeEach(() => { globalThis.localStorage = new Storage(); });
 const saved = { mode: "signup", email: "pending@example.invalid", name: "Pending Customer", phone: "+639171234567", firebaseUid: "pending-user", verificationSent: true };
-function harness(firebaseUser) {
+function harness(firebaseUser, { codes = false, initialMode = "signup", failSignOut = false } = {}) {
   let cursor = 0;
   let dirty = true;
   let poll;
@@ -37,8 +39,9 @@ function harness(firebaseUser) {
     onAuthStateChanged(_, callback) { observer = callback; callback(auth.currentUser); return () => {}; },
     async reload(user) { user.emailVerified = true; },
     async updateProfile(user, profile) { user.displayName = profile.displayName; },
-    async signOut() { auth.currentUser = null; observer(null); },
+    async signOut() { if (failSignOut) throw Error("Sign-out unavailable"); auth.currentUser = null; observer(null); },
     async sendEmailVerification() { requests.push("verification-email"); },
+    async sendPasswordResetEmail() { requests.push("firebase-reset-email"); },
   };
   const hooks = {
     useState(initial) {
@@ -56,9 +59,17 @@ function harness(firebaseUser) {
     },
   };
   const exports = {};
-  vm.runInNewContext(compiled, { exports, process: { env: { NODE_ENV: "production" } },
-    fetch: async (path, options) => { requests.push({ path, body: JSON.parse(options.body) }); return new Response(JSON.stringify({ user: { id: "fetch-user", role: "CUSTOMER" } })); },
+  const fakeFetch = async (path, options) => {
+    requests.push({ path, body: JSON.parse(options.body) });
+    return new Response(JSON.stringify(path === "/api/auth/firebase-session" ? { user: { id: "fetch-user", role: "CUSTOMER" } } :
+      { challengeId: "550e8400-e29b-41d4-a716-446655440000", expiresAt: new Date(Date.now() + 600000).toISOString(), retryAfter: 60, message: "Request complete." }));
+  };
+  const client = {};
+  vm.runInNewContext(compiledClient, { exports: client, fetch: fakeFetch, AbortSignal });
+  vm.runInNewContext(compiled, { exports, process: { env: { NODE_ENV: "production", NEXT_PUBLIC_EMAIL_CODE_AUTH: String(codes) } },
+    fetch: fakeFetch,
     require(name) {
+      if (name === "@/lib/email-code-client") return client;
       if (name === "@/lib/password-policy") return passwordPolicy;
       if (name === "react") return hooks;
       if (name === "react/jsx-runtime") return require(name);
@@ -75,7 +86,7 @@ function harness(firebaseUser) {
   function render() {
     for (let attempt = 0; attempt < 10; attempt++) {
       dirty = false; cursor = 0;
-      tree = exports.AuthView({ initialMode: "signup" });
+      tree = exports.AuthView({ initialMode });
       while (queued.length) queued.shift()();
       if (!dirty) return tree;
     }
@@ -132,4 +143,48 @@ test("leaving the verification screen during a background check prevents session
   await app.poll(controller.signal);
   assert.equal(app.state.user, null);
   assert.deepEqual(app.requests, []);
+});
+
+test("code verification uses our endpoints and resumes the existing Firebase customer session", async () => {
+  progress.saveAuthProgress(saved);
+  const app = harness(firebaseUser(), { codes: true });
+  const form = app.nodes().find(node => node.type === "EmailCodeForm");
+  assert.equal(form.props.purpose, "verification");
+  const challenge = await form.props.onSend();
+  await form.props.onConfirm(challenge.challengeId, "012345");
+  app.render();
+  assert.equal(app.state.user.id, "fetch-user");
+  assert.deepEqual(app.requests.map(r => r.path), ["/api/auth/email-code/send", "/api/auth/email-code/verify", "/api/auth/firebase-session"]);
+  assert.equal(app.requests[1].body.idToken, "fixture-verified-token");
+  assert.equal(app.requests[1].body.code, "012345");
+});
+
+test("a pending code request blocks account switching and background verification", async () => {
+  progress.saveAuthProgress(saved);
+  const app = harness(firebaseUser(), { codes: true });
+  app.nodes().find(node => node.type === "EmailCodeForm").props.onBusyChange(true);
+  app.render();
+  const button = app.nodes().find(node => node.type === "Button" && node.props.children === "Use a different account");
+  assert.equal(button.props.disabled, true);
+  await button.props.onClick();
+  await app.poll(new AbortController().signal);
+  assert.deepEqual(app.requests, []);
+  assert.equal(progress.readAuthProgress().firebaseUid, saved.firebaseUid);
+});
+
+test("password-reset codes replace Firebase reset links and return to login even if local sign-out fails", async () => {
+  progress.saveAuthProgress({ ...saved, firebaseUid: null, verificationSent: false });
+  const app = harness({ ...firebaseUser(), emailVerified: true }, { codes: true, initialMode: "login", failSignOut: true });
+  const forgot = app.nodes().find(node => node.type === "Button" && node.props.children === "Forgot password?");
+  assert(forgot);
+  await forgot.props.onClick(); app.render();
+  const form = app.nodes().find(node => node.type === "EmailCodeForm");
+  assert.equal(form.props.purpose, "reset");
+  const challenge = await form.props.onSend();
+  await form.props.onConfirm(challenge.challengeId, "012345", "sixsix"); app.render();
+  assert.deepEqual(app.requests.map(r => r.path), ["/api/auth/password-reset/send", "/api/auth/password-reset/confirm"]);
+  assert.equal(app.requests[1].body.password, "sixsix");
+  assert.equal(app.nodes().some(node => node.type === "EmailCodeForm"), false);
+  assert(app.nodes().some(node => node.props?.role === "status" && /Sign in with your new password/.test(node.props.children)));
+  assert.equal(progress.readAuthProgress(), null);
 });

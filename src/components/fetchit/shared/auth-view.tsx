@@ -42,9 +42,12 @@ import { customerAuthMessage, startCustomerSignup } from "@/lib/customer-signup"
 import { validNewPassword, PASSWORD_REQUIREMENT, PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 import { clearAuthProgress, readAuthProgress, saveAuthProgress } from "@/lib/auth-progress";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
+import { EmailCodeForm } from "./email-code-form";
+import { emailCodeRequest, type CodeChallenge } from "@/lib/email-code-client";
 
 const DEMO_EMAIL = "customer@fetchit.app";
 const DEMO_PASSWORD = "demo1234";
+const EMAIL_CODES_ENABLED = process.env.NEXT_PUBLIC_EMAIL_CODE_AUTH === "true";
 
 export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
   const setView = useAppStore((s) => s.setView);
@@ -68,6 +71,10 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
   const [emailVerified, setEmailVerified] = useState(false);
   const [pendingName, setPendingName] = useState<{ uid: string; name: string } | null>(null);
   const [legacyLogin, setLegacyLogin] = useState(false);
+  const [resetActive, setResetActive] = useState(false);
+  const [verificationChallenge, setVerificationChallenge] = useState<CodeChallenge | null>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
+  const codePending = useRef(false);
   const requestPending = useRef(false);
   const signupEmail = useRef<string | null>(null);
   const progressEnabled = useRef(true);
@@ -125,7 +132,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
   }, [mode, email, name, phone, firebaseUid, verificationSent]);
 
   useVisiblePoll(pendingVerification && firebaseUid ? `verification:${firebaseUid}` : "", async signal => {
-    if (requestPending.current || emailVerified) return;
+    if (requestPending.current || codePending.current || emailVerified) return;
     const user = getCustomerAuth().currentUser;
     if (!user || user.uid !== firebaseUid) return;
     requestPending.current = true;
@@ -148,7 +155,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     if (!refreshed) await reload(user);
     if (!user.emailVerified) {
       setPendingVerification(true);
-      setNotice("Your email is not verified yet. Open the verification link or send another email below.");
+      setNotice(EMAIL_CODES_ENABLED ? "Verify your email using a code below." : "Your email is not verified yet. Open the verification link or send another email below.");
       return;
     }
     setEmailVerified(true);
@@ -210,7 +217,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
           create: async (address, secret) => (await createUserWithEmailAndPassword(auth, address, secret)).user,
           signIn: async (address, secret) => (await signInWithEmailAndPassword(auth, address, secret)).user,
           signOut: () => signOut(auth),
-          sendVerification: sendEmailVerification,
+          sendVerification: sendVerificationForUser,
           updateName: (user, displayName) => updateProfile(user, { displayName }),
         }, { email, password, name });
         setEmail(result.user.email || email.trim());
@@ -219,10 +226,10 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
         setFirebaseUid(result.user.uid);
         setPendingName(result.profileError ? { uid: result.user.uid, name: name.trim() } : null);
         if (result.verificationError) {
-          setError(`Your signup is saved, but the verification email could not be sent. ${customerAuthMessage(result.verificationError)} Select Send verification email to retry.`);
+          setError(`Your signup is saved, but the verification email could not be sent. ${customerAuthMessage(result.verificationError)} Select ${EMAIL_CODES_ENABLED ? "Send code" : "Send verification email"} to retry.`);
         } else {
           setVerificationSent(true);
-          setNotice(`${result.recovered ? "Your unfinished signup has been recovered. " : ""}Verification email sent. Check your inbox and spam folder, open the link, then return here.${result.profileError ? " Your name will be saved when you finish signing in." : ""}`);
+          setNotice(`${result.recovered ? "Your unfinished signup has been recovered. " : ""}${EMAIL_CODES_ENABLED ? "Verification code sent. Enter it below." : "Verification email sent. Check your inbox and spam folder, open the link, then return here."}${result.profileError ? " Your name will be saved when you finish signing in." : ""}`);
         }
       }
     } catch (err) {
@@ -234,6 +241,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
   }
 
   async function useDifferentAccount() {
+    if (codePending.current) return;
     if (!beginRequest()) return;
     try {
       await signOut(getCustomerAuth());
@@ -245,6 +253,8 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     setEmailVerified(false);
     setVerificationSent(false);
     setPendingName(null);
+    setVerificationChallenge(null);
+    setResetActive(false);
     setPassword("");
     setEmail("");
     setName("");
@@ -279,7 +289,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     try {
       const user = getCustomerAuth().currentUser;
       if (!user) throw new Error("Sign in again to resend verification.");
-      await sendEmailVerification(user);
+      await sendVerificationForUser(user);
       setVerificationSent(true);
       setNotice("Verification email sent. Check your inbox and spam folder.");
     } catch (err) {
@@ -295,6 +305,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       setError("Enter your email first, then select Forgot password.");
       return;
     }
+    if (EMAIL_CODES_ENABLED) { setResetActive(true); setError(null); setNotice(null); return; }
     if (!beginRequest()) return;
     try {
       await sendPasswordResetEmail(getCustomerAuth(), email.trim());
@@ -304,6 +315,31 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     } finally {
       endRequest();
     }
+  }
+
+  async function sendVerificationForUser(user: User) {
+    if (!EMAIL_CODES_ENABLED) { await sendEmailVerification(user); return; }
+    const next = await emailCodeRequest("/api/auth/email-code/send", { idToken: await user.getIdToken(true) });
+    setVerificationChallenge(next);
+  }
+
+  async function confirmVerificationCode(challengeId: string, code: string) {
+    if (!beginRequest()) throw new Error("Please wait for the current request.");
+    let confirmed = false;
+    try {
+      const user = getCustomerAuth().currentUser;
+      if (!user) throw new Error("Sign in again to verify your email.");
+      await emailCodeRequest("/api/auth/email-code/verify", { challengeId, code, idToken: await user.getIdToken(true) });
+      await reload(user); confirmed = user.emailVerified; setEmailVerified(confirmed);
+      try { normalizePhilippinePhone(phone); }
+      catch { setNotice("Email verified. Enter your phone number below, then continue."); return; }
+      await finishSignIn(user, true);
+    } catch (err) {
+      // The code form disappears after verification; retain any session error
+      // on the remaining account-details screen so Continue can retry it.
+      if (confirmed) setError(customerAuthMessage(err));
+      throw err;
+    } finally { endRequest(); }
   }
 
   async function tryDemo() {
@@ -330,7 +366,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 h-20 flex items-center justify-between">
           <button
             onClick={() => { progressEnabled.current = false; clearAuthProgress(); setView("landing"); }}
-            disabled={loading}
+            disabled={loading || codeBusy}
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
           >
             <ArrowLeft className="h-4 w-4" /> Back
@@ -349,19 +385,37 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
           <Card className="min-w-0 gap-5 border-0 bg-transparent shadow-none">
             <CardHeader className="min-w-0 px-4 sm:px-6">
               <CardTitle className="text-3xl font-semibold tracking-tight">
-                {pendingVerification ? emailVerified ? "Email verified" : verificationSent ? "Check your inbox" : "Verify your email" : mode === "login" ? "Welcome back." : "Your next move starts here."}
+                {resetActive ? "Reset your password" : pendingVerification ? emailVerified ? "Email verified" : verificationSent ? "Check your inbox" : "Verify your email" : mode === "login" ? "Welcome back." : "Your next move starts here."}
               </CardTitle>
               {pendingVerification && (
                 <CardDescription className="break-words [overflow-wrap:anywhere]">
-                  {emailVerified ? "Finish your account details to continue." : verificationSent ? `Check the link sent to ${email || "your inbox"}.` : `Verify ${email || "your email address"} to finish signing up.`}
+                  {emailVerified ? "Finish your account details to continue." : verificationSent ? `Check the ${EMAIL_CODES_ENABLED ? "code" : "link"} sent to ${email || "your inbox"}.` : `Verify ${email || "your email address"} to finish signing up.`}
                 </CardDescription>
               )}
-              {!pendingVerification && <CardDescription className="mt-2 leading-relaxed">{mode === "login" ? "Sign in to book, track and manage your trips." : "Create an account for easier deliveries and rides."}</CardDescription>}
+              {!pendingVerification && !resetActive && <CardDescription className="mt-2 leading-relaxed">{mode === "login" ? "Sign in to book, track and manage your trips." : "Create an account for easier deliveries and rides."}</CardDescription>}
             </CardHeader>
             <CardContent className="min-w-0 px-4 sm:px-6">
-              {pendingVerification ? (
+              {resetActive ? <div className="space-y-3">
+                <EmailCodeForm purpose="reset" email={email.trim()} onBusyChange={busy => { codePending.current = busy; setCodeBusy(busy); }} onSend={() => emailCodeRequest("/api/auth/password-reset/send", { email: email.trim() })}
+                  onConfirm={async (challengeId, code, password) => {
+                    await emailCodeRequest("/api/auth/password-reset/confirm", { challengeId, code, password });
+                    try { if (getCustomerAuth().currentUser) await signOut(getCustomerAuth()); }
+                    catch { /* The server has already invalidated old sessions. */ }
+                    setPassword(""); setResetActive(false); setPendingVerification(false); setVerificationChallenge(null);
+                    setFirebaseUid(null); setEmailVerified(false); setVerificationSent(false); setPendingName(null); clearAuthProgress();
+                    setMode("login"); setNotice("Password updated. Sign in with your new password."); setError(null);
+                  }} />
+                <Button variant="ghost" className="w-full" disabled={codeBusy} onClick={() => { if (!codePending.current) setResetActive(false); }}>Back to sign in</Button>
+              </div> : pendingVerification ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">{emailVerified ? "Your email is verified. Continue below if signup has not finished automatically." : verificationSent ? "Open the email link, then return here. We’ll check verification when you return; your progress is saved." : "Your signup is saved. Send a verification email below, then open its link and return here."}</p>
+                  <p className="text-sm text-muted-foreground">{emailVerified ? "Your email is verified. Continue below if signup has not finished automatically." : EMAIL_CODES_ENABLED ? "Your signup is saved. Verify your email with the code below." : verificationSent ? "Open the email link, then return here. We’ll check verification when you return; your progress is saved." : "Your signup is saved. Send a verification email below, then open its link and return here."}</p>
+                  {EMAIL_CODES_ENABLED && !emailVerified && <EmailCodeForm key={`${firebaseUid}:${verificationChallenge?.challengeId ?? "new"}`} purpose="verification" email={email} initialChallenge={verificationChallenge}
+                    onBusyChange={busy => { codePending.current = busy; setCodeBusy(busy); }}
+                    onSend={async () => {
+                      const user = getCustomerAuth().currentUser;
+                      if (!user) throw new Error("Sign in again to verify your email.");
+                      return emailCodeRequest("/api/auth/email-code/send", { idToken: await user.getIdToken(true) });
+                    }} onConfirm={confirmVerificationCode} />}
                   <div className="space-y-2">
                     <Label htmlFor="verification-phone">Phone number</Label>
                     <Input id="verification-phone" type="tel" required autoComplete="tel" maxLength={32}
@@ -370,11 +424,11 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                   </div>
                   {error && <p className="text-sm text-destructive [overflow-wrap:anywhere]" role="alert">{error}</p>}
                   {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
-                  <Button className="w-full" onClick={checkVerification} disabled={loading}>
+                  {(!EMAIL_CODES_ENABLED || emailVerified) && <Button className="w-full" onClick={checkVerification} disabled={loading}>
                     {loading && <FetchItLoader className="h-4 w-4" />} {emailVerified ? "Continue" : "I've verified my email"}
-                  </Button>
-                  {!emailVerified && <Button variant="outline" className="w-full" onClick={resendVerification} disabled={loading}>{verificationSent ? "Resend email" : "Send verification email"}</Button>}
-                  <Button variant="ghost" className="w-full" onClick={useDifferentAccount} disabled={loading}>Use a different account</Button>
+                  </Button>}
+                  {!EMAIL_CODES_ENABLED && !emailVerified && <Button variant="outline" className="w-full" onClick={resendVerification} disabled={loading}>{verificationSent ? "Resend email" : "Send verification email"}</Button>}
+                  <Button variant="ghost" className="w-full" onClick={useDifferentAccount} disabled={loading || codeBusy}>Use a different account</Button>
                 </div>
               ) : <Tabs
                 value={mode}
@@ -421,7 +475,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                       Sign in
                     </Button>
                   </form>
-                  {!legacyLogin && <Button variant="link" className="w-full" onClick={resetPassword} disabled={loading}>Forgot password?</Button>}
+                  {(!legacyLogin || EMAIL_CODES_ENABLED) && <Button variant="link" className="w-full" onClick={resetPassword} disabled={loading}>Forgot password?</Button>}
                   <Button
                     variant="ghost"
                     className="w-full text-xs"

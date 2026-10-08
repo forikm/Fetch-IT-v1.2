@@ -11,6 +11,7 @@ import { createSessionToken, setSessionCookie } from "@/lib/session";
 import type { Role } from "@/lib/constants";
 
 async function handlePOST(req: NextRequest) {
+  const authenticatedAt = Date.now();
   try {
     const { email, password, role } = (await req.json()) as {
       email: string;
@@ -62,6 +63,7 @@ async function handlePOST(req: NextRequest) {
       email: user.email,
       name: user.name,
       role: user.role as Role,
+      iat: authenticatedAt,
     });
     await setSessionCookie(token);
 

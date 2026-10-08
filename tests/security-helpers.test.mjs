@@ -33,7 +33,7 @@ test("customer, rider and admin sessions reject forged, malformed and expired co
     return value + "." + crypto.createHmac("sha256", secret).update(value).digest("base64url");
   };
   for (const [file, method] of [["../src/lib/session.ts", "verifySessionToken"], ["../../fetch-rider/src/lib/session.ts", "verifySessionToken"], ["../../fetch-admin/src/lib/session.ts", "verifyAdminSessionToken"]]) {
-    const verify = load(file, env, dependencies)[method];
+    const verify = load(file, env, { ...dependencies, "./db": { db: {} } })[method];
     const payload = { uid: "account-id", email: "private@example.invalid", name: "Private Name", role: "CUSTOMER", exp: Date.now() + 60000 };
     assert(verify(signed(payload)));
     for (const token of [signed(payload) + ".extra", signed(payload).slice(0, -2), "invalid", signed({ ...payload, exp: 0 }), signed({ ...payload, exp: undefined }), signed({ ...payload, uid: null })]) assert.equal(verify(token), null);

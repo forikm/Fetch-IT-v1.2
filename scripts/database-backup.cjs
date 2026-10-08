@@ -28,6 +28,9 @@ function decode(file) {
   decipher.setAuthTag(Buffer.from(value.tag, 'base64'));
   const data = JSON.parse(Buffer.concat([decipher.update(Buffer.from(value.data, 'base64')), decipher.final()]).toString('utf8'));
   if (data.version !== 1 || models.some(m => !Array.isArray(data.tables[m]))) throw new Error('Invalid backup data');
+  // Backups made before email-code resets had no invalidation timestamp.
+  // Normalize its nullable default when comparing a restore to the new schema.
+  for (const user of data.tables.user) if (!Object.hasOwn(user, 'authInvalidBefore')) user.authInvalidBefore = null;
   return data;
 }
 async function snapshot(db) {

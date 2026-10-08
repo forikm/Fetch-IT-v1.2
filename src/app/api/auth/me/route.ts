@@ -25,7 +25,7 @@ export async function PATCH(request: Request) {
     try { phone = normalizePhilippinePhone(body.phone); }
     catch (error) { throw new CustomerError(error instanceof Error ? error.message : "Enter a valid Philippine phone number.", 400); }
     const user = await db.user.update({ where: { id: session.uid }, data: { name: body.name.trim(), phone }, select: { id: true, name: true, email: true, role: true, phone: true } });
-    await setSessionCookie(createSessionToken({ uid: user.id, name: user.name, email: session.email, role: session.role }));
+    await setSessionCookie(createSessionToken({ uid: user.id, name: user.name, email: session.email, role: session.role, iat: session.iat ?? 0 }));
     return NextResponse.json({ user });
   } catch (error) { return customerErrorResponse(error); }
 }
