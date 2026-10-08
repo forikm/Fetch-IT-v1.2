@@ -4,7 +4,7 @@ import { sessionSecret } from "./session-secret";
 
 export const EMAIL_CODE_TTL_MS = 10 * 60_000;
 export const EMAIL_CODE_MAX_ATTEMPTS = 5;
-export type EmailCodePurpose = "VERIFY_EMAIL" | "RESET_PASSWORD";
+export type EmailCodePurpose = "VERIFY_EMAIL" | "RESET_PASSWORD" | "ADMIN_RESET_PASSWORD";
 export type EmailCodeTarget = { email: string; subjectId: string; provider: "FIREBASE" | "PASSWORD" };
 
 export function emailCodeHash(id: string, code: string) {
@@ -36,5 +36,5 @@ export async function consumeEmailCode(id: string, purpose: EmailCodePurpose, co
     const correct = expected.length === supplied.length && timingSafeEqual(expected, supplied);
     await tx.authEmailCode.update({ where: { id }, data: { attempts: { increment: 1 }, ...(correct ? { usedAt: new Date() } : {}) } });
     return correct ? row : null;
-  });
+  }, { maxWait: 10000, timeout: 20000 });
 }

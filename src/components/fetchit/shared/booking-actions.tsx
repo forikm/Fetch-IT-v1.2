@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { customerResponse } from "@/lib/customer-request";
 import { SupportCenter } from "./support-center";
+import { PaymentCard } from "./payment-card";
 
 type Review = { rating: number; comment: string | null };
 export function BookingActions({ booking, readOnly = false }: { readOnly?: boolean; booking: { id: string; refCode: string; status: string; riderId: string | null } }) {
@@ -34,6 +35,7 @@ export function BookingActions({ booking, readOnly = false }: { readOnly?: boole
     finally { setBusy(false); }
   }
   return <>
+    <PaymentCard key={booking.id} bookingId={booking.id} role="CUSTOMER" readOnly={unavailable} />
     <div className="flex flex-wrap gap-2 pt-2 border-t">
       <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={async () => {
         setError("");

@@ -3,12 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCustomer, CustomerError, customerErrorResponse } from "@/lib/customer-access";
 import { db } from "@/lib/db";
 import { bookingStatusWhere } from "@/lib/booking-status-query";
+import { expireRiderOffers } from "@/lib/dispatch";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await requireCustomer();
     const ids = [...new Set((req.nextUrl.searchParams.get("ids") ?? "").split(",").filter(Boolean))];
     if (ids.length > 100 || ids.some((id) => id.length > 100)) throw new CustomerError("Too many booking IDs.", 400);
+    await expireRiderOffers(db);
     const onlyTracked = req.nextUrl.searchParams.get("onlyTracked") === "1";
     const bookings = await db.booking.findMany({
       where: bookingStatusWhere(session.uid, ids, onlyTracked),

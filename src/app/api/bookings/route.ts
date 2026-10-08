@@ -12,6 +12,7 @@ import type { Prisma } from "@prisma/client";
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireCustomer, CustomerError, customerErrorResponse } from "@/lib/customer-access";
+import { expireRiderOffers } from "@/lib/dispatch";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import {
@@ -28,6 +29,7 @@ async function handleGET(req: NextRequest) {
   try {
     const session = await requireCustomer();
 
+    await expireRiderOffers(db);
     const url = new URL(req.url);
     const filter = url.searchParams.get("filter") || "active"; // active | history | all
     const type = url.searchParams.get("type");
@@ -98,6 +100,7 @@ async function handlePOST(req: NextRequest) {
 
     const body = await req.json();
     if (!body || typeof body !== "object") throw new CustomerError("Booking details are required.", 400);
+    if (body.paymentMethod !== undefined && body.paymentMethod !== "CASH") throw new CustomerError("Cash is the currently supported payment method.", 400);
     const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
     const previous = await findBookingAttempt(db, attemptId, body);
     if (previous) return NextResponse.json({ booking: omitTicket(bookingView(previous)) });

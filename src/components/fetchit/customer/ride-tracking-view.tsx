@@ -11,6 +11,7 @@ import { useTrackingUpdates } from "@/hooks/use-tracking-updates";
 import { VEHICLES, statusLabel, type BookingStatus, type VehicleClass } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Booking } from "./customer-dashboard";
+import { BookingActions } from "../shared/booking-actions";
 
 const RIDE_ICONS: Partial<Record<VehicleClass, React.ReactNode>> = {
   MOTORCYCLE: <Bike className="h-5 w-5" />,
@@ -112,6 +113,7 @@ export function RideTrackingView({
       )}
 
       {/* Status timeline */}
+      <BookingActions booking={{ ...ride, status }} />
       {!cancelled && (
         <ol className="space-y-0">
           {steps.map((s, i) => {

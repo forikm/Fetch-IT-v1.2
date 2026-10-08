@@ -3,6 +3,7 @@
 import { NotificationInbox } from "../shared/notification-inbox";
 import { BookingHistoryRow } from "../shared/booking-history-row";
 import { BookingSummary } from "../shared/booking-summary";
+import { CancelBooking } from "../shared/cancel-booking";
 import { BookingActions } from "../shared/booking-actions";
 import { BookingTimeline } from "../shared/booking-timeline";
 import { CustomerBottomNav } from "../shared/customer-bottom-nav";
@@ -529,30 +530,6 @@ function BookingCard({
   const { toast } = useToast();
   const v = VEHICLES[booking.vehicleClass];
   const vIcon = useVehicleIcon(booking.vehicleClass);
-  const [cancelling, setCancelling] = useState(false);
-
-  async function cancel() {
-    if (readOnly || !navigator.onLine) return;
-    setCancelling(true);
-    try {
-      const res = await fetch(`/api/bookings/${booking.id}/cancel`, { method: "POST" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Failed to cancel");
-      }
-      toast({ title: "Booking cancelled", description: booking.refCode });
-      onRefresh();
-    } catch (e) {
-      toast({
-        title: "Cancellation failed",
-        description: e instanceof Error ? e.message : "Unknown error",
-        variant: "destructive",
-      });
-    } finally {
-      setCancelling(false);
-    }
-  }
-
   const canCancel = ["PENDING", "MATCHED", "ACCEPTED"].includes(booking.status);
   const canTrack = !!booking.riderId && !["CANCELLED"].includes(booking.status);
   const isDelivered = booking.status === "DELIVERED";
@@ -626,17 +603,7 @@ function BookingCard({
               <Navigation className="h-3.5 w-3.5" /> Track
             </Button>
           )}
-          {canCancel && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={cancel}
-              disabled={cancelling || readOnly}
-            >
-              {cancelling ? <FetchItLoader className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-              Cancel
-            </Button>
-          )}
+          {canCancel && <CancelBooking bookingId={booking.id} readOnly={readOnly} onCancelled={onRefresh} />}
           {["DELIVERED", "CANCELLED"].includes(booking.status) && <Button size="sm" variant="outline" onClick={onRepeat}>Book again</Button>}
           {isDelivered && booking.type === "DELIVERY" && !readOnly && (
             <Button size="sm" variant="outline" className="flex-1" onClick={onTrack}>
@@ -822,6 +789,7 @@ function BookingForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: bookingType,
+          paymentMethod: "CASH",
           passengers: isRide ? Number(passengers) : undefined,
           pickup: { lat: Number(pickupLat), lng: Number(pickupLng), label: pickupLabel },
           dropoff: { lat: Number(dropoffLat), lng: Number(dropoffLng), label: dropoffLabel },
@@ -1199,6 +1167,8 @@ function BookingForm({
           )}
         </div>
       )}
+
+      {step === 2 && <div className="space-y-2"><Label htmlFor="payment-method">Payment method</Label><select id="payment-method" className="w-full rounded-md border bg-background p-3" defaultValue="CASH"><option value="CASH">Cash — pay your rider</option></select><p className="text-xs text-muted-foreground">After paying, confirm the amount in your booking. Your rider confirms receipt.</p></div>}
 
       {/* Navigation */}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">

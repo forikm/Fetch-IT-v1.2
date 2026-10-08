@@ -35,7 +35,7 @@ async function request(app, route, auth, method = "GET", body, expected = 200) {
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   const text = await res.text();
-  assert((Array.isArray(expected) ? expected : [expected]).includes(res.status), `${app} ${method} ${route}: ${res.status} ${text.slice(0, 250)}`);
+  assert((Array.isArray(expected) ? expected : [expected]).includes(res.status), `${app} ${method} ${route}${body?.status ? ` -> ${body.status}` : ""}: ${res.status} ${text.slice(0, 250)}`);
   let data; try { data = JSON.parse(text); } catch { data = text; }
   return { status: res.status, data, headers: res.headers, cookie: res.headers.get("set-cookie")?.split(";")[0] };
 }
@@ -108,6 +108,17 @@ async function main() {
     assert.notEqual(identity.providerUserId, firebase.id); assert.equal(identity.passwordHash, null);
     const customerAuth = await login("customer", customer), otherAuth = await login("customer", other);
     const riderAuth = await login("rider", rider), secondAuth = await login("rider", second), adminAuth = await login("admin", admin);
+    if (process.env.RUN_ADMIN_PAGE_INTEGRATION === "1") {
+      const sample = await createBooking(customerAuth);
+      const completed = await createBooking(customerAuth, "RIDE");
+      await db.booking.update({ where: { id: completed.id }, data: { riderId: rider.id, status: "DELIVERED", deliveredAt: new Date(), paymentStatus: "PAID", paidAt: new Date(), paymentReference: "CASH-FIXTURE" } });
+      for (const route of ["/dashboard", "/dashboard/reports", "/dashboard/riders", `/dashboard/riders/${rider.id}`, "/dashboard/bookings", `/dashboard/bookings/${sample.id}`, `/dashboard/bookings/${completed.id}`, "/dashboard/audit"]) {
+        const page = await request("admin", route, adminAuth);
+        assert(page.data.includes("admin-workspace"), `${route} must render the authenticated admin page`);
+      }
+      console.log("PASS: admin overview, reports, rider pages, booking list, payment/assignment details and audit pages render against the migrated schema.");
+      return;
+    }
     await request("rider", "/api/auth/login", null, "POST", { email: customer.email, password }, 403);
     await request("admin", "/api/auth/login", null, "POST", { email: rider.email, password }, 401);
     const me = await request("rider", "/api/auth/me", riderAuth); assert.equal(me.data.user.vehicleClass, "MOTORCYCLE"); assert.equal(me.data.user.isOnline, true);
@@ -122,7 +133,7 @@ async function main() {
     for (const value of [customer.email, customer.name, customer.phone, customer.id, booking.ticketId]) assert(!JSON.stringify(available).includes(value));
     assert.equal(available.ticket, null); assert.equal(available.cargoNotes, null);
     await request("customer", `/api/bookings/${booking.id}`, otherAuth, "GET", undefined, 403);
-    await request("customer", `/api/bookings/${booking.id}/cancel`, otherAuth, "POST", undefined, 403);
+    await request("customer", `/api/bookings/${booking.id}/cancel`, otherAuth, "POST", { reason: "Ownership check" }, 403);
     await request("rider", `/api/bookings/${booking.id}`, secondAuth, "GET", undefined, 403);
     const otherStatuses = await request("customer", `/api/bookings/status?ids=${booking.id}`, otherAuth);
     assert.equal(otherStatuses.data.bookings.length, 0);
@@ -142,23 +153,7 @@ async function main() {
     await advance(booking, ownerAuth, ["PICKED_UP", "IN_TRANSIT"]);
     assert.equal(await db.bookingEvent.count({ where: { bookingId: booking.id } }), 4);
     console.log("PASS: exact decimal storage, numeric API fares, concurrent rider claims, atomic booking events.");
-    const matched = await createBooking(customerAuth);
-    await db.booking.update({ where: { id: matched.id }, data: { riderId: rider.id, status: "MATCHED" } });
-    const matchedDetails = (await request("rider", `/api/bookings/${matched.id}`, riderAuth)).data.booking;
-    assert.equal(matchedDetails.customer.phone, null); assert.equal(matchedDetails.ticket, null);
-    const nativeMatched = await fetch(`http://localhost:3101/api/native/tickets/${matched.ticketId}`, {
-      headers: { authorization: `Bearer ${riderAuth.split("=")[1]}` } });
-    assert.equal(nativeMatched.status, 409);
-    await request("rider", `/api/bookings/${matched.id}`, riderAuth, "PATCH", { status: "ACCEPTED" });
-    const cancellationRace = await Promise.all([
-      request("customer", `/api/bookings/${matched.id}/cancel`, customerAuth, "POST", undefined, [200, 400, 409]),
-      request("rider", `/api/bookings/${matched.id}`, riderAuth, "PATCH", { status: "PICKED_UP" }, [200, 409]),
-    ]);
-    assert.equal(cancellationRace.filter(r => r.status === 200).length, 1);
-    const finalRace = await db.booking.findUniqueOrThrow({ where: { id: matched.id } });
-    assert(["PICKED_UP", "CANCELLED"].includes(finalRace.status));
-    assert.equal(await db.bookingEvent.count({ where: { bookingId: matched.id, toStatus: { in: ["PICKED_UP", "CANCELLED"] } } }), 1);
-    console.log("PASS: private pending/matched job feeds, customer ownership, assigned-rider contact details and cancellation/pickup race.");
+
 
     const ownerAccount = owner.riderId === rider.id ? rider : second;
     const native = await fetch("http://localhost:3101/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json", "x-client": "fetchit-android" }, body: JSON.stringify({ email: ownerAccount.email, password }) });
@@ -197,6 +192,25 @@ async function main() {
     assert.equal(await db.bookingEvent.count({ where: { bookingId: booking.id, toStatus: "DELIVERED" } }), 1);
     console.log("PASS: delivery-code ownership, attempt lockout, expiry renewal, replay rejection, and exactly-once completion.");
 
+    const matched = await createBooking(customerAuth);
+    await db.booking.update({ where: { id: matched.id }, data: { riderId: rider.id, status: "MATCHED" } });
+    const matchedDetails = (await request("rider", `/api/bookings/${matched.id}`, riderAuth)).data.booking;
+    assert.equal(matchedDetails.customer.phone, null); assert.equal(matchedDetails.ticket, null);
+    const nativeMatched = await fetch(`http://localhost:3101/api/native/tickets/${matched.ticketId}`, {
+      headers: { authorization: `Bearer ${riderAuth.split("=")[1]}` } });
+    assert.equal(nativeMatched.status, 409);
+    await request("rider", `/api/bookings/${matched.id}`, riderAuth, "PATCH", { status: "ACCEPTED" });
+    const cancellationRace = await Promise.all([
+      request("customer", `/api/bookings/${matched.id}/cancel`, customerAuth, "POST", { reason: "Race check" }, [200, 400, 409]),
+      request("rider", `/api/bookings/${matched.id}`, riderAuth, "PATCH", { status: "PICKED_UP" }, [200, 409]),
+    ]);
+    assert.equal(cancellationRace.filter(r => r.status === 200).length, 1);
+    const finalRace = await db.booking.findUniqueOrThrow({ where: { id: matched.id } });
+    assert(["PICKED_UP", "CANCELLED"].includes(finalRace.status));
+    assert.equal(await db.bookingEvent.count({ where: { bookingId: matched.id, toStatus: { in: ["PICKED_UP", "CANCELLED"] } } }), 1);
+    console.log("PASS: private pending/matched job feeds, customer ownership, assigned-rider contact details and cancellation/pickup race.");
+    if (finalRace.status !== "CANCELLED") await request("admin", `/api/bookings/${matched.id}`, adminAuth, "PATCH", { action: "cancel", reason: "Free the test rider after the pickup race" });
+
     const photoBooking = await createBooking(customerAuth);
     await advance(photoBooking, riderAuth, ["ACCEPTED", "PICKED_UP", "IN_TRANSIT"]);
     const photo = await request("rider", `/api/bookings/${photoBooking.id}/proof`, riderAuth, "POST", { photoDataUrl: "data:image/png;base64,aGVsbG8=" });
@@ -208,7 +222,7 @@ async function main() {
     const ride = await createBooking(customerAuth, "RIDE");
     await advance(ride, riderAuth, ["ACCEPTED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"]);
     const cancelled = await createBooking(customerAuth);
-    await request("customer", `/api/bookings/${cancelled.id}/cancel`, customerAuth, "POST");
+    await request("customer", `/api/bookings/${cancelled.id}/cancel`, customerAuth, "POST", { reason: "Plans changed" });
     assert.equal(await db.bookingEvent.count({ where: { bookingId: cancelled.id, action: "CANCELLED" } }), 1);
     const race = await createBooking(customerAuth);
     await advance(race, riderAuth, ["ACCEPTED", "PICKED_UP", "IN_TRANSIT"]);
@@ -293,4 +307,13 @@ async function main() {
     }
   }
 }
-main().then(() => console.log("PASS: shared database rebuild integration complete; fixtures and test servers cleaned up.")).catch(error => { console.error(error.message); process.exitCode = 1; });
+main().then(() => console.log("PASS: shared database rebuild integration complete; fixtures and test servers cleaned up.")).catch(error => {
+  console.error(error.message);
+  for (const server of servers) {
+    const codes = [...new Set((server.logs || '').match(/\b(?:P\d{4}|INTERNAL|ECONNRESET|ETIMEDOUT)\b/g) || [])];
+    if (codes.length) console.error('Test server diagnostic codes:', codes.join(', '));
+    const errors = (server.logs || '').split(/\r?\n/).filter(line => /(?:Error:|TypeError:|ReferenceError:|SyntaxError:|Digest:)/.test(line));
+    for (const line of errors) console.error(line.replace(/postgres(?:ql)?:\/\/\S+/g, '[database URL redacted]').slice(0, 800));
+  }
+  process.exitCode = 1;
+});

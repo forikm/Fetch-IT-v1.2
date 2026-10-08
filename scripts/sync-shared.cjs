@@ -3,13 +3,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const root = path.resolve(__dirname, "..");
-const commonFiles = ["prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/booking-events.ts", "src/lib/session-secret.ts", "src/lib/request-guard.ts", "src/lib/password-policy.ts"];
-const riderFiles = ["src/lib/delivery-challenge.ts", "src/lib/ticket.ts", "src/hooks/use-visible-poll.ts"];
+const commonFiles = ["prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/booking-events.ts", "src/lib/session-secret.ts", "src/lib/request-guard.ts", "src/lib/password-policy.ts", "src/lib/payment-policy.ts", "src/lib/payments.ts", "src/lib/dispatch.ts"];
+const riderFiles = ["src/lib/delivery-challenge.ts", "src/lib/ticket.ts", "src/hooks/use-visible-poll.ts", "src/components/fetchit/shared/payment-card.tsx"];
 let failed = false;
 for (const app of ["fetch-rider", "fetch-admin"]) {
   const target = path.resolve(root, "..", app);
   if (!fs.existsSync(target)) throw new Error(`Sibling checkout missing: ${app}`);
-  const files = app === "fetch-rider" ? [...commonFiles, ...riderFiles] : commonFiles;
+  const files = app === "fetch-rider" ? [...commonFiles, ...riderFiles] : [...commonFiles, "src/lib/auth-email-code.ts", "src/lib/auth-email-sender.ts"];
   for (const file of files) {
     const source = fs.readFileSync(path.join(root, file));
     const dest = path.join(target, file);

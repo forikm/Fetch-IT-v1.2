@@ -18,7 +18,7 @@ export function bookingAttemptId(customerId: string, key: string | null) {
 type RequestDetails = {
   type?: unknown; pickup?: { label?: unknown; lat?: unknown; lng?: unknown };
   dropoff?: { label?: unknown; lat?: unknown; lng?: unknown }; vehicleClass?: unknown;
-  cargoWeightKg?: unknown; passengers?: unknown; cargoNotes?: unknown; scheduledAt?: unknown;
+  cargoWeightKg?: unknown; passengers?: unknown; cargoNotes?: unknown; scheduledAt?: unknown; paymentMethod?: unknown;
 };
 
 export async function findBookingAttempt(db: PrismaClient, id: string | undefined, body: RequestDetails) {
@@ -27,7 +27,7 @@ export async function findBookingAttempt(db: PrismaClient, id: string | undefine
   if (!booking) return null;
   const type = body.type ?? "DELIVERY";
   const scheduled = body.scheduledAt ? new Date(String(body.scheduledAt)).getTime() : null;
-  if (booking.type !== type || booking.vehicleClass !== body.vehicleClass ||
+  if (booking.type !== type || booking.vehicleClass !== body.vehicleClass || booking.paymentMethod !== (body.paymentMethod ?? "CASH") ||
       booking.pickupLabel !== body.pickup?.label || booking.pickupLat !== body.pickup?.lat || booking.pickupLng !== body.pickup?.lng ||
       booking.dropoffLabel !== body.dropoff?.label || booking.dropoffLat !== body.dropoff?.lat || booking.dropoffLng !== body.dropoff?.lng ||
       booking.cargoWeightKg !== (type === "RIDE" ? 0 : Number(body.cargoWeightKg ?? 1)) ||
