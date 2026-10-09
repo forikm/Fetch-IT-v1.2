@@ -68,7 +68,7 @@
 .root .eta strong { font:800 22px var(--font-geist-sans), sans-serif;letter-spacing:-1px }
 .root .eta small { font:500 10px var(--font-geist-sans), sans-serif;letter-spacing:0 }
 .root .eta>span { font-size:7px;color:#969a90 }
-.root .parcel-card { position:absolute;width:158px;height:169px;left:-8%;top:36px;background:#fffefa;z-index:3;border-radius:22px;box-shadow:0 22px 36px -16px #bd62294d;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:fi-landing-float-parcel 6s ease-in-out infinite;transform:rotate(-8deg) }
+.root .parcel-card { position:absolute;width:158px;height:169px;left:8%;top:-10px;background:#fffefa;z-index:3;border-radius:22px;box-shadow:0 22px 36px -16px #bd62294d;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:fi-landing-float-parcel 6s ease-in-out infinite;transform:rotate(-8deg) }
 .root .parcel-illustration { width:106px;height:110px;position:relative }
 .root .parcel-halo { position:absolute;width:96px;height:96px;border-radius:50%;background:#fff2e2;top:22px }
 .root .parcel-check { position:absolute;right:14px;top:15px;background:#ecf0e2;color:#839567;border:4px solid #fffefa;width:29px;height:29px;display:grid;place-items:center;border-radius:50% }
@@ -114,7 +114,7 @@
 .root .hero-actions { gap:13px }
 .root .primary-button { padding:16px 19px;gap:18px }
 .root .how-button { font-size:9px }
-.root .parcel-card { width:125px;height:138px;left:-6%;top:64px }
+.root .parcel-card { width:125px;height:138px;left:6%;top:20px }
 .root .parcel-illustration { width:90px;height:95px }
 .root .parcel-halo { width:75px;height:75px }
 .root .map-card { top:113px;width:91% }
@@ -152,7 +152,7 @@
 .root .rider-info strong { font-size:8px }
 .root .eta strong { font-size:18px }
 .root .eta>span { font-size:6px }
-.root .parcel-card { left:-4%;top:30px;width:109px;height:119px;border-radius:17px }
+.root .parcel-card { left:4%;top:15px;width:109px;height:119px;border-radius:17px }
 .root .parcel-illustration { width:78px;height:80px }
 .root .parcel-halo { width:65px;height:65px;top:17px }
 .root .parcel-label { font-size:6px }
@@ -196,7 +196,7 @@
 .root .rider-avatar { width:31px;height:31px }
 .root .eta strong { font-size:23px }
 .root .eta>span { font-size:7px }
-.root .parcel-card { width:121px;height:133px;left:-3%;top:7px }
+.root .parcel-card { width:121px;height:133px;left:3%;top:7px }
 .root .parcel-illustration { width:86px;height:90px }
 .root .parcel-label { font-size:7px }
 .root .parcel-halo { width:80px;height:80px }
@@ -275,7 +275,7 @@
 }
 .root .mascot img { display: block; width: 100%; height: auto; }
 .root .map-card { top: 150px; }
-.root .availability { left: 18%; right: auto; top: 8px; }
+.root .availability { left: 18%; right: auto; top: -40px; }
 @keyframes fi-landing-mascot-float {
   0%, 100% { transform: translateY(0) rotate(3deg); }
   50% { transform: translateY(-9px) rotate(-1deg); }
