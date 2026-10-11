@@ -78,7 +78,7 @@ export function ModeSelect() {
             features={[
               { icon: MapPin, text: "Motor, tricycle or car" },
               { icon: Calculator, text: "Upfront fare by weight & distance" },
-              { icon: ShieldCheck, text: "OTP, signature & photo e-POD" },
+              { icon: ShieldCheck, text: "Signature & photo e-POD" },
             ]}
             cta="Start a delivery"
             onClick={() => chooseMode("delivery")}
@@ -92,6 +92,7 @@ export function ModeSelect() {
               { icon: Bike, text: "Motor, tricycle or car" },
               { icon: Users, text: "Up to 4 passengers, fare per trip" },
               { icon: Navigation, text: "Live map & driver ETA" },
+              { icon: ShieldCheck, text: "Pickup OTP before boarding" },
             ]}
             cta="Book a ride"
             onClick={() => chooseMode("ride")}

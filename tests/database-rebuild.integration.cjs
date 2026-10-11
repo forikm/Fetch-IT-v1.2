@@ -108,6 +108,25 @@ async function main() {
     assert.notEqual(identity.providerUserId, firebase.id); assert.equal(identity.passwordHash, null);
     const customerAuth = await login("customer", customer), otherAuth = await login("customer", other);
     const riderAuth = await login("rider", rider), secondAuth = await login("rider", second), adminAuth = await login("admin", admin);
+    if (process.env.RUN_RIDE_OTP_BROWSER === "1") {
+      const ride = await createBooking(customerAuth, "RIDE");
+      await advance(ride, riderAuth, ["ACCEPTED"]);
+      console.log("BROWSER_FIXTURE " + JSON.stringify({ customerEmail: customer.email, riderEmail: rider.email, password, bookingId: ride.id, refCode: ride.refCode }));
+      const releaseFile = path.join(require("node:os").tmpdir(), `${schema}.release`);
+      console.log("Isolated ride ready on customer :3100 and rider :3101. Create this release file after browser verification: " + releaseFile);
+      await new Promise(resolve => {
+        const timer = setInterval(() => {
+          if (fs.existsSync(releaseFile)) { clearInterval(timer); resolve(); }
+        }, 250);
+      });
+      fs.unlinkSync(releaseFile);
+      const updated = await db.booking.findUniqueOrThrow({ where: { id: ride.id } });
+      assert(["PICKED_UP", "IN_TRANSIT", "DELIVERED"].includes(updated.status));
+      assert((await db.deliveryChallenge.findUniqueOrThrow({ where: { bookingId: ride.id } })).verifiedAt);
+      assert.equal(await db.bookingEvent.count({ where: { bookingId: ride.id, toStatus: "PICKED_UP" } }), 1);
+      console.log("PASS: browser OTP reveal, driver verification and atomic boarding reached the shared database.");
+      return;
+    }
     if (process.env.RUN_ADMIN_PAGE_INTEGRATION === "1") {
       const sample = await createBooking(customerAuth);
       const completed = await createBooking(customerAuth, "RIDE");
@@ -174,23 +193,17 @@ async function main() {
     console.log("PASS: every GPS update refreshes the live map while historical points are sampled.");
 
     await request("customer", `/api/bookings/${booking.id}/otp`, otherAuth, "GET", undefined, 404);
-    const code = (await request("customer", `/api/bookings/${booking.id}/otp`, customerAuth)).data.otp;
-    assert.equal((await request("customer", `/api/bookings/${booking.id}/otp`, customerAuth)).data.otp, code);
+    await request("customer", `/api/bookings/${booking.id}/otp`, customerAuth, "GET", undefined, 409);
     assert.equal(await db.deliveryProof.count({ where: { bookingId: booking.id } }), 0);
-    await request("rider", `/api/bookings/${booking.id}/proof`, unrelatedAuth, "POST", { otp: code }, 403);
+    await request("rider", `/api/bookings/${booking.id}/proof`, ownerAuth, "POST", { otp: "123456" }, 400);
+    await request("rider", `/api/bookings/${booking.id}/proof`, unrelatedAuth, "POST", { signatureSvg: "<svg/>" }, 403);
     await request("rider", `/api/bookings/${booking.id}`, ownerAuth, "PATCH", { status: "DELIVERED" }, 409);
-    const wrong = code === "000000" ? "000001" : "000000";
-    for (let i = 0; i < 5; i++) await request("rider", `/api/bookings/${booking.id}/proof`, ownerAuth, "POST", { otp: wrong }, 400);
-    await request("rider", `/api/bookings/${booking.id}/proof`, ownerAuth, "POST", { otp: code }, 429);
-    assert.equal((await db.deliveryChallenge.findUnique({ where: { bookingId: booking.id } })).attempts, 5);
-    await db.deliveryChallenge.update({ where: { bookingId: booking.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
-    const freshCode = (await request("customer", `/api/bookings/${booking.id}/otp`, customerAuth)).data.otp;
-    const completed = await Promise.all([request("rider", `/api/bookings/${booking.id}/proof`, ownerAuth, "POST", { otp: freshCode }, [200, 409]), request("rider", `/api/bookings/${booking.id}/proof`, ownerAuth, "POST", { otp: freshCode }, [200, 409])]);
+    const completed = await Promise.all([request("rider", `/api/bookings/${booking.id}/proof`, ownerAuth, "POST", { signatureSvg: "<svg/>" }, [200, 409]), request("rider", `/api/bookings/${booking.id}/proof`, ownerAuth, "POST", { signatureSvg: "<svg/>" }, [200, 409])]);
     assert.deepEqual(completed.map(c => c.status).sort(), [200, 409]);
     assert.equal((await db.riderProfile.findUnique({ where: { userId: owner.riderId } })).totalDeliveries, 1);
-    assert.equal(await db.deliveryProof.count({ where: { bookingId: booking.id, proofType: "OTP" } }), 1);
+    assert.equal(await db.deliveryProof.count({ where: { bookingId: booking.id, proofType: "SIGNATURE" } }), 1);
     assert.equal(await db.bookingEvent.count({ where: { bookingId: booking.id, toStatus: "DELIVERED" } }), 1);
-    console.log("PASS: delivery-code ownership, attempt lockout, expiry renewal, replay rejection, and exactly-once completion.");
+    console.log("PASS: deliveries reject OTP and complete exactly once with a recipient signature.");
 
     const matched = await createBooking(customerAuth);
     await db.booking.update({ where: { id: matched.id }, data: { riderId: rider.id, status: "MATCHED" } });
@@ -220,7 +233,50 @@ async function main() {
     const signature = (await request("customer", `/api/bookings/${photoBooking.id}`, customerAuth)).data.booking.deliveryProofs.find(p => p.proofType === "SIGNATURE");
     assert(signature.verifiedAt); assert(!("otpCode" in signature));
     const ride = await createBooking(customerAuth, "RIDE");
-    await advance(ride, riderAuth, ["ACCEPTED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"]);
+    await request("customer", `/api/bookings/${ride.id}/otp`, otherAuth, "GET", undefined, 404);
+    await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth, "GET", undefined, 409);
+    await advance(ride, riderAuth, ["ACCEPTED"]);
+    const codeResponse = await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth);
+    assert.equal(codeResponse.headers.get("cache-control"), "private, no-store");
+    const code = codeResponse.data.otp;
+    assert.match(code, /^\d{6}$/);
+    assert.equal((await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth)).data.otp, code);
+    const codeRow = await db.deliveryChallenge.findUniqueOrThrow({ where: { bookingId: ride.id } });
+    assert(Math.abs(codeRow.expiresAt - codeRow.createdAt - 15 * 60000) < 1000);
+    for (const app of ["customer", "rider"]) {
+      const details = await request(app, `/api/bookings/${ride.id}`, app === "customer" ? customerAuth : riderAuth);
+      for (const secret of [code, codeRow.codeHash, codeRow.codeCiphertext]) assert(!JSON.stringify(details.data).includes(secret));
+    }
+    await request("rider", `/api/bookings/${ride.id}`, secondAuth, "PATCH", { status: "PICKED_UP", otp: code }, 403);
+    await request("rider", `/api/bookings/${ride.id}`, riderAuth, "PATCH", { status: "PICKED_UP" }, 400);
+    await request("rider", `/api/bookings/${ride.id}`, riderAuth, "PATCH", { status: "PICKED_UP", otp: "bad" }, 400);
+    await request("rider", `/api/bookings/${ride.id}`, riderAuth, "PATCH", { status: "IN_TRANSIT" }, 409);
+    const wrong = code === "000000" ? "000001" : "000000";
+    for (let i = 0; i < 5; i++) await request("rider", `/api/bookings/${ride.id}`, riderAuth, "PATCH", { status: "PICKED_UP", otp: wrong }, 400);
+    await request("rider", `/api/bookings/${ride.id}`, riderAuth, "PATCH", { status: "PICKED_UP", otp: code }, 429);
+    await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth, "GET", undefined, 429);
+    assert.equal((await db.deliveryChallenge.findUniqueOrThrow({ where: { bookingId: ride.id } })).attempts, 5);
+    assert.equal((await db.booking.findUniqueOrThrow({ where: { id: ride.id } })).status, "ACCEPTED");
+    assert.equal((await db.booking.findUniqueOrThrow({ where: { id: ride.id } })).pickedUpAt, null);
+    await db.deliveryChallenge.update({ where: { bookingId: ride.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await request("rider", `/api/bookings/${ride.id}`, riderAuth, "PATCH", { status: "PICKED_UP", otp: code }, 400);
+    await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth);
+    await request("admin", `/api/bookings/${ride.id}/assign`, adminAuth, "POST", { riderId: second.id, reason: "Test pickup OTP invalidation on reassignment" });
+    assert.equal(await db.deliveryChallenge.count({ where: { bookingId: ride.id } }), 0);
+    await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth, "GET", undefined, 409);
+    await request("rider", `/api/bookings/${ride.id}`, riderAuth, "PATCH", { status: "PICKED_UP", otp: code }, 403);
+    await advance(ride, secondAuth, ["ACCEPTED"]);
+    await request("rider", `/api/bookings/${ride.id}`, secondAuth, "PATCH", { status: "PICKED_UP", otp: code }, 400);
+    const freshCode = (await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth)).data.otp;
+    const boarded = await Promise.all([request("rider", `/api/bookings/${ride.id}`, secondAuth, "PATCH", { status: "PICKED_UP", otp: freshCode }, [200, 409]), request("rider", `/api/bookings/${ride.id}`, secondAuth, "PATCH", { status: "PICKED_UP", otp: freshCode }, [200, 409])]);
+    assert.deepEqual(boarded.map(c => c.status).sort(), [200, 409]);
+    assert((await db.deliveryChallenge.findUniqueOrThrow({ where: { bookingId: ride.id } })).verifiedAt);
+    assert.equal(await db.deliveryProof.count({ where: { bookingId: ride.id } }), 0);
+    assert.equal(await db.bookingEvent.count({ where: { bookingId: ride.id, toStatus: "PICKED_UP" } }), 1);
+    await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth, "GET", undefined, 409);
+    await request("rider", `/api/bookings/${ride.id}`, secondAuth, "PATCH", { status: "PICKED_UP", otp: freshCode }, 409);
+    await advance(ride, secondAuth, ["IN_TRANSIT", "DELIVERED"]);
+    console.log("PASS: ride OTP ownership, no boarding bypass, attempt lockout, expiry renewal, reassignment invalidation, replay rejection and atomic boarding.");
     const cancelled = await createBooking(customerAuth);
     await request("customer", `/api/bookings/${cancelled.id}/cancel`, customerAuth, "POST", { reason: "Plans changed" });
     assert.equal(await db.bookingEvent.count({ where: { bookingId: cancelled.id, action: "CANCELLED" } }), 1);

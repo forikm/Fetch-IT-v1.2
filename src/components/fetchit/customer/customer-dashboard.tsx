@@ -1276,15 +1276,6 @@ function TrackingView({
   const [riderLng, setRiderLng] = useState<number | null>(booking.trackingUpdates?.[0]?.lng ?? null);
   const [lastGpsAt, setLastGpsAt] = useState<string | null>(booking.trackingUpdates?.[0]?.createdAt ?? null);
   const [eta, setEta] = useState<number | null>(booking.etaMinutes);
-  const [otp, setOtp] = useState<string | null>(null);
-  const [loadingOtp, setLoadingOtp] = useState(false);
-  const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null);
-  const [otpError, setOtpError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!otpExpiresAt) return;
-    const timer = setTimeout(() => { setOtp(null); setOtpExpiresAt(null); setOtpError("This code expired. Reveal a new code when the rider arrives."); }, Math.max(0, Date.parse(otpExpiresAt) - Date.now()));
-    return () => clearTimeout(timer);
-  }, [otpExpiresAt]);
 
   const pickup = { lat: booking.pickupLat, lng: booking.pickupLng };
   const dropoff = { lat: booking.dropoffLat, lng: booking.dropoffLng };
@@ -1328,23 +1319,6 @@ function TrackingView({
     onUpdated(updated);
   });
 
-  async function loadOtp() {
-    setLoadingOtp(true);
-    setOtpError(null);
-    try {
-      const res = await fetch(`/api/bookings/${booking.id}/otp`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not retrieve the delivery code.");
-      setOtp(data.otp);
-      setOtpExpiresAt(data.expiresAt);
-    } catch (error) { setOtpError(error instanceof Error ? error.message : "Please retry."); }
-    finally {
-      setLoadingOtp(false);
-    }
-  }
-
-  // Show OTP button when status is ACCEPTED / IN_TRANSIT
-  const showOtp = ["ACCEPTED", "PICKED_UP", "IN_TRANSIT"].includes(status);
   const isDelivered = status === "DELIVERED";
   const proofs = booking.deliveryProofs ?? [];
   const sigProof = proofs.find((p) => p.proofType === "SIGNATURE");
@@ -1428,32 +1402,6 @@ function TrackingView({
         </div>
       </div>
 
-      {/* OTP for handover */}
-      {showOtp && (
-        <Card className="border-2 border-primary/30 bg-primary/5">
-          <CardContent className="py-4 space-y-3">
-            <div className="flex items-center gap-2 font-medium">
-              <KeyRound className="h-4 w-4 text-primary" /> Delivery hand-off code
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Share this 6-digit code with your rider at hand-off. A recipient signature can also confirm delivery.
-            </p>
-            {otpError && <p role="alert" className="text-sm text-destructive">{otpError}</p>}
-            {otpExpiresAt && <p className="text-xs text-muted-foreground">Valid until {new Date(otpExpiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.</p>}
-            {otp ? (
-              <div className="font-mono text-2xl sm:text-3xl tracking-[0.15em] sm:tracking-[0.3em] text-center py-3 bg-card rounded-lg border">
-                {otp}
-              </div>
-            ) : (
-              <Button variant="outline" onClick={loadOtp} disabled={loadingOtp}>
-                {loadingOtp ? <FetchItLoader className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
-                Reveal OTP
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Proof of delivery */}
       {isDelivered && (
         <Card className="border-emerald-300 bg-emerald-50/40">
@@ -1467,11 +1415,7 @@ function TrackingView({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-2 text-sm">
-              <ProofChip
-                ok={!!otpProof}
-                label="OTP"
-                icon={<KeyRound className="h-4 w-4" />}
-              />
+              {otpProof && <ProofChip ok label="Previous OTP proof" icon={<KeyRound className="h-4 w-4" />} />}
               <ProofChip
                 ok={!!sigProof}
                 label="Signature"

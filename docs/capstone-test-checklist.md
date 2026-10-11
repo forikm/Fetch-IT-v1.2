@@ -16,7 +16,8 @@ Use one customer account, one online rider with the matching vehicle class, and 
 - Offline rider: the available job count and job board should be empty; accepting a job by API must fail.
 - Online rider: only due jobs for the rider's vehicle class appear. Claim a job from two accounts at once; only one may succeed.
 - Advance accepted → picked up → in transit → delivered. Try skipping a step, repeating a step, and completing a cancelled job; all must fail.
-- For a delivery, submit a valid OTP or signature while in transit. Verify the booking completes once and the rider's completed count increases once, even after a repeated request. An invalid OTP must fail.
+- For a ride, reveal the customer's OTP after acceptance. The assigned driver must verify it before boarding. Missing/incorrect/expired codes, five-attempt lockout, reuse, and another rider's requests must fail. Reassignment invalidates the previous code.
+- For a delivery, submit a recipient signature while in transit. Verify completion and the rider's completed count happen once. A photo alone must not complete delivery; delivery OTP requests must fail.
 - Confirm rider fare labels refer to recorded fares, not wallet payouts.
 
 ## Admin and access

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bike, Car, CircleDot, Navigation, Phone, Calculator } from "lucide-react";
+import { Bike, Car, CircleDot, Navigation, Phone, Calculator, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { VEHICLES, statusLabel, type BookingStatus, type VehicleClass } from "@/
 import { cn } from "@/lib/utils";
 import type { Booking } from "./customer-dashboard";
 import { BookingActions } from "../shared/booking-actions";
+import { RidePickupOtp } from "./ride-pickup-otp";
 
 const RIDE_ICONS: Partial<Record<VehicleClass, React.ReactNode>> = {
   MOTORCYCLE: <Bike className="h-5 w-5" />,
@@ -111,6 +112,9 @@ export function RideTrackingView({
           </CardContent>
         </Card>
       )}
+
+      {status === "ACCEPTED" && ride.rider && <RidePickupOtp key={ride.id} bookingId={ride.id} />}
+      {["PICKED_UP", "IN_TRANSIT", "DELIVERED"].includes(status) && <p className="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="h-4 w-4" /> Passenger pickup completed</p>}
 
       {/* Status timeline */}
       <BookingActions booking={{ ...ride, status }} />

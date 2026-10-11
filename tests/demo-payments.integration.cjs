@@ -229,7 +229,12 @@ async function main() {
     await assignRider(db, first.id, actor(admin), 'Demo reassignment', riders[1].id);
     assert.equal((await get(first.id)).paymentStatus, 'PAID');
     signIn(riders[1]);
-    for (const next of ['ACCEPTED', 'PICKED_UP', 'IN_TRANSIT']) await request(status, { status: next }, 200, first.id, 'PATCH');
+    await request(status, { status: 'ACCEPTED' }, 200, first.id, 'PATCH');
+    signIn(customer);
+    const pickupOtp = await request(load('src/app/api/bookings/[id]/otp/route.ts').GET, null, 200, first.id, 'GET');
+    signIn(riders[1]);
+    await request(status, { status: 'PICKED_UP', otp: pickupOtp.otp }, 200, first.id, 'PATCH');
+    await request(status, { status: 'IN_TRANSIT' }, 200, first.id, 'PATCH');
     const finish = () => status(new NextRequest('https://fixture.invalid/api/test', { method: 'PATCH', headers: { 'content-type': 'application/json', origin: 'https://fixture.invalid' }, body: JSON.stringify({ status: 'DELIVERED' }) }), { params: Promise.resolve({ id: first.id }) });
     const outcomes = await Promise.all([finish(), finish()]);
     assert.deepEqual(outcomes.map(response => response.status).sort(), [200, 409], 'One completion wins and the other is rejected');

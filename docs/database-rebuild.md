@@ -24,11 +24,19 @@ shared helper copies remain checked in to the other apps for independent builds.
 - `BookingLocation`: latest native location for one booking, updated on every
   location publication. The live map uses this instead of sampled history.
 - `TrackingUpdate`: at most one saved native point per booking per 30 seconds.
-- `DeliveryChallenge`: booking-bound encrypted code plus keyed hash, 15-minute
-  expiry, five-attempt limit, and verification timestamp. Failed attempts commit;
-  verification, proof, completion, counter, and event save atomically.
-- `DeliveryProof`: OTP verification evidence, signature, or photo. No codes are
-  exposed through the booking/proof API. A photo alone does not complete a job.
+- `DeliveryChallenge`: legacy table name now used for ride pickup OTP. The code
+  is booking-bound and encrypted, with a keyed hash, 15-minute expiry, five-attempt
+  limit, and verification timestamp. Failed attempts commit. Verification,
+  boarding, and the status event save atomically; reassignment removes the code.
+- `DeliveryProof`: recipient signature or supporting photo. Existing historical
+  OTP proof records remain readable. A signature completes delivery; a photo
+  alone does not. Current delivery endpoints reject OTP.
+
+Ride customers reveal their OTP through `GET /api/bookings/[id]/otp` only while
+the ride is accepted. Drivers send `{ status: "PICKED_UP", otp: "123456" }` to
+`PATCH /api/bookings/[id]`; the code is verified under the booking row lock.
+The existing shared `DELIVERY_CODE_SECRET` (or `SESSION_SECRET`) remains in use,
+so this change needs no database migration or new environment variable.
 - `CustomerReview`: one review per completed booking, rating constrained to 1–5,
   and owner/rider checked against that booking.
 - `SupportTicket`, `SupportMessage`, `AdminAudit`, `TicketCounter`: retained.

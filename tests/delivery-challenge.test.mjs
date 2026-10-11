@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createChallenge, readChallenge, matchesChallenge, CHALLENGE_TTL_MS } from "../src/lib/delivery-challenge.ts";
 process.env.DELIVERY_CODE_SECRET = "unit-test-only-secret";
 
-test("delivery codes round-trip encrypted, expire after 15 minutes, and are bound to their booking", () => {
+test("ride pickup codes round-trip encrypted, expire after 15 minutes, and are bound to their booking", () => {
   const now = new Date("2026-10-04T00:00:00Z");
   const challenge = createChallenge("booking-a", now);
   const code = readChallenge("booking-a", challenge.codeCiphertext);

@@ -12,8 +12,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${id} FOR UPDATE`;
       const booking = await tx.booking.findFirst({ where: { id, customerId: session.uid } });
       if (!booking) throw new CustomerError("Booking not found.", 404);
-      if (booking.type !== "DELIVERY" || ["DELIVERED", "CANCELLED"].includes(booking.status))
-        throw new CustomerError("Delivery codes are only available for active deliveries.", 409);
+      if (booking.type !== "RIDE" || booking.status !== "ACCEPTED" || !booking.riderId)
+        throw new CustomerError("Pickup codes are only available for accepted rides before boarding.", 409);
       const now = new Date();
       let challenge = await tx.deliveryChallenge.findUnique({ where: { bookingId: id } });
       if (challenge?.verifiedAt) throw new CustomerError("This code has already been used.", 409);

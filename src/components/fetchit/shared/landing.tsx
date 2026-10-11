@@ -14,7 +14,7 @@ import { LandingHero } from "./landing-hero";
 const FEATURES = [
   { icon: MapPin, title: "Every stop, in sight.", desc: "Follow your booking from pickup to arrival with route maps and tracking updates." },
   { icon: Clock, title: "Now, or right on time.", desc: "Book a delivery right away or schedule a pickup for when you need it." },
-  { icon: ShieldCheck, title: "A little extra assurance.", desc: "Confirm deliveries with a signature, photo or secure one-time code." },
+  { icon: ShieldCheck, title: "A little extra assurance.", desc: "Verify ride pickups with an OTP and confirm deliveries with a recipient signature and supporting photos." },
 ];
 
 export function LandingView() {

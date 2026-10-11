@@ -7,8 +7,8 @@ Next.js 16 · App Router · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma 
 
 - **Landing page** — public storefront for both products.
 - **Mode selector** — after logging in, the customer picks **Delivery** or **Ride**; the chosen experience opens (return to the selector with the Back button below the header).
-- **Delivery dashboard** — 3-step cargo booking wizard (pickup → drop-off → details), Motor, Tricycle and Car vehicle choices, weight-based dynamic fares with surge, live tracking with OTP / signature / photo e-POD.
-- **Ride dashboard** — the same 3-step booking wizard and dashboard as delivery, with passenger counts, ride fares and driver tracking.
+- **Delivery dashboard** — 4-step booking wizard (pickup → drop-off → details → review & pay), Motor, Tricycle and Car vehicle choices, weight-based fares, live tracking, and signature / photo e-POD.
+- **Ride dashboard** — the same booking wizard with passenger counts, ride fares, driver tracking, and a customer pickup OTP that the assigned driver must verify before boarding.
 - **Offline PWA** — reopen the previously loaded app, view saved active bookings/history with the last-update time, and edit persistent ride/delivery drafts using saved places. Cached customer views last up to seven days; sign-out clears that account’s local data. Reconnecting refreshes the account and bookings. Address search/maps, fare quotes, booking confirmation, tracking, receipts and support conversations require a connection; drafts are never sent automatically.
 - Firebase email/password sign-up with email verification for new customers. Existing accounts and the demo account retain their legacy sign-in.
 - Customer sign-up requires a valid Philippine phone number. Local numbers such as `09171234567` are stored as `+639171234567`; profile edits use the same validation. Email/password sign-in does not ask existing accounts to re-enter their phone.
@@ -90,4 +90,4 @@ Seeded automatically by the landing page (idempotent):
 
 ## Database rebuild
 
-The canonical schema and versioned migrations live in fetch-customer. See [docs/database-rebuild.md](docs/database-rebuild.md) for account identities, rider records, delivery codes, GPS retention, and coordinated deployment. Set the same DELIVERY_CODE_SECRET in customer and rider environments. Configure CRON_SECRET in the rider deployment for daily tracking cleanup. External image storage is deferred.
+The canonical schema and versioned migrations live in fetch-customer. See [docs/database-rebuild.md](docs/database-rebuild.md) for account identities, rider records, ride pickup codes, GPS retention, and coordinated deployment. Set the same DELIVERY_CODE_SECRET (legacy variable name) in customer and rider environments, or use their shared SESSION_SECRET. Configure CRON_SECRET in the rider deployment for daily tracking cleanup. External image storage is deferred.
