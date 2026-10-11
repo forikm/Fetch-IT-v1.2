@@ -29,7 +29,7 @@ function load(file) {
   cached.set(absolute, exports);
   const owner = absolute.includes('fetch-admin') ? path.resolve(root, '../fetch-admin') : absolute.includes('fetch-rider') ? path.resolve(root, '../fetch-rider') : root;
   const compiled = ts.transpileModule(fs.readFileSync(absolute, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(compiled, { exports, Buffer, process, console: { info() {}, error() {} }, Date, URL,
+  vm.runInNewContext(compiled, { exports, Buffer, process, console: { info() {}, error(...args) { if (args[0] === '[bookings POST] error') console.error(...args); } }, Date, URL,
     require(name) {
       if (name === './db' || name === '@/lib/db') return { db };
       if ((name === './session' || name === '@/lib/session') && owner !== path.resolve(root, '../fetch-admin')) return { getSession: async () => session };
@@ -73,7 +73,8 @@ async function main() {
     for (let i = 0; i < 2; i++) riders.push(await db.user.create({ data: { name: `Rider ${i}`, email: `rider${i}@fixture.invalid`, role: 'RIDER', riderProfile: { create: { vehicleClass: 'MOTORCYCLE' } }, riderPresence: { create: { isOnline: true } } } }));
     const signIn = user => { session = { ...actor(user), email: user.email }; };
     const start = load('src/app/api/bookings/[id]/demo-checkout/route.ts').POST;
-    const resolve = load('src/app/api/demo-checkouts/[id]/route.ts').POST;
+    const resolve = load('src/app/api/checkouts/[id]/route.ts').POST;
+    const retryCheckout = load('src/app/api/checkouts/[id]/retry/route.ts').POST;
     const create = load('src/app/api/bookings/route.ts').POST;
     const cancel = load('src/app/api/bookings/[id]/cancel/route.ts').POST;
     const status = load('../fetch-rider/src/app/api/bookings/[id]/route.ts').PATCH;
@@ -89,12 +90,83 @@ async function main() {
     for (const paymentMethod of ['DEMO_GCASH', 'DEMO_MAYA', 'DEMO_BANK', 'CASH']) {
       const key = crypto.randomUUID();
       const data = await request(create, { ...base, paymentMethod }, 200, undefined, 'POST', { 'Idempotency-Key': key });
-      assert.equal(data.booking.paymentMethod, paymentMethod);
-      assert.equal(data.booking.demoCommissionBps, paymentMethod === 'CASH' ? null : 1500);
-      const retry = await request(create, { ...base, paymentMethod }, 200, undefined, 'POST', { 'Idempotency-Key': key });
-      assert.equal(retry.booking.id, data.booking.id);
-      created.push(data.booking);
+      if (paymentMethod === 'CASH') {
+        assert.equal(data.booking.paymentMethod, 'CASH');
+        assert.equal(data.booking.demoCommissionBps, null);
+        const retry = await request(create, { ...base, paymentMethod }, 200, undefined, 'POST', { 'Idempotency-Key': key });
+        assert.equal(retry.booking.id, data.booking.id);
+        created.push(data.booking);
+        continue;
+      }
+      assert(!data.booking, 'Online requests must not create bookings before payment');
+      const checkoutId = data.checkoutUrl.split('/').at(-1);
+      const attempt = await db.demoCheckout.findUniqueOrThrow({ where: { id: checkoutId }, include: { draft: true } });
+      assert.equal(attempt.bookingId, null);
+      assert.equal(await db.booking.count({ where: { id: attempt.draftId } }), 0);
+      assert.equal(attempt.draft.bookingData.demoCommissionBps, 1500);
+      assert.equal(attempt.draft.bookingData.paymentMethod, paymentMethod);
+      const retry = await request(create, { paymentMethod, ...base }, 200, undefined, 'POST', { 'Idempotency-Key': key });
+      assert.equal(retry.checkoutUrl, data.checkoutUrl, 'Same key resumes the same checkout');
+      await request(create, { ...base, paymentMethod, pickup: { ...base.pickup, label: 'Changed pickup' } }, 409, undefined, 'POST', { 'Idempotency-Key': key });
+      signIn(other); await request(resolve, { outcome: 'SUCCEEDED' }, 404, checkoutId);
+      await request(retryCheckout, {}, 404, checkoutId);
+      signIn(customer);
+      const [paid, duplicate] = await Promise.all([request(resolve, { outcome: 'SUCCEEDED', amount: 1 }, 200, checkoutId), request(resolve, { outcome: 'SUCCEEDED' }, 200, checkoutId)]);
+      assert.equal(paid.bookingId, duplicate.bookingId);
+      const paidBooking = await get(paid.bookingId);
+      assert.equal(paidBooking.paymentStatus, 'PAID');
+      assert.equal(paidBooking.customerPaidAmount.toString(), String(attempt.draft.bookingData.totalFare));
+      assert.equal(await db.paymentEvent.count({ where: { bookingId: paid.bookingId } }), 1);
+      assert.equal(await db.bookingEvent.count({ where: { bookingId: paid.bookingId, action: 'CREATED' } }), 1);
+      assert(paidBooking.ticketId);
+      const confirmed = await request(create, { ...base, paymentMethod }, 200, undefined, 'POST', { 'Idempotency-Key': key });
+      assert.equal(confirmed.booking.id, paid.bookingId);
+      await request(resolve, { outcome: 'FAILED' }, 409, checkoutId);
+      await request(retryCheckout, {}, 409, checkoutId);
+      // Older unpaid bookings keep their resumable payment flow.
+      const saved = attempt.draft.bookingData;
+      const legacy = await db.booking.create({ data: { ...saved, id: `legacy_${paymentMethod}`, refCode: `LEGACY-${paymentMethod}`, scheduledAt: null } });
+      created.push({ ...legacy, totalFare: Number(legacy.totalFare) });
     }
+    // Failed/cancelled/expired checkouts have no booking, ticket, or earnings.
+    const onlineBody = { ...base, paymentMethod: 'DEMO_BANK' };
+    const onlineKey = crypto.randomUUID();
+    const ticketCount = await db.ticketCounter.findMany();
+    const [draftA, draftB] = await Promise.all([request(create, onlineBody, 200, undefined, 'POST', { 'Idempotency-Key': onlineKey }), request(create, onlineBody, 200, undefined, 'POST', { 'Idempotency-Key': onlineKey })]);
+    assert.equal(draftA.checkoutUrl, draftB.checkoutUrl, 'Concurrent creation shares one pending checkout');
+    let onlineId = draftA.checkoutUrl.split('/').at(-1);
+    const draftId = (await db.demoCheckout.findUniqueOrThrow({ where: { id: onlineId } })).draftId;
+    assert.deepEqual(await db.ticketCounter.findMany(), ticketCount, 'Unpaid drafts do not allocate tracking tickets');
+    await request(resolve, { outcome: 'FAILED' }, 200, onlineId);
+    assert.equal(await db.booking.count({ where: { id: draftId } }), 0);
+    // A failed booking insert rolls back settlement and the ticket counter too.
+    const deliveryRequest = await request(create, { ...onlineBody, type: 'DELIVERY', cargoWeightKg: 2 }, 200, undefined, 'POST', { 'Idempotency-Key': crypto.randomUUID() });
+    const deliveryCheckoutId = deliveryRequest.checkoutUrl.split('/').at(-1);
+    const deliveryAttempt = await db.demoCheckout.findUniqueOrThrow({ where: { id: deliveryCheckoutId }, include: { draft: true } });
+    const originalData = deliveryAttempt.draft.bookingData;
+    const brokenData = JSON.parse(JSON.stringify(originalData));
+    brokenData.events.create.actorId = 'missing-fixture-user';
+    await db.checkoutDraft.update({ where: { id: deliveryAttempt.draftId }, data: { bookingData: brokenData } });
+    await request(resolve, { outcome: 'SUCCEEDED' }, 503, deliveryCheckoutId);
+    assert.equal(await db.booking.count({ where: { id: deliveryAttempt.draftId } }), 0);
+    assert.equal((await db.demoCheckout.findUniqueOrThrow({ where: { id: deliveryCheckoutId } })).status, 'PENDING');
+    assert.deepEqual(await db.ticketCounter.findMany(), ticketCount);
+    await db.checkoutDraft.update({ where: { id: deliveryAttempt.draftId }, data: { bookingData: originalData } });
+    const deliveryPaid = await request(resolve, { outcome: 'SUCCEEDED' }, 200, deliveryCheckoutId);
+    assert.equal((await get(deliveryPaid.bookingId)).type, 'DELIVERY');
+    assert.equal((await get(deliveryPaid.bookingId)).paymentStatus, 'PAID');
+    const newAttempt = await request(retryCheckout, {}, 200, onlineId);
+    onlineId = newAttempt.checkoutUrl.split('/').at(-1);
+    await request(resolve, { outcome: 'CANCELLED' }, 200, onlineId);
+    assert.equal(await db.booking.count({ where: { id: draftId } }), 0);
+    const restarted = await request(create, onlineBody, 200, undefined, 'POST', { 'Idempotency-Key': onlineKey });
+    onlineId = restarted.checkoutUrl.split('/').at(-1);
+    await db.checkoutDraft.update({ where: { id: draftId }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await request(resolve, { outcome: 'SUCCEEDED' }, 409, onlineId);
+    await request(retryCheckout, {}, 409, onlineId);
+    await request(create, onlineBody, 409, undefined, 'POST', { 'Idempotency-Key': onlineKey });
+    assert.equal(await db.booking.count({ where: { id: draftId } }), 0);
+    await request(create, { ...base, pickup: { ...base.pickup, lat: 'bad' }, paymentMethod: 'DEMO_BANK' }, 400);
     await request(create, { ...base, paymentMethod: 'GCASH' }, 400);
     assert.equal(demoCommissionBps(), 1500);
     process.env.DEMO_COMMISSION_PERCENT = '12.34'; assert.equal(demoCommissionBps(), 1234);
@@ -107,7 +179,7 @@ async function main() {
     assert(beforeFeed.jobs.some(job => job.id === created[3].id));
     assert(!beforeFeed.jobs.some(job => job.id === first.id), 'Unpaid demo jobs must be hidden');
     signIn(customer);
-    await assert.rejects(assignRider(db, first.id, actor(admin), 'Before payment', riders[0].id), /checkout/);
+    await assert.rejects(assignRider(db, first.id, actor(admin), 'Before payment', riders[0].id), /payment/);
     await assert.rejects(startDemoCheckout(db, first.id, actor(other)), /not found/);
     await assert.rejects(startDemoCheckout(db, first.id, actor(riders[0])), /not found/);
     const [a, b] = await Promise.all([request(start, {}, 200, first.id), request(start, {}, 200, first.id)]);
@@ -126,7 +198,7 @@ async function main() {
     await request(resolve, { outcome: 'FAILED' }, 409, checkoutId);
     await request(start, {}, 409, first.id);
     await assert.rejects(confirmCashPayment(db, first.id, actor(customer), first.totalFare), /Cash/);
-    await assert.rejects(reviewPayment(db, first.id, actor(admin), { status: 'PAID', reason: 'Forged confirmation' }), /checkout/);
+    await assert.rejects(reviewPayment(db, first.id, actor(admin), { status: 'PAID', reason: 'Forged confirmation' }), /payment/);
     await assert.rejects(recordDemoPayout(db, first.id, actor(admin), { reference: 'early', reason: 'Early' }), /completed/);
     // Funds belong to the booking, so pre-pickup reassignment keeps the payment.
     await assignRider(db, first.id, actor(admin), 'Paid demo assignment', riders[0].id);
@@ -197,11 +269,11 @@ async function main() {
     assert.equal(stats.demoPaidOut, split.riderEarnings); assert.equal(stats.demoAwaitingPayout, 0);
     signIn(customer);
     const receiptResponse = await load('src/app/api/bookings/[id]/receipt/route.ts').GET(new NextRequest('https://fixture.invalid'), { params: Promise.resolve({ id: first.id }) });
-    const receipt = await receiptResponse.text(); assert(receipt.includes('DEMO ONLY')); assert(!receipt.includes('Cash payment recorded'));
+    const receipt = await receiptResponse.text(); assert(receipt.includes('Test payment — no money charged')); assert(!receipt.includes('Cash payment recorded'));
     // Missing auth, wrong roles, and account ownership are enforced by routes.
     session = null; await request(start, {}, 401, first.id);
     signIn(riders[0]); await request(start, {}, 403, first.id); await request(payout, { reference: 'no', reason: 'No' }, 401, first.id);
-    console.log('PASS: demo creation, three methods, checkout results/retries/ownership/races, dispatch, ride+delivery completion, earnings, refunds, one-time payouts, cash separation, receipts, and API auth.');
+    console.log('PASS: payment-before-booking for rides and deliveries, three methods, retries/ownership/races/expiry/atomic rollback, legacy checkout, dispatch, completion, earnings, refunds, payouts, cash separation, receipts, and API auth.');
   } finally {
     if (ownsSchema) {
       assert(/^fetch_demo_test_[a-f0-9]{32}$/.test(schema));

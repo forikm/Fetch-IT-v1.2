@@ -19,7 +19,7 @@ export default function Home() {
   useEffect(() => {
     if (!bootstrapped || user?.role !== "CUSTOMER") return;
     const query = new URLSearchParams(window.location.search);
-    const id = query.get("demoBooking");
+    const id = query.get("paymentBooking") ?? query.get("demoBooking");
     const type = query.get("type");
     if (!id || !/^[a-zA-Z0-9_-]{1,100}$/.test(id) || (type !== "RIDE" && type !== "DELIVERY")) return;
     // The summary API checks ownership; query parameters never verify payment.

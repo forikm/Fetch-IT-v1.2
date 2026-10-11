@@ -26,6 +26,7 @@ import { omitTicket } from "@/lib/ticket";
 import { bookingAttemptId, findBookingAttempt, createBookingWithRetry } from "@/lib/booking-create";
 import { PAYMENT_METHOD_LABEL, isDemoPayment, type PaymentMethod } from "@/lib/payment-policy";
 import { demoCommissionBps } from "@/lib/demo-payments";
+import { prepareOnlineCheckout } from "@/lib/online-checkout";
 
 async function handleGET(req: NextRequest) {
   try {
@@ -103,11 +104,24 @@ async function handlePOST(req: NextRequest) {
     const body = await req.json();
     if (!body || typeof body !== "object") throw new CustomerError("Booking details are required.", 400);
     const paymentMethod = body.paymentMethod ?? "CASH";
-    if (typeof paymentMethod !== "string" || !Object.hasOwn(PAYMENT_METHOD_LABEL, paymentMethod)) throw new CustomerError("Choose cash or a demo payment method.", 400);
+    if (typeof paymentMethod !== "string" || !Object.hasOwn(PAYMENT_METHOD_LABEL, paymentMethod)) throw new CustomerError("Choose a valid payment method.", 400);
     const paymentData = { paymentMethod: paymentMethod as PaymentMethod, ...(isDemoPayment(paymentMethod) ? { demoCommissionBps: demoCommissionBps() } : {}) };
     const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
     const previous = await findBookingAttempt(db, attemptId, body);
     if (previous) return NextResponse.json({ booking: omitTicket(bookingView(previous)) });
+    async function submit(type: "RIDE" | "DELIVERY", data: Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">) {
+      if (isDemoPayment(paymentMethod)) {
+        const checkout = await prepareOnlineCheckout(db, data, body);
+        if (checkout.bookingId) {
+          const booking = await findBookingAttempt(db, checkout.bookingId, body);
+          if (!booking) throw new CustomerError("Booking unavailable.", 409);
+          return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
+        }
+        return NextResponse.json(checkout);
+      }
+      const booking = await createBookingWithRetry(db, type, data, body);
+      return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
+    }
     const {
       type = "DELIVERY",
       pickup,
@@ -140,11 +154,14 @@ async function handlePOST(req: NextRequest) {
     if (!isBookingVehicle(vehicleClass)) {
       return NextResponse.json({ error: "Choose Motor, Tricycle or Car." }, { status: 400 });
     }
-    if (!pickup.label || !dropoff.label) {
+    if (typeof pickup.label !== "string" || typeof dropoff.label !== "string" || !pickup.label.trim() || !dropoff.label.trim() || pickup.label.length > 500 || dropoff.label.length > 500) {
       return NextResponse.json(
         { error: "Pickup and drop-off addresses are required." },
         { status: 400 },
       );
+    }
+    if ([pickup, dropoff].some(point => typeof point.lat !== "number" || typeof point.lng !== "number" || !Number.isFinite(point.lat) || !Number.isFinite(point.lng) || Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180)) {
+      return NextResponse.json({ error: "Choose valid pickup and drop-off locations." }, { status: 400 });
     }
     const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
     if (scheduledDate && (!Number.isFinite(scheduledDate.getTime()) || scheduledDate.getTime() <= Date.now())) {
@@ -172,7 +189,7 @@ async function handlePOST(req: NextRequest) {
         when: scheduledDate ?? new Date(),
       });
 
-      const booking = await createBookingWithRetry(db, "RIDE", {
+      return await submit("RIDE", {
         ...paymentData,
         id: attemptId,
         type: "RIDE",
@@ -195,9 +212,7 @@ async function handlePOST(req: NextRequest) {
         status: "PENDING",
         events: { create: { actorId: session.uid, actorName: session.name, actorRole: "CUSTOMER", action: "CREATED", toStatus: "PENDING" } },
         etaMinutes: quote.etaMinutes,
-      }, body);
-
-      return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
+      });
     }
 
     // ---------- DELIVERY ----------
@@ -225,7 +240,7 @@ async function handlePOST(req: NextRequest) {
     const { distanceKm, surgeMultiplier, fare } = quote;
     const eta = quote.etaMinutes;
 
-    const booking = await createBookingWithRetry(db, "DELIVERY", {
+    return await submit("DELIVERY", {
       ...paymentData,
       id: attemptId,
       type: "DELIVERY",
@@ -248,9 +263,7 @@ async function handlePOST(req: NextRequest) {
       status: "PENDING",
       events: { create: { actorId: session.uid, actorName: session.name, actorRole: "CUSTOMER", action: "CREATED", toStatus: "PENDING" } },
       etaMinutes: eta,
-    }, body);
-
-    return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
+    });
   } catch (err) {
     if (err instanceof RateLimitError) throw err;
     if (err instanceof CustomerError) return customerErrorResponse(err);

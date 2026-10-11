@@ -5,14 +5,21 @@ rider earnings, and an admin-reviewed payout. It has no payment-provider
 integration, requires no wallet or bank credentials, and never moves money.
 
 Customer payment options are cash (the existing real cash-confirmation flow),
-GCash (demo), Maya (demo), and bank payment (demo). The online options open a
-Fetch-It demo checkout with success, failure, and cancellation controls. A failed
-or cancelled checkout can be retried. Closing checkout leaves it pending and it
-can be resumed from the payment card. A booking itself remains active until
-explicitly cancelled.
+GCash, Maya, and bank account. Online requests save a separate `CheckoutDraft`
+with a validated server quote and a 20-minute expiry. No booking, booking
+reference, or tracking ticket exists until payment succeeds. The checkout uses
+a normal Pay button with a small "Test payment — no money charged" notice.
+Failure testing is available under Testing options. Failed or cancelled attempts
+create no booking and can be retried with a new immutable payment attempt.
+Closing checkout leaves it pending; submitting the same saved request resumes
+that checkout. Payment-method selection and request details persist on the device.
+Expired quotes require reviewing the request again.
 
-Demo bookings are hidden from the available jobs board until checkout succeeds.
-Assignment and acceptance also enforce this on the server. Paid demo bookings
+Payment success creates the paid booking and tracking ticket atomically, with
+one booking per customer-scoped request key. Duplicate or lost responses return
+the same booking; client amounts and return URLs cannot verify payment.
+Existing unpaid demo bookings remain hidden from the jobs board until checkout
+succeeds. Assignment and acceptance also enforce this on the server. Paid bookings
 can be reassigned before pickup because no cash was collected by the old rider.
 Cash bookings retain their existing confirmation/reassignment rules.
 
@@ -25,7 +32,7 @@ the rider's earnings. At 15%, a PHP 60 fare records PHP 9 commission and PHP 51
 rider earnings. Simulated processor fees are zero; these figures are not a
 prediction of actual gateway costs or net profit.
 
-Admin booking details show demo commission, rider earnings, and payout state.
+Admin booking details show commission, rider earnings, and payout state.
 For a completed, paid demo booking, submit a reference and review note to record
 one simulated payout. It is an accounting record only, not a transfer. Retries
 with the same reference do not duplicate it. A demo payout cannot be recorded
@@ -35,7 +42,7 @@ active demo booking closes checkout and records a simulated refund if paid.
 
 Rider stats display demo earnings, awaiting review, and simulated payouts
 separately from completed cash fares. Admin confirmed cash collections exclude
-demo payments. Receipts and payment methods identify demo records explicitly.
+test payments. Receipts and payment cards retain a small test-payment notice.
 
 ## Database and deployment
 
@@ -47,7 +54,10 @@ demo payments. Receipts and payment methods identify demo records explicitly.
 
 Only `fetch-customer` owns and deploys migrations. This adds enum values, demo
 accounting fields, and the `DemoCheckout` table; it preserves cash records.
-The UI labels all online options as demo, including on a production-hosted app.
+The second migration adds `CheckoutDraft` and lets a checkout belong to either
+a draft or an existing booking. Legacy bookings and payment attempts are preserved.
+The UI uses ordinary payment-method names and small test-payment notices,
+including on a production-hosted app. Receipts retain an explicit test identifier.
 
 Before real payments are introduced, use a provider checkout with verified
 webhooks, real refunds, provider fees, and a separately authorized payout

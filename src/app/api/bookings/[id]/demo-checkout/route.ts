@@ -9,7 +9,7 @@ async function post(_req: NextRequest, { params }: { params: Promise<{ id: strin
     const session = await requireCustomer();
     await limitRequests("customer:demo-checkout", session.uid, 30, 60_000);
     const checkout = await startDemoCheckout(db, (await params).id, session);
-    return NextResponse.json({ checkoutUrl: `/demo-checkout/${checkout.id}` }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ checkoutUrl: `/checkout/${checkout.id}` }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     if (error instanceof RateLimitError) throw error;
     if (error instanceof PaymentError) return NextResponse.json({ error: error.message }, { status: error.status });

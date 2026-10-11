@@ -272,7 +272,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     if (demo) setSummaryBooking(b);
     toast({
       title: "Booking created",
-      description: demo ? `${b.refCode} · Complete demo checkout before a rider accepts. No real money moves.` : `${b.refCode} · ₱${b.totalFare.toFixed(2)} · ${
+      description: `${b.refCode} · ₱${b.totalFare.toFixed(2)} · ${
         b.rider ? (isRide ? "Driver matched!" : "Rider matched!") : (isRide ? "Searching for a driver…" : "Searching for a rider…")
       }`,
     });
@@ -708,7 +708,7 @@ function BookingForm({
   const estimate = estimatedKey === fareKey ? fareEstimate : null;
   const [estimateError, setEstimateError] = useState<string | null>(null);
 
-  const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [paymentMethod, setPaymentMethod] = useCustomerData(userId, isRide ? "ride-payment-method" : "delivery-payment-method", "CASH", true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -849,7 +849,12 @@ function BookingForm({
         headers: { "Content-Type": "application/json", "Idempotency-Key": submission.key },
         body,
       });
-      const data = await customerResponse<{ booking: Booking }>(res, "We couldn’t confirm your booking. Check Active bookings before trying again. Your details are saved.");
+      if (res.status === 409) setPendingSubmission(null);
+      const data = await customerResponse<{ booking?: Booking; checkoutUrl?: string }>(res, "We couldn’t confirm your request. Your details are saved; reconnect and retry.");
+      if (data.checkoutUrl && /^\/checkout\/[a-zA-Z0-9_-]+$/.test(data.checkoutUrl)) {
+        window.location.assign(data.checkoutUrl);
+        return;
+      }
       if (!data.booking?.id) throw new Error("We couldn’t confirm your booking. Check Active bookings before trying again. Your details are saved.");
       setDraft(emptyDraft);
       setPendingSubmission(null);
@@ -1173,7 +1178,7 @@ function BookingForm({
         </div>
       )}
 
-      {step === 2 && <div className="space-y-2"><Label htmlFor="payment-method">Payment method</Label><select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your rider</option><option value="DEMO_GCASH">GCash (demo only)</option><option value="DEMO_MAYA">Maya (demo only)</option><option value="DEMO_BANK">Bank payment (demo only)</option></select><p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? "After paying, confirm the amount in your booking. Your rider confirms receipt." : "Demo only: no real money moves. Open demo checkout from your booking and simulate payment before a rider accepts."}</p></div>}
+      {step === 2 && <div className="space-y-2"><Label htmlFor="payment-method">Payment method</Label><select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your rider</option><option value="DEMO_GCASH">GCash</option><option value="DEMO_MAYA">Maya</option><option value="DEMO_BANK">Bank account</option></select><p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? "After paying, confirm the amount in your booking. Your rider confirms receipt." : "Pay first to confirm your booking. Test payment — no money charged."}</p></div>}
 
       {/* Navigation */}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">
@@ -1195,7 +1200,7 @@ function BookingForm({
         ) : (
           <Button type="button" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
             {submitting ? <FetchItLoader className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-            Confirm booking
+            {paymentMethod === "CASH" ? "Confirm booking" : "Continue to payment"}
           </Button>
         )}
       </DialogFooter>
