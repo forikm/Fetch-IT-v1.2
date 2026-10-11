@@ -415,7 +415,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
       {/* New booking modal */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent
-          className="sm:max-w-2xl"
+          className="flex flex-col overflow-hidden p-0 sm:max-w-2xl sm:p-0"
           onPointerDownOutside={(e) => {
             // Google's address-suggestion dropdown (.pac-container) is
             // rendered directly on <body>, outside this dialog's own DOM
@@ -428,12 +428,12 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
             }
           }}
         >
-          <DialogHeader>
+          <DialogHeader className="shrink-0 px-4 pt-5 sm:px-6">
             <DialogTitle className="flex items-center gap-2">
               <ServiceIcon className="h-5 w-5 text-primary" /> Book a {isRide ? "ride" : "delivery"}
             </DialogTitle>
             <DialogDescription>
-              Choose your pickup and drop-off. Available {isRide ? "drivers" : "riders"} can accept your request.
+              Choose a route and review your booking.
             </DialogDescription>
           </DialogHeader>
           {online && !offlineAccess && !mapsReady && !mapsFailed ? (
@@ -714,10 +714,17 @@ function BookingForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 3-step wizard: pickup → drop-off → details. This gives each map far
-  // more vertical room than a single long scrolling form, which matters
-  // most on mobile where screen height is tight.
-  const [step, setStep] = useState<0 | 1 | 2>(0);
+  // Keep data entry separate from the final review and payment decision.
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
+  const stepContent = useRef<HTMLDivElement>(null);
+  function goToStep(next: 0 | 1 | 2 | 3) {
+    setError(null);
+    setStep(next);
+  }
+  useEffect(() => {
+    stepContent.current?.scrollTo({ top: 0 });
+    stepContent.current?.focus({ preventScroll: true });
+  }, [step]);
 
   function fillCurrentLocation(target: "pickup" | "dropoff") {
     const applyFallback = () => {
@@ -769,6 +776,14 @@ function BookingForm({
     );
   }
 
+  let scheduleValid = true;
+  if (scheduledAt) {
+    try { scheduleValid = new Date(pickupScheduleIso(scheduledAt)!).getTime() > Date.now(); }
+    catch { scheduleValid = false; }
+  }
+  const detailsValid = scheduleValid && (isRide
+    ? Number.isInteger(Number(passengers)) && Number(passengers) >= 1 && Number(passengers) <= passengerCapacity
+    : Number.isFinite(Number(cargoWeightKg)) && Number(cargoWeightKg) > 0 && Number(cargoWeightKg) <= VEHICLES[vehicleClass].capacityKg);
   function canEstimate() {
     return (
       pickupLabel &&
@@ -777,9 +792,7 @@ function BookingForm({
       dropoffLabel &&
       dropoffLat &&
       dropoffLng &&
-      (isRide
-        ? Number.isInteger(Number(passengers)) && Number(passengers) >= 1 && Number(passengers) <= passengerCapacity
-        : Number.isFinite(Number(cargoWeightKg)) && Number(cargoWeightKg) > 0 && Number(cargoWeightKg) <= VEHICLES[vehicleClass].capacityKg)
+      detailsValid
     );
   }
 
@@ -872,7 +885,7 @@ function BookingForm({
   const v = VEHICLES[vehicleClass];
   const pickupChosen = !!pickupLabel && (!connected || !!(pickupLat && pickupLng));
   const dropoffChosen = !!dropoffLabel && (!connected || !!(dropoffLat && dropoffLng));
-  const stepLabels = ["Pickup", "Drop-off", "Details"];
+  const stepLabels = ["Pickup", "Drop-off", "Details", "Review & pay"];
 
   return (
     <form
@@ -883,18 +896,16 @@ function BookingForm({
         // "submit this form." Block that everywhere in this wizard —
         // the ONLY way to actually book is an explicit click on the
         // "Confirm booking" button.
-        if (e.key === "Enter") e.preventDefault();
+        if (e.key === "Enter" && !(e.target as HTMLElement).closest("button, summary, select, textarea")) e.preventDefault();
       }}
-      className="min-w-0 space-y-4"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
-      <p className="text-xs text-muted-foreground">Your draft is saved on this device until you book or sign out. Review the route and current fare before confirming.</p>
-      {(!online || offlineAccess) && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">Offline draft · edit your details or choose saved places. Address search, maps, and fare quotes need a connection. Nothing will be booked automatically.</p>}
       {/* Step indicator */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-muted-foreground">
+      <div aria-label="Booking progress" className="grid shrink-0 grid-cols-4 gap-1 border-b px-4 pb-4 text-[11px] font-medium text-muted-foreground sm:px-6 sm:text-xs">
         {stepLabels.map((label, i) => (
-          <div key={label} className="flex items-center gap-1 sm:gap-2">
+          <div key={label} aria-current={i === step ? "step" : undefined} className="flex justify-center">
             <span
-              className={`flex items-center gap-1.5 ${i === step ? "text-foreground" : ""}`}
+              className={`flex flex-col items-center gap-1.5 sm:flex-row ${i === step ? "text-foreground" : ""}`}
             >
               <span
                 className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${
@@ -909,10 +920,13 @@ function BookingForm({
               </span>
               {label}
             </span>
-            {i < stepLabels.length - 1 && <span className="hidden w-4 h-px bg-border sm:block" />}
           </div>
         ))}
       </div>
+
+      <div ref={stepContent} role="region" aria-label={stepLabels[step]} tabIndex={-1} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 outline-none sm:px-6">
+      {step === 0 && <p className="text-xs text-muted-foreground">Your draft is saved on this device.</p>}
+      {!connected && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">You can edit your saved draft offline. Reconnect to get a fare and confirm.</p>}
 
       {/* Step 0: Pickup */}
       {step === 0 && (
@@ -1032,35 +1046,24 @@ function BookingForm({
         </div>
       )}
 
-      {/* Step 2: Details, fare, confirm */}
+      {/* Step 2: Booking details */}
       {step === 2 && (
         <div className="space-y-4">
           {connected && (!pickupChosen || !dropoffChosen) && <p className="rounded-lg border bg-muted/30 p-3 text-sm">Go back and select your typed addresses from search suggestions or saved places before requesting a fare.</p>}
-          <div className="rounded-md border bg-muted/20 p-3 text-xs space-y-1">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-              <span className="min-w-0 break-words [overflow-wrap:anywhere]">{pickupLabel}</span>
-            </div>
-            <div className="flex min-w-0 items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-              <span className="min-w-0 break-words [overflow-wrap:anywhere]">{dropoffLabel}</span>
-            </div>
-          </div>
-
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div className="space-y-2">
-              <Label htmlFor="vc">Vehicle class</Label>
+              <Label htmlFor="vc">Vehicle</Label>
               <Select value={vehicleClass} onValueChange={(v) => setVehicleClass(v as VehicleClass)}>
                 <SelectTrigger id="vc"><SelectValue>{v?.label}</SelectValue></SelectTrigger>
                 <SelectContent>
                   {VEHICLE_LIST.map((v) => (
                     <SelectItem key={v.id} value={v.id}>
-                      {v.label} · {isRide ? `${PASSENGER_CAPACITY[v.id]} passenger${PASSENGER_CAPACITY[v.id] === 1 ? "" : "s"}` : `${v.capacityKg} kg`} · ₱{v.baseFare} for the first {v.includedKm} km
+                      {v.label} · {isRide ? `${PASSENGER_CAPACITY[v.id]} passenger${PASSENGER_CAPACITY[v.id] === 1 ? "" : "s"}` : `up to ${v.capacityKg} kg`}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {v && <p className="text-xs text-muted-foreground">{isRide ? `Up to ${passengerCapacity} passenger${passengerCapacity === 1 ? "" : "s"}` : `${v.capacityKg} kg capacity`} · ₱{v.baseFare} for the first {v.includedKm} km. {!isRide && v.description}</p>}
+              <p className="text-xs text-muted-foreground">{isRide ? `Up to ${passengerCapacity} passenger${passengerCapacity === 1 ? "" : "s"}` : `Up to ${v.capacityKg} kg`}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="booking-size">{isRide ? "Passengers" : "Cargo weight (kg)"}</Label>
@@ -1088,49 +1091,69 @@ function BookingForm({
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div className="space-y-2">
               <Label htmlFor="pickup-timing">Pickup time</Label>
-              <select id="pickup-timing" className="w-full rounded-md border bg-background p-3" value={scheduledAt ? "LATER" : "NOW"} onChange={event => setScheduledAt(event.target.value === "NOW" ? "" : pickupScheduleInput(new Date(Date.now() + 30 * 60_000)))}><option value="NOW">Now — find a rider immediately</option><option value="LATER">Schedule for later</option></select>
+              <select id="pickup-timing" className="w-full rounded-md border bg-background p-3" value={scheduledAt ? "LATER" : "NOW"} onChange={event => setScheduledAt(event.target.value === "NOW" ? "" : pickupScheduleInput(new Date(Date.now() + 30 * 60_000)))}><option value="NOW">Now</option><option value="LATER">Schedule for later</option></select>
               {scheduledAt && <><Label htmlFor="scheduled">Date and time (Philippine time)</Label><Input
                 id="scheduled"
                 type="datetime-local"
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
                 min={pickupScheduleInput(new Date(Date.now() + 60_000))}
-              /><p className="text-xs text-muted-foreground">Riders will see this booking when the scheduled pickup is due. Choose Now for an immediate pickup.</p></>}
+              /><p className="text-xs text-muted-foreground">Riders will see the booking when pickup is due.</p>{!scheduleValid && <p role="alert" className="text-xs text-destructive">Choose a future pickup time or select Now.</p>}</>}
             </div>
-            {!isRide && <div className="space-y-2">
-              <Label htmlFor="notes">Cargo notes (optional)</Label>
+            {!isRide && <details className="space-y-2 sm:col-span-2">
+              <summary className="cursor-pointer text-sm font-medium">Add handling instructions (optional){cargoNotes ? " · Added" : ""}</summary>
+              <Label htmlFor="notes" className="sr-only">Handling instructions</Label>
               <Input
                 id="notes"
                 value={cargoNotes}
                 onChange={(e) => setCargoNotes(e.target.value)}
                 placeholder="Fragile · handle with care"
               />
-            </div>}
+            </details>}
           </div>
+
+        </div>
+      )}
+
+      {/* Step 3: Review and payment */}
+      {step === 3 && (
+        <div className="space-y-4">
+          <section aria-label="Route summary" className="rounded-xl border p-3 space-y-3">
+            {([
+              { label: "Pickup", address: pickupLabel, editStep: 0, color: "text-emerald-600" },
+              { label: "Drop-off", address: dropoffLabel, editStep: 1, color: "text-rose-600" },
+            ] as const).map(place => <div key={place.label} className="flex items-start gap-2">
+              <MapPin className={`mt-1 h-4 w-4 shrink-0 ${place.color}`} />
+              <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">{place.label}</p><p className="break-words text-sm [overflow-wrap:anywhere]">{place.address}</p></div>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label={`Edit ${place.label.toLowerCase()}`} onClick={() => goToStep(place.editStep)} className="h-7 px-2 text-xs">Edit</Button>
+            </div>)}
+          </section>
+          <section aria-label="Booking details summary" className="rounded-xl bg-muted/30 p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 space-y-1 text-sm">
+                <p className="font-medium">{v.label} · {isRide ? `${passengers} passenger${Number(passengers) === 1 ? "" : "s"}` : `${cargoWeightKg} kg`}</p>
+                <p className="text-muted-foreground">{scheduledAt ? `Pickup ${formatPickupSchedule(pickupScheduleIso(scheduledAt)!)} Philippine time` : "Pickup now"}</p>
+                {!scheduleValid && <p role="alert" className="text-destructive">Pickup time has passed. Edit the details to choose a new time.</p>}
+                {!isRide && cargoNotes && <p className="break-words text-muted-foreground [overflow-wrap:anywhere]">{cargoNotes}</p>}
+              </div>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label="Edit booking details" onClick={() => goToStep(2)} className="h-7 px-2 text-xs">Edit</Button>
+            </div>
+          </section>
 
           {/* Fare estimate */}
           {online && !offlineAccess && canEstimate() && (
-            <Card className="bg-muted/30 border-dashed">
-              <CardContent className="py-4">
+            <Card className="py-0 shadow-none">
+              <CardContent className="p-3">
                 {estimating ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <FetchItLoader className="h-4 w-4" /> Calculating fare…
                   </div>
                 ) : estimate ? (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <Calculator className="h-4 w-4 text-primary" /> Fare estimate
-                      </div>
-                      <div className="text-2xl font-bold">
-                        ₱{estimate.fare.totalFare.toLocaleString("en-PH")}
-                        <span className="text-sm text-muted-foreground font-normal ml-1">
-                          {estimate.fare.currency}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                      <FareLine label="Distance" value={`${estimate.distanceKm} km`} />
+                  <div className="space-y-3">
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span>{estimate.distanceKm} km</span><span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Estimated time ~{estimate.etaMinutes} min</span></p>
+                    <details>
+                      <summary className="cursor-pointer text-sm font-medium">View fare breakdown</summary>
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
                       <FareLine label="Base" value={`₱${estimate.fare.baseFare}`} />
                       <FareLine
                         label={`Distance charge (${estimate.fare.billableKm} km)`}
@@ -1154,15 +1177,8 @@ function BookingForm({
                           value={`₱${estimate.fare.minimumAdjustment}`}
                         />
                       )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> ETA ~{estimate.etaMinutes} min
-                      </span>
-                      <span className="flex items-center gap-1">
-                        {isRide ? <><Users className="h-3.5 w-3.5" /> {passengers} passenger{Number(passengers) === 1 ? "" : "s"}</> : <><Package className="h-3.5 w-3.5" /> {(Number(cargoWeightKg) / v!.capacityKg * 100).toFixed(0)}% of capacity</>}
-                      </span>
-                    </div>
+                      </div>
+                    </details>
                   </div>
                 ) : estimateError ? (
                   <div className="flex items-start gap-2 text-sm text-destructive">
@@ -1174,6 +1190,12 @@ function BookingForm({
             </Card>
           )}
 
+          <div className="space-y-2">
+            <Label htmlFor="payment-method">Payment method</Label>
+            <select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your rider</option><option value="DEMO_GCASH">GCash</option><option value="DEMO_MAYA">Maya</option><option value="DEMO_BANK">Bank account</option></select>
+            <p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? "Pay your rider directly, then confirm payment in the booking." : "Pay first to confirm. Test payment — no money charged."}</p>
+          </div>
+
           {error && (
             <div className="flex items-start gap-2 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> {error}
@@ -1181,33 +1203,36 @@ function BookingForm({
           )}
         </div>
       )}
-
-      {step === 2 && <div className="space-y-2"><Label htmlFor="payment-method">Payment method</Label><select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your rider</option><option value="DEMO_GCASH">GCash</option><option value="DEMO_MAYA">Maya</option><option value="DEMO_BANK">Bank account</option></select><p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? "After paying, confirm the amount in your booking. Your rider confirms receipt." : "Pay first to confirm your booking. Test payment — no money charged."}</p></div>}
+      </div>
 
       {/* Navigation */}
+      <div className="shrink-0 space-y-3 border-t bg-background px-4 py-3 sm:px-6">
+      {step === 3 && <div aria-live="polite" className="flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">Total fare</span><strong className="text-2xl">{estimate ? `₱${estimate.fare.totalFare.toLocaleString("en-PH")}` : estimating ? "Calculating…" : "—"}</strong></div>}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">
         <Button
           type="button"
           variant="outline"
-          onClick={() => (step === 0 ? onCancel() : setStep((s) => (s - 1) as 0 | 1 | 2))}
+          disabled={submitting}
+          onClick={() => (step === 0 ? onCancel() : goToStep((step - 1) as 0 | 1 | 2))}
         >
           {step === 0 ? "Cancel" : "Back"}
         </Button>
-        {step < 2 ? (
+        {step < 3 ? (
           <Button
             type="button"
-            disabled={step === 0 ? !pickupChosen : !dropoffChosen}
-            onClick={() => setStep((s) => (s + 1) as 0 | 1 | 2)}
+            disabled={step === 0 ? !pickupChosen : step === 1 ? !dropoffChosen : !pickupChosen || !dropoffChosen || !detailsValid}
+            onClick={() => goToStep((step + 1) as 1 | 2 | 3)}
           >
-            Next
+            {step === 2 ? "Review & pay" : "Next"}
           </Button>
         ) : (
-          <Button type="button" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
+          <Button type="button" className="min-w-0 px-3 text-xs sm:text-sm" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
             {submitting ? <FetchItLoader className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             {paymentMethod === "CASH" ? "Confirm booking" : "Continue to payment"}
           </Button>
         )}
       </DialogFooter>
+      </div>
     </form>
   );
 }
