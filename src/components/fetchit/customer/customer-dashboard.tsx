@@ -716,10 +716,20 @@ function BookingForm({
 
   // Keep data entry separate from the final review and payment decision.
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
+  const [reviewDraft, setReviewDraft] = useState<typeof draft | null>(null);
   const stepContent = useRef<HTMLDivElement>(null);
   function goToStep(next: 0 | 1 | 2 | 3) {
     setError(null);
     setStep(next);
+  }
+  function editFromReview(next: 0 | 1 | 2) {
+    setReviewDraft({ ...draft });
+    goToStep(next);
+  }
+  function returnToReview(saveChanges: boolean) {
+    if (!saveChanges && reviewDraft) setDraft(reviewDraft);
+    setReviewDraft(null);
+    goToStep(3);
   }
   useEffect(() => {
     stepContent.current?.scrollTo({ top: 0 });
@@ -902,30 +912,34 @@ function BookingForm({
     >
       {/* Step indicator */}
       <div aria-label="Booking progress" className="grid shrink-0 grid-cols-4 gap-1 border-b px-4 pb-4 text-[11px] font-medium text-muted-foreground sm:px-6 sm:text-xs">
-        {stepLabels.map((label, i) => (
+        {stepLabels.map((label, i) => {
+          const complete = i < step || (reviewDraft !== null && i < 3 && i !== step);
+          return (
           <div key={label} aria-current={i === step ? "step" : undefined} className="flex justify-center">
             <span
               className={`flex flex-col items-center gap-1.5 sm:flex-row ${i === step ? "text-foreground" : ""}`}
             >
               <span
                 className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${
-                  i < step
+                  complete
                     ? "bg-primary text-primary-foreground"
                     : i === step
                       ? "border-2 border-primary text-primary"
                       : "border text-muted-foreground"
                 }`}
               >
-                {i < step ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
+                {complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
               </span>
               {label}
             </span>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div ref={stepContent} role="region" aria-label={stepLabels[step]} tabIndex={-1} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 outline-none sm:px-6">
-      {step === 0 && <p className="text-xs text-muted-foreground">Your draft is saved on this device.</p>}
+      {reviewDraft && <p role="status" className="text-sm font-medium">Editing {stepLabels[step].toLowerCase()}</p>}
+      {step === 0 && !reviewDraft && <p className="text-xs text-muted-foreground">Your draft is saved on this device.</p>}
       {!connected && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">You can edit your saved draft offline. Reconnect to get a fare and confirm.</p>}
 
       {/* Step 0: Pickup */}
@@ -1125,7 +1139,7 @@ function BookingForm({
             ] as const).map(place => <div key={place.label} className="flex items-start gap-2">
               <MapPin className={`mt-1 h-4 w-4 shrink-0 ${place.color}`} />
               <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">{place.label}</p><p className="break-words text-sm [overflow-wrap:anywhere]">{place.address}</p></div>
-              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label={`Edit ${place.label.toLowerCase()}`} onClick={() => goToStep(place.editStep)} className="h-7 px-2 text-xs">Edit</Button>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label={`Edit ${place.label.toLowerCase()}`} onClick={() => editFromReview(place.editStep)} className="h-7 px-2 text-xs">Edit</Button>
             </div>)}
           </section>
           <section aria-label="Booking details summary" className="rounded-xl bg-muted/30 p-3">
@@ -1136,7 +1150,7 @@ function BookingForm({
                 {!scheduleValid && <p role="alert" className="text-destructive">Pickup time has passed. Edit the details to choose a new time.</p>}
                 {!isRide && cargoNotes && <p className="break-words text-muted-foreground [overflow-wrap:anywhere]">{cargoNotes}</p>}
               </div>
-              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label="Edit booking details" onClick={() => goToStep(2)} className="h-7 px-2 text-xs">Edit</Button>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label="Edit booking details" onClick={() => editFromReview(2)} className="h-7 px-2 text-xs">Edit</Button>
             </div>
           </section>
 
@@ -1213,17 +1227,17 @@ function BookingForm({
           type="button"
           variant="outline"
           disabled={submitting}
-          onClick={() => (step === 0 ? onCancel() : goToStep((step - 1) as 0 | 1 | 2))}
+          onClick={() => reviewDraft ? returnToReview(false) : step === 0 ? onCancel() : goToStep((step - 1) as 0 | 1 | 2)}
         >
-          {step === 0 ? "Cancel" : "Back"}
+          {reviewDraft ? "Cancel edit" : step === 0 ? "Cancel" : "Back"}
         </Button>
         {step < 3 ? (
           <Button
             type="button"
             disabled={step === 0 ? !pickupChosen : step === 1 ? !dropoffChosen : !pickupChosen || !dropoffChosen || !detailsValid}
-            onClick={() => goToStep((step + 1) as 1 | 2 | 3)}
+            onClick={() => reviewDraft ? returnToReview(true) : goToStep((step + 1) as 1 | 2 | 3)}
           >
-            {step === 2 ? "Review & pay" : "Next"}
+            {reviewDraft ? "Save changes" : step === 2 ? "Review & pay" : "Next"}
           </Button>
         ) : (
           <Button type="button" className="min-w-0 px-3 text-xs sm:text-sm" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
