@@ -27,6 +27,7 @@ import { bookingAttemptId, findBookingAttempt, createBookingWithRetry } from "@/
 import { PAYMENT_METHOD_LABEL, isDemoPayment, type PaymentMethod } from "@/lib/payment-policy";
 import { demoCommissionBps } from "@/lib/demo-payments";
 import { prepareOnlineCheckout } from "@/lib/online-checkout";
+import { parsePickupSchedule } from "@/lib/pickup-schedule";
 
 async function handleGET(req: NextRequest) {
   try {
@@ -163,7 +164,9 @@ async function handlePOST(req: NextRequest) {
     if ([pickup, dropoff].some(point => typeof point.lat !== "number" || typeof point.lng !== "number" || !Number.isFinite(point.lat) || !Number.isFinite(point.lng) || Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180)) {
       return NextResponse.json({ error: "Choose valid pickup and drop-off locations." }, { status: 400 });
     }
-    const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
+    let scheduledDate: Date | null;
+    try { scheduledDate = parsePickupSchedule(scheduledAt); }
+    catch { throw new CustomerError("Choose a valid pickup date and time (Philippine time).", 400); }
     if (scheduledDate && (!Number.isFinite(scheduledDate.getTime()) || scheduledDate.getTime() <= Date.now())) {
       return NextResponse.json({ error: "Choose a future pickup time." }, { status: 400 });
     }

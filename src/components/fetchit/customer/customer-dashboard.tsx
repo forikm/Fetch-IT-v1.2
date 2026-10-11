@@ -20,6 +20,7 @@ import { readCustomerBooking } from "@/lib/offline-bookings";
 import { readSnapshot, saveSnapshot } from "@/lib/offline-data";
 import { customerResponse } from "@/lib/customer-request";
 import { FetchItLoader } from "@/components/fetchit/shared/loading";
+import { pickupScheduleIso, pickupScheduleInput, formatPickupSchedule } from "@/lib/pickup-schedule";
 
 // Customer dashboard — bookings list, booking form, live tracking modal.
 // All client-side; view state lives in this component.
@@ -272,7 +273,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     if (demo) setSummaryBooking(b);
     toast({
       title: "Booking created",
-      description: `${b.refCode} · ₱${b.totalFare.toFixed(2)} · ${
+      description: b.scheduledAt && new Date(b.scheduledAt) > new Date() ? `${b.refCode} · Scheduled for ${formatPickupSchedule(b.scheduledAt)} Philippine time. Riders will see it when pickup is due.` : `${b.refCode} · ₱${b.totalFare.toFixed(2)} · ${
         b.rider ? (isRide ? "Driver matched!" : "Rider matched!") : (isRide ? "Searching for a driver…" : "Searching for a rider…")
       }`,
     });
@@ -561,6 +562,7 @@ function BookingCard({
         </div>
       </CardHeader>
       <CardContent className="min-w-0 space-y-3 flex-1">
+        {booking.status === "PENDING" && booking.scheduledAt && new Date(booking.scheduledAt) > new Date() && <p className="rounded-lg bg-muted p-3 text-sm">Scheduled for {formatPickupSchedule(booking.scheduledAt)} Philippine time. This booking will appear to riders when pickup is due.</p>}
         <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
           <Stat label="Vehicle" value={v?.label ?? booking.vehicleClass} icon={vIcon} />
           <Stat label="Distance" value={`${booking.distanceKm} km`} icon={<Navigation className="h-4 w-4" />} />
@@ -799,7 +801,7 @@ function BookingForm({
           dropoff: { lat: Number(dropoffLat), lng: Number(dropoffLng), label: dropoffLabel },
           vehicleClass,
           cargoWeightKg: isRide ? undefined : Number(cargoWeightKg),
-          scheduledAt: scheduledAt || undefined,
+          scheduledAt: pickupScheduleIso(scheduledAt),
         }),
       });
       const data = await customerResponse<NonNullable<typeof estimate>>(res, "We couldn’t load the fare. Please retry.");
@@ -838,7 +840,7 @@ function BookingForm({
           vehicleClass,
           cargoWeightKg: isRide ? undefined : Number(cargoWeightKg),
           cargoNotes: isRide ? undefined : cargoNotes || undefined,
-          scheduledAt: scheduledAt || undefined,
+          scheduledAt: pickupScheduleIso(scheduledAt),
       });
       // Reuse the key after a lost response, including after reopening this
       // saved draft. Changed details start a separate explicit request.
@@ -1085,13 +1087,15 @@ function BookingForm({
 
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div className="space-y-2">
-              <Label htmlFor="scheduled">Schedule for later (optional)</Label>
-              <Input
+              <Label htmlFor="pickup-timing">Pickup time</Label>
+              <select id="pickup-timing" className="w-full rounded-md border bg-background p-3" value={scheduledAt ? "LATER" : "NOW"} onChange={event => setScheduledAt(event.target.value === "NOW" ? "" : pickupScheduleInput(new Date(Date.now() + 30 * 60_000)))}><option value="NOW">Now — find a rider immediately</option><option value="LATER">Schedule for later</option></select>
+              {scheduledAt && <><Label htmlFor="scheduled">Date and time (Philippine time)</Label><Input
                 id="scheduled"
                 type="datetime-local"
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
-              />
+                min={pickupScheduleInput(new Date(Date.now() + 60_000))}
+              /><p className="text-xs text-muted-foreground">Riders will see this booking when the scheduled pickup is due. Choose Now for an immediate pickup.</p></>}
             </div>
             {!isRide && <div className="space-y-2">
               <Label htmlFor="notes">Cargo notes (optional)</Label>

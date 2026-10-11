@@ -4,6 +4,7 @@ import { generateTicketId, type TicketType } from "./ticket";
 import { generateRefCode } from "./fare";
 import { riderSelect } from "./db-data";
 import { CustomerError } from "./customer-access";
+import { parsePickupSchedule } from "./pickup-schedule";
 
 const include = { customer: { select: { id: true, name: true, phone: true } }, rider: { select: riderSelect } } as const;
 
@@ -26,7 +27,9 @@ export async function findBookingAttempt(db: PrismaClient, id: string | undefine
   const booking = await db.booking.findUnique({ where: { id }, include });
   if (!booking) return null;
   const type = body.type ?? "DELIVERY";
-  const scheduled = body.scheduledAt ? new Date(String(body.scheduledAt)).getTime() : null;
+  let scheduled: number | null;
+  try { scheduled = parsePickupSchedule(body.scheduledAt)?.getTime() ?? null; }
+  catch { throw new CustomerError("Choose a valid pickup date and time (Philippine time).", 400); }
   if (booking.type !== type || booking.vehicleClass !== body.vehicleClass || booking.paymentMethod !== (body.paymentMethod ?? "CASH") ||
       booking.pickupLabel !== body.pickup?.label || booking.pickupLat !== body.pickup?.lat || booking.pickupLng !== body.pickup?.lng ||
       booking.dropoffLabel !== body.dropoff?.label || booking.dropoffLat !== body.dropoff?.lat || booking.dropoffLng !== body.dropoff?.lng ||

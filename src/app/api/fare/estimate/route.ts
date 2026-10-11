@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { quoteFare, quoteRideFare } from "@/lib/fare";
 import { VEHICLES, isBookingVehicle, PASSENGER_CAPACITY, type VehicleClass } from "@/lib/constants";
 import { withRequestLog, safeErrorCode } from "@/lib/request-guard";
+import { parsePickupSchedule } from "@/lib/pickup-schedule";
 
 async function handlePOST(req: NextRequest) {
   try {
@@ -49,7 +50,9 @@ async function handlePOST(req: NextRequest) {
     if (!isBookingVehicle(vehicleClass)) {
       return NextResponse.json({ error: "Choose Motor, Tricycle or Car." }, { status: 400 });
     }
-    const when = scheduledAt ? new Date(scheduledAt) : new Date();
+    let when: Date;
+    try { when = parsePickupSchedule(scheduledAt) ?? new Date(); }
+    catch { return NextResponse.json({ error: "Choose a valid pickup date and time (Philippine time)." }, { status: 400 }); }
     if (!Number.isFinite(when.getTime()) || (scheduledAt && when.getTime() <= Date.now())) {
       return NextResponse.json({ error: "Choose a future pickup time." }, { status: 400 });
     }

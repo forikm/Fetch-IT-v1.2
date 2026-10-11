@@ -5,6 +5,7 @@ import vm from "node:vm";
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import { customerResponse } from "../src/lib/customer-request.ts";
+import { pickupScheduleIso } from "../src/lib/pickup-schedule.ts";
 
 const ts = createRequire(import.meta.url)("typescript");
 const source = fs.readFileSync(new URL("../src/components/fetchit/customer/customer-dashboard.tsx", import.meta.url), "utf8");
@@ -25,6 +26,7 @@ function fixture(fetch, pending = null) {
     bookingType: "DELIVERY", isRide: false, passengers: "1", pickupLat: "14.6", pickupLng: "120.98", pickupLabel: "Pickup",
     dropoffLat: "14.62", dropoffLng: "121.01", dropoffLabel: "Destination", vehicleClass: "MOTORCYCLE",
     cargoWeightKg: "2", cargoNotes: "", scheduledAt: "", estimate: {}, estimatedKey: "current", fareKey: "current", canEstimate: () => true,
+    paymentMethod: "CASH", pickupScheduleIso,
     emptyDraft: { empty: true }, fetch, customerResponse, created: [], error: null, cleared: false,
   };
   context.setError = value => { context.error = value; };
@@ -36,6 +38,15 @@ function fixture(fetch, pending = null) {
   return context;
 }
 const success = () => Response.json({ booking: { id: "confirmed" } });
+
+test("booking confirmation sends Philippine pickup time as an explicit UTC instant", async () => {
+  let body;
+  const app = fixture(async (url, options) => { body = JSON.parse(options.body); return success(); });
+  app.scheduledAt = "2026-10-11T17:09";
+  await app.handleConfirmBooking();
+  assert.equal(body.scheduledAt, "2026-10-11T09:09:00.000Z");
+  assert.equal(app.created.length, 1);
+});
 
 test("lost booking responses keep the draft/key; an explicit retry after reopening reuses that key", async () => {
   const requests = [];
