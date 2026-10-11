@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCustomer, customerErrorResponse } from "@/lib/customer-access";
 import { omitTicket } from "@/lib/ticket";
+import { cancelDemoPayment } from "@/lib/demo-payments";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -43,7 +44,11 @@ async function handlePOST(req: NextRequest, { params }: Params) {
         where: { id, customerId: session.uid, status: booking.status },
         data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: body.reason.trim(), assignmentExpiresAt: null },
       });
-      if (changed.count) await recordBookingEvent(tx, id, session, { action: "CANCELLED", fromStatus: booking.status, toStatus: "CANCELLED", riderId: booking.riderId, reason: body.reason.trim() });
+      if (changed.count) {
+        const locked = await tx.booking.findUniqueOrThrow({ where: { id } });
+        await cancelDemoPayment(tx, locked, session);
+        await recordBookingEvent(tx, id, session, { action: "CANCELLED", fromStatus: booking.status, toStatus: "CANCELLED", riderId: booking.riderId, reason: body.reason.trim() });
+      }
       return changed;
     }, { maxWait: 10000, timeout: 20000 });
     if (changed.count === 0) return NextResponse.json({ error: "Booking status changed. Refresh and try again." }, { status: 409 });

@@ -24,6 +24,8 @@ import {
 import { quoteFare, quoteRideFare } from "@/lib/fare";
 import { omitTicket } from "@/lib/ticket";
 import { bookingAttemptId, findBookingAttempt, createBookingWithRetry } from "@/lib/booking-create";
+import { PAYMENT_METHOD_LABEL, isDemoPayment, type PaymentMethod } from "@/lib/payment-policy";
+import { demoCommissionBps } from "@/lib/demo-payments";
 
 async function handleGET(req: NextRequest) {
   try {
@@ -100,7 +102,9 @@ async function handlePOST(req: NextRequest) {
 
     const body = await req.json();
     if (!body || typeof body !== "object") throw new CustomerError("Booking details are required.", 400);
-    if (body.paymentMethod !== undefined && body.paymentMethod !== "CASH") throw new CustomerError("Cash is the currently supported payment method.", 400);
+    const paymentMethod = body.paymentMethod ?? "CASH";
+    if (typeof paymentMethod !== "string" || !Object.hasOwn(PAYMENT_METHOD_LABEL, paymentMethod)) throw new CustomerError("Choose cash or a demo payment method.", 400);
+    const paymentData = { paymentMethod: paymentMethod as PaymentMethod, ...(isDemoPayment(paymentMethod) ? { demoCommissionBps: demoCommissionBps() } : {}) };
     const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
     const previous = await findBookingAttempt(db, attemptId, body);
     if (previous) return NextResponse.json({ booking: omitTicket(bookingView(previous)) });
@@ -169,6 +173,7 @@ async function handlePOST(req: NextRequest) {
       });
 
       const booking = await createBookingWithRetry(db, "RIDE", {
+        ...paymentData,
         id: attemptId,
         type: "RIDE",
         customerId: session.uid,
@@ -221,6 +226,7 @@ async function handlePOST(req: NextRequest) {
     const eta = quote.etaMinutes;
 
     const booking = await createBookingWithRetry(db, "DELIVERY", {
+      ...paymentData,
       id: attemptId,
       type: "DELIVERY",
       customerId: session.uid,

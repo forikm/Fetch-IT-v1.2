@@ -125,6 +125,7 @@ export interface Booking {
   baseFare: number;
   surgeMultiplier: number;
   totalFare: number;
+  paymentMethod?: string;
   currency: string;
   status: BookingStatus;
   etaMinutes: number | null;
@@ -267,9 +268,11 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     setBookings((prev) => [b, ...prev.filter((x) => x.id !== b.id)]);
     setShowNew(false);
     setTab("active");
+    const demo = b.paymentMethod?.startsWith("DEMO_");
+    if (demo) setSummaryBooking(b);
     toast({
       title: "Booking created",
-      description: `${b.refCode} · ₱${b.totalFare.toFixed(2)} · ${
+      description: demo ? `${b.refCode} · Complete demo checkout before a rider accepts. No real money moves.` : `${b.refCode} · ₱${b.totalFare.toFixed(2)} · ${
         b.rider ? (isRide ? "Driver matched!" : "Rider matched!") : (isRide ? "Searching for a driver…" : "Searching for a rider…")
       }`,
     });
@@ -705,6 +708,7 @@ function BookingForm({
   const estimate = estimatedKey === fareKey ? fareEstimate : null;
   const [estimateError, setEstimateError] = useState<string | null>(null);
 
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -789,7 +793,7 @@ function BookingForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: bookingType,
-          paymentMethod: "CASH",
+          paymentMethod,
           passengers: isRide ? Number(passengers) : undefined,
           pickup: { lat: Number(pickupLat), lng: Number(pickupLng), label: pickupLabel },
           dropoff: { lat: Number(dropoffLat), lng: Number(dropoffLng), label: dropoffLabel },
@@ -826,6 +830,7 @@ function BookingForm({
     setSubmitting(true);
     try {
       const body = JSON.stringify({
+          paymentMethod,
           type: bookingType,
           passengers: isRide ? Number(passengers) : undefined,
           pickup: { lat: Number(pickupLat), lng: Number(pickupLng), label: pickupLabel },
@@ -1168,7 +1173,7 @@ function BookingForm({
         </div>
       )}
 
-      {step === 2 && <div className="space-y-2"><Label htmlFor="payment-method">Payment method</Label><select id="payment-method" className="w-full rounded-md border bg-background p-3" defaultValue="CASH"><option value="CASH">Cash — pay your rider</option></select><p className="text-xs text-muted-foreground">After paying, confirm the amount in your booking. Your rider confirms receipt.</p></div>}
+      {step === 2 && <div className="space-y-2"><Label htmlFor="payment-method">Payment method</Label><select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your rider</option><option value="DEMO_GCASH">GCash (demo only)</option><option value="DEMO_MAYA">Maya (demo only)</option><option value="DEMO_BANK">Bank payment (demo only)</option></select><p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? "After paying, confirm the amount in your booking. Your rider confirms receipt." : "Demo only: no real money moves. Open demo checkout from your booking and simulate payment before a rider accepts."}</p></div>}
 
       {/* Navigation */}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">

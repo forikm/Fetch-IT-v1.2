@@ -10,11 +10,22 @@ import { RideDashboard } from "@/components/fetchit/customer/ride-dashboard";
 import { FetchItLoadingScreen } from "@/components/fetchit/shared/loading";
 
 export default function Home() {
-  const { view, bootstrapped, bootstrap } = useAppStore();
+  const { view, user, bootstrapped, bootstrap, openBookingSummary } = useAppStore();
 
   useEffect(() => {
     if (!bootstrapped) void bootstrap();
   }, [bootstrap, bootstrapped]);
+
+  useEffect(() => {
+    if (!bootstrapped || user?.role !== "CUSTOMER") return;
+    const query = new URLSearchParams(window.location.search);
+    const id = query.get("demoBooking");
+    const type = query.get("type");
+    if (!id || !/^[a-zA-Z0-9_-]{1,100}$/.test(id) || (type !== "RIDE" && type !== "DELIVERY")) return;
+    // The summary API checks ownership; query parameters never verify payment.
+    openBookingSummary(id, type === "RIDE" ? "ride" : "delivery");
+    window.history.replaceState(window.history.state, "", "/");
+  }, [bootstrapped, user?.role, openBookingSummary]);
 
   if (!bootstrapped) {
     return <FetchItLoadingScreen />;
