@@ -24,7 +24,7 @@ const servers = [];
 const ports = { customer: 3210, admin: 3212 };
 const previewPassword = "support-test-only";
 function cookie(user, admin = false) {
-  const value = Buffer.from(JSON.stringify({ uid: user.id, email: user.email, name: user.name, role: user.role, exp: Date.now() + 600000 })).toString("base64url");
+  const value = Buffer.from(JSON.stringify({ uid: user.id, email: user.email, name: user.name, role: user.role, iat: Date.now(), exp: Date.now() + 600000 })).toString("base64url");
   const secret = admin ? adminEnv.ADMIN_SESSION_SECRET || "fetch-it-admin-dev-secret-please-rotate" : process.env.SESSION_SECRET || "fetch-it-dev-secret-please-rotate";
   return `${admin ? "fetchit_admin_session" : "fetchit_session"}=${value}.${crypto.createHmac("sha256", secret).update(value).digest("base64url")}`;
 }
@@ -82,7 +82,8 @@ async function main() {
     const token = cookie(actors.customer), otherToken = cookie(actors.other), adminToken = cookie(actors.admin, true);
     await request("/api/support", null, 401);
     await request("/api/support/notifications", cookie(actors.rider), 403);
-    await request("/api/support", cookie(actors.banned), 403);
+    // Restriction invalidates the authenticated session before route access.
+    await request("/api/support", cookie(actors.banned), 401);
     const booking = await db.booking.create({ data: { refCode: "SUPPORT-TEST", customerId: actors.customer.id, type: "RIDE", pickupLabel: "Test pickup", pickupLat: 14.6, pickupLng: 121,
       dropoffLabel: "Test dropoff", dropoffLat: 14.7, dropoffLng: 121.1, vehicleClass: "MOTORCYCLE", distanceKm: 2, baseFare: 50, totalFare: 50 } });
     await request("/api/support", otherToken, 404, "POST", { bookingId: booking.id, category: "BOOKING", message: "Please check my booking" });

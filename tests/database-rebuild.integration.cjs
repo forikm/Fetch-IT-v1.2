@@ -108,10 +108,17 @@ async function main() {
     assert.notEqual(identity.providerUserId, firebase.id); assert.equal(identity.passwordHash, null);
     const customerAuth = await login("customer", customer), otherAuth = await login("customer", other);
     const riderAuth = await login("rider", rider), secondAuth = await login("rider", second), adminAuth = await login("admin", admin);
-    if (process.env.RUN_RIDE_OTP_BROWSER === "1") {
+    if (process.env.RUN_RIDE_OTP_BROWSER === "1" || process.env.RUN_BUG_AUDIT_BROWSER === "1") {
       const ride = await createBooking(customerAuth, "RIDE");
       await advance(ride, riderAuth, ["ACCEPTED"]);
-      console.log("BROWSER_FIXTURE " + JSON.stringify({ customerEmail: customer.email, riderEmail: rider.email, password, bookingId: ride.id, refCode: ride.refCode }));
+      if (process.env.RUN_BUG_AUDIT_BROWSER === "1") {
+        const gps = await fetch(`http://localhost:3101/api/native/tickets/${ride.ticketId}/location`, {
+          method: "POST", headers: { "Content-Type": "application/json", authorization: `Bearer ${riderAuth.split("=")[1]}` },
+          body: JSON.stringify({ lat: 14.6005, lng: 120.9805, speedKph: 20, heading: 90 }),
+        });
+        assert.equal(gps.status, 200);
+      }
+      console.log("BROWSER_FIXTURE " + JSON.stringify({ customerEmail: customer.email, riderEmail: rider.email, adminEmail: admin.email, password, bookingId: ride.id, refCode: ride.refCode }));
       const releaseFile = path.join(require("node:os").tmpdir(), `${schema}.release`);
       console.log("Isolated ride ready on customer :3100 and rider :3101. Create this release file after browser verification: " + releaseFile);
       await new Promise(resolve => {
@@ -121,7 +128,8 @@ async function main() {
       });
       fs.unlinkSync(releaseFile);
       const updated = await db.booking.findUniqueOrThrow({ where: { id: ride.id } });
-      assert(["PICKED_UP", "IN_TRANSIT", "DELIVERED"].includes(updated.status));
+      if (process.env.RUN_BUG_AUDIT_BROWSER === "1") assert.equal(updated.status, "CANCELLED");
+      else assert(["PICKED_UP", "IN_TRANSIT", "DELIVERED"].includes(updated.status));
       assert((await db.deliveryChallenge.findUniqueOrThrow({ where: { bookingId: ride.id } })).verifiedAt);
       assert.equal(await db.bookingEvent.count({ where: { bookingId: ride.id, toStatus: "PICKED_UP" } }), 1);
       console.log("PASS: browser OTP reveal, driver verification and atomic boarding reached the shared database.");
@@ -236,6 +244,13 @@ async function main() {
     await request("customer", `/api/bookings/${ride.id}/otp`, otherAuth, "GET", undefined, 404);
     await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth, "GET", undefined, 409);
     await advance(ride, riderAuth, ["ACCEPTED"]);
+    const rideGps = await fetch(`http://localhost:3101/api/native/tickets/${ride.ticketId}/location`, {
+      method: "POST", headers: { "Content-Type": "application/json", authorization: `Bearer ${riderAuth.split("=")[1]}` },
+      body: JSON.stringify({ lat: 14.605, lng: 120.985, speedKph: 20 }),
+    });
+    assert.equal(rideGps.status, 200);
+    const rideTracking = await request("customer", `/api/bookings/status?onlyTracked=1&ids=${ride.id}`, customerAuth);
+    assert.equal(rideTracking.data.bookings[0].trackingUpdates[0].lat, 14.605);
     const codeResponse = await request("customer", `/api/bookings/${ride.id}/otp`, customerAuth);
     assert.equal(codeResponse.headers.get("cache-control"), "private, no-store");
     const code = codeResponse.data.otp;

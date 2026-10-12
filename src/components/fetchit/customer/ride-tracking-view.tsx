@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { Bike, Car, CircleDot, Navigation, Phone, Calculator, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { FetchItLoader } from "../shared/loading";
-import { BookingRouteMap } from "../shared/booking-route-map";
+import { LiveTrackingMap } from "../shared/live-tracking-map";
 import { useTrackingUpdates } from "@/hooks/use-tracking-updates";
 import { VEHICLES, statusLabel, type BookingStatus, type VehicleClass } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -29,17 +28,14 @@ export function RideTrackingView({
   onClose: () => void;
   onUpdated: (u: Partial<Booking>) => void;
 }) {
-  const [status, setStatus] = useState<BookingStatus>(ride.status);
-  const [eta, setEta] = useState<number | null>(ride.etaMinutes);
+  const status = ride.status;
+  const eta = ride.etaMinutes;
+  const location = ride.trackingUpdates?.[0];
 
   const pickup = { lat: ride.pickupLat, lng: ride.pickupLng };
   const dropoff = { lat: ride.dropoffLat, lng: ride.dropoffLng };
 
-  useTrackingUpdates<Booking>(ride.id, (updated) => {
-    if (updated.status) setStatus(updated.status);
-    if (updated.etaMinutes !== undefined) setEta(updated.etaMinutes);
-    onUpdated(updated);
-  });
+  useTrackingUpdates<Booking>(ride.id, onUpdated);
 
   const done = status === "DELIVERED";
   const cancelled = status === "CANCELLED";
@@ -62,9 +58,11 @@ export function RideTrackingView({
 
       {/* Map */}
       <div className="relative rounded-xl overflow-hidden border bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-100 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-emerald-900/30 aspect-[16/10]">
-        <BookingRouteMap
+        <LiveTrackingMap
+          key={ride.id}
           pickup={pickup}
           dropoff={dropoff}
+          rider={location ? { lat: location.lat, lng: location.lng } : null}
           className="absolute inset-0 h-full w-full border-0 rounded-none"
         />
         <div className="absolute top-2 left-2 bg-card/95 backdrop-blur rounded-full px-2.5 py-1 text-xs font-medium border shadow-sm flex items-center gap-1.5 z-10">
@@ -113,7 +111,7 @@ export function RideTrackingView({
         </Card>
       )}
 
-      {status === "ACCEPTED" && ride.rider && <RidePickupOtp key={ride.id} bookingId={ride.id} />}
+      {status === "ACCEPTED" && ride.rider && <RidePickupOtp key={`${ride.id}:${ride.riderId}`} bookingId={ride.id} />}
       {["PICKED_UP", "IN_TRANSIT", "DELIVERED"].includes(status) && <p className="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="h-4 w-4" /> Passenger pickup completed</p>}
 
       {/* Status timeline */}
