@@ -21,6 +21,8 @@ export function PlaceAutocompleteInput({
   onTextChange,
   required,
   className,
+  id,
+  describedBy,
 }: {
   placeholder: string;
   value: string;
@@ -29,10 +31,15 @@ export function PlaceAutocompleteInput({
   onTextChange: (text: string) => void;
   required?: boolean;
   className?: string;
+  id?: string;
+  describedBy?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const onChangeRef = useRef(onChange);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,8 +57,8 @@ export function PlaceAutocompleteInput({
           const lat = place.geometry?.location?.lat();
           const lng = place.geometry?.location?.lng();
           if (lat == null || lng == null) return; // user hit Enter with no selection
-          const label = place.name || place.formatted_address || "";
-          onChange({ label, lat, lng });
+          const label = place.formatted_address || place.name || "";
+          onChangeRef.current({ label, lat, lng });
         });
         setReady(true);
       })
@@ -69,6 +76,8 @@ export function PlaceAutocompleteInput({
     <div className="relative sm:col-span-3">
       <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
       <Input
+        id={id}
+        aria-describedby={describedBy}
         ref={inputRef}
         placeholder={failed ? "Type an address (autocomplete unavailable)" : placeholder}
         value={value}
@@ -81,7 +90,7 @@ export function PlaceAutocompleteInput({
         <FetchItLoader className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       )}
       {failed && (
-        <p className="text-xs text-amber-600 mt-1">{failed}</p>
+        <p className="text-xs text-amber-700 mt-1">Address search is unavailable. Please try again later or choose a location on the map.</p>
       )}
     </div>
   );

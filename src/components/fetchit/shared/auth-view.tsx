@@ -173,10 +173,11 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     // handler runs. Keep the HTTP status visible instead of showing a JSON
     // parsing error that hides the real failure.
     const body = await res.text();
-    let data: { error?: string; user?: AuthUser } | null = null;
+    type SessionResponse = { error?: string; user?: AuthUser; isNewUser?: boolean };
+    let data: SessionResponse | null = null;
     if (body) {
       try {
-        data = JSON.parse(body) as { error?: string; user?: AuthUser };
+        data = JSON.parse(body) as SessionResponse;
       } catch {
         // An HTML error page is also possible when the function crashes.
       }
@@ -185,7 +186,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       throw new Error(data?.error || `Sign-in service failed (HTTP ${res.status}). Please try again later.`);
     }
     if (!data?.user) throw new Error("Sign-in service returned an invalid response.");
-    setUser(data.user);
+    setUser(data.user, data.isNewUser === true || mode === "signup");
   }
 
   async function submit(e: React.FormEvent) {

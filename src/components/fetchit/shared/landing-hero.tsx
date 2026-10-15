@@ -8,10 +8,10 @@ import Link from "next/link";
 import Image from "next/image";
 import styles from "./landing-hero.module.css";
 
-type Props = { onStart: (mode: AppMode) => void; onLogin: () => void; signedIn: boolean; riderAppUrl: string };
+type Props = { onStart: (mode: AppMode) => void; onLogin: () => void; onSetupPlaces: () => void; signedIn: boolean; riderAppUrl: string };
 
 /** Landing illustration only; actual bookings and tracking use the existing authenticated views. */
-export function LandingHero({ onStart, onLogin, signedIn, riderAppUrl }: Props) {
+export function LandingHero({ onStart, onLogin, onSetupPlaces, signedIn, riderAppUrl }: Props) {
   const [mode, setMode] = useState<AppMode>("delivery");
   const [menuOpen, setMenuOpen] = useState(false);
   const mapRef = useRef<SVGSVGElement>(null);
@@ -39,6 +39,7 @@ export function LandingHero({ onStart, onLogin, signedIn, riderAppUrl }: Props) 
       }
     }}>
     <a className={styles["nav-link"]} href="#services">Our services</a>
+    <button type="button" className={styles["nav-link"]} onClick={onSetupPlaces}>Set up your places</button>
     <a className={styles["nav-link"]} href="#how-it-works">How it works</a>
     <a className={cn(styles["nav-link"], styles["secondary-nav-link"])} href="#about-us">About us</a>
     <a className={cn(styles["nav-link"], styles["secondary-nav-link"])} href="#contact-us">Contact us</a>

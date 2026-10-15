@@ -7,8 +7,7 @@ import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { PlaceValue } from "./place-autocomplete-input";
-
-type SavedPlace = PlaceValue & { name: string; id: string };
+import { mergeSavedPlaces, type SavedPlace } from "@/lib/signup-onboarding";
 
 export function SavedPlaces({ place, onSelect }: { place: PlaceValue | null; onSelect: (place: PlaceValue) => void }) {
   const userId = useAppStore((s) => s.user?.id ?? "anonymous");
@@ -25,13 +24,13 @@ export function SavedPlaces({ place, onSelect }: { place: PlaceValue | null; onS
         <Input aria-label="Saved place name" placeholder="Home, Work, or a name" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
         <Button type="button" disabled={!name.trim()} onClick={() => {
           const saved = { ...place, name: name.trim(), id: crypto.randomUUID() };
-          setPlaces((previous) => [...previous.filter((p) => p.name.toLowerCase() !== saved.name.toLowerCase()), saved].slice(-20));
+          setPlaces((previous) => mergeSavedPlaces(previous, [saved]));
           setName(""); setSaving(false);
         }}>Save</Button>
       </div>}
       {places.length ? <div className="flex flex-wrap gap-2">{places.map((p) => (
         <div key={p.id} className="flex items-center rounded-lg border bg-background">
-          <Button type="button" size="sm" variant="ghost" title={p.label} onClick={() => onSelect({ label: p.label, lat: p.lat, lng: p.lng })}>{p.name}</Button>
+          <Button type="button" size="sm" variant="ghost" title={[p.label, p.details].filter(Boolean).join(", ")} onClick={() => onSelect({ label: [p.details, p.label].filter(Boolean).join(", "), lat: p.lat, lng: p.lng })}>{p.name}</Button>
           <button type="button" className="p-2 text-muted-foreground hover:text-destructive" aria-label={`Remove ${p.name}`} onClick={() => setPlaces((previous) => previous.filter((item) => item.id !== p.id))}><X className="h-3.5 w-3.5" /></button>
         </div>
       ))}</div> : <p className="text-xs text-muted-foreground">Choose an address to save Home, Work, or another favorite.</p>}

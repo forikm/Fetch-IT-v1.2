@@ -61,6 +61,7 @@ export function LandingView() {
           riderAppUrl={riderAppUrl}
           onStart={(mode) => user ? chooseMode(mode) : pickRole("CUSTOMER", "signup")}
           onLogin={() => user ? setView("mode-select") : pickRole("CUSTOMER", "login")}
+          onSetupPlaces={() => user ? setView("onboarding") : pickRole("CUSTOMER", "signup")}
         />
         <div className="border-y border-foreground/5 bg-white/50 dark:bg-card/50">
           <div className="mx-auto grid max-w-7xl grid-cols-2 gap-5 px-4 py-6 text-xs font-medium text-muted-foreground sm:grid-cols-4 sm:px-6 sm:text-sm lg:px-8">

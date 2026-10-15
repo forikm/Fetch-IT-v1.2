@@ -9,6 +9,7 @@
 import { create } from "zustand";
 import { clearOfflineAccount, hasPendingLogout, readOfflineCustomer, saveOfflineCustomer, setPendingLogout } from "./offline-data";
 import { clearAuthProgress, readAuthProgress } from "./auth-progress";
+import { onboardingPending, setOnboardingPending } from "./signup-onboarding";
 let sessionEpoch = 0;
 
 export type Role = "CUSTOMER" | "RIDER";
@@ -32,6 +33,7 @@ export type AppView =
   | "landing"
   | "login"
   | "signup"
+  | "onboarding"
   // Post-login hub where the customer picks Delivery or Ride.
   | "mode-select"
   | "customer-dashboard"
@@ -67,7 +69,7 @@ interface AppState {
   clearPendingBooking: () => void;
   setView: (v: AppView) => void;
   setPendingRole: (r: Role | null) => void;
-  setUser: (u: AuthUser | null) => void;
+  setUser: (u: AuthUser | null, beginOnboarding?: boolean) => void;
   chooseMode: (m: AppMode) => void;
   bootstrap: () => Promise<void>;
   logout: () => Promise<void>;
@@ -87,17 +89,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearPendingBooking: () => set({ pendingBookingId: null }),
   setView: (v) => set({ view: v }),
   setPendingRole: (r) => set({ pendingRole: r }),
-  setUser: (u) => {
+  setUser: (u, beginOnboarding = false) => {
     sessionEpoch++;
     clearAuthProgress();
     if (u?.role === "CUSTOMER") { setPendingLogout(false); saveOfflineCustomer({ ...u, role: "CUSTOMER" }); }
     else clearOfflineAccount();
+    if (u?.role === "CUSTOMER" && beginOnboarding) setOnboardingPending(u.id, true);
     set({
       user: isAllowedRole(u?.role) ? u : null,
       offlineAccess: false,
-      // Authenticated customers always land on the mode picker first, so
-      // they consciously choose between Delivery and Ride.
-      view: isAllowedRole(u?.role) ? "mode-select" : "landing",
+      view: u?.role === "CUSTOMER" ? beginOnboarding || onboardingPending(u.id) ? "onboarding" : "mode-select" : "landing",
     });
   },
   chooseMode: (m) =>
@@ -129,14 +130,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       else clearOfflineAccount();
       set({
         user: allowed ? data.user : null,
-        view: allowed ? "mode-select" : guestView(get().view, true),
+        view: allowed && data.user ? onboardingPending(data.user.id) ? "onboarding" : "mode-select" : guestView(get().view, true),
         bootstrapped: true,
         offlineAccess: false,
       });
     } catch {
       if (epoch !== sessionEpoch) return;
       const saved = readOfflineCustomer();
-      set({ user: saved, view: saved ? "mode-select" : guestView(get().view, true), offlineAccess: !!saved, bootstrapped: true });
+      set({ user: saved, view: saved ? onboardingPending(saved.id) ? "onboarding" : "mode-select" : guestView(get().view, true), offlineAccess: !!saved, bootstrapped: true });
     }
   },
   logout: async () => {

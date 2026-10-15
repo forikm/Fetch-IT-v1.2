@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import * as offline from "../src/lib/offline-data.ts";
 import * as progress from "../src/lib/auth-progress.ts";
+import * as onboarding from "../src/lib/signup-onboarding.ts";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const compiled = ts.transpileModule(fs.readFileSync(new URL("../src/lib/store.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
@@ -23,6 +24,7 @@ function app(fetch) {
   vm.runInNewContext(compiled, { exports, navigator: { onLine: true }, fetch, require: name => {
     if (name === "./offline-data") return offline;
     if (name === "./auth-progress") return progress;
+    if (name === "./signup-onboarding") return onboarding;
     if (name === "firebase/auth") return { async signOut() {} };
     if (name === "@/lib/firebase-client") return { getCustomerAuth() { return {}; } };
     return require(name);
@@ -35,6 +37,32 @@ test("offline reopening restores only a saved customer view in offline mode", as
   await store.getState().bootstrap();
   assert.equal(store.getState().user.id, user.id);
   assert.equal(store.getState().offlineAccess, true);
+  assert.equal(store.getState().view, "mode-select");
+});
+
+test("signup enters address setup and an authenticated refresh resumes it", async () => {
+  const store = app(async () => new Response(JSON.stringify({ user })));
+  store.getState().setUser(user, true);
+  assert.equal(store.getState().view, "onboarding");
+  assert.equal(onboarding.onboardingPending(user.id), true);
+  const reopened = app(async () => new Response(JSON.stringify({ user })));
+  await reopened.getState().bootstrap();
+  assert.equal(reopened.getState().view, "onboarding");
+  assert.equal(reopened.getState().user.id, user.id);
+});
+
+test("finishing setup returns later sign-ins to the mode picker", () => {
+  const store = app(async () => new Response("{}"));
+  store.getState().setUser(user, true);
+  onboarding.setOnboardingPending(user.id, false);
+  store.getState().setUser(user);
+  assert.equal(store.getState().view, "mode-select");
+});
+
+test("another account cannot inherit an unfinished address setup", () => {
+  const store = app(async () => new Response("{}"));
+  store.getState().setUser(user, true);
+  store.getState().setUser({ ...user, id: "another-customer" });
   assert.equal(store.getState().view, "mode-select");
 });
 test("an online expired session clears the saved customer instead of restoring it", async () => {

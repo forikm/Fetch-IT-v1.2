@@ -31,7 +31,7 @@ function harness(firebaseUser, { codes = false, initialMode = "signup", failSign
   const effects = new Map();
   const queued = [];
   const requests = [];
-  const state = { user: null, view: "signup", setView(view) { state.view = view; }, setUser(user) { state.user = user; progress.clearAuthProgress(); } };
+  const state = { user: null, view: "signup", onboarding: false, setView(view) { state.view = view; }, setUser(user, onboarding = false) { state.user = user; state.onboarding = onboarding; progress.clearAuthProgress(); } };
   const store = selector => selector(state);
   store.getState = () => state;
   const auth = { currentUser: firebaseUser };
@@ -112,6 +112,7 @@ test("returning from email restores verification details and completes with the 
   await app.poll(new AbortController().signal);
   app.render();
   assert.equal(app.state.user.id, "fetch-user");
+  assert.equal(app.state.onboarding, true);
   assert.deepEqual(app.requests, [{ path: "/api/auth/firebase-session", body: { idToken: "fixture-verified-token", phone: saved.phone } }]);
   assert.equal(progress.readAuthProgress(), null);
 });

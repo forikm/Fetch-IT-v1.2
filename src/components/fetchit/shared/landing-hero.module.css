@@ -168,11 +168,6 @@
  }
 @media(max-width:620px) { .root .orange-field { top:500px;right:-20%;height:660px;width:135%;border-radius:48% 30% 0 0 / 23% 24% 0 0;transform:rotate(-9deg) }
 .root .header { padding:0 7%;height:100px }
-.root .menu-button { display:grid;gap:5px;place-content:center;width:37px;height:37px;border-radius:50%;background:#fff0dd }
-.root .menu-button span { height:2px;width:15px;background:var(--ink) }
-.root .header nav { display:none;position:absolute;z-index:10;top:78px;right:7%;background:#fffefa;border:1px solid #e9e5db;box-shadow:0 10px 30px #203b381a;border-radius:14px;padding:15px 24px;align-items:flex-start;min-width:170px }
-.root .header nav.open { display:flex;flex-direction:column;gap:7px }
-.root .nav-link { color:var(--ink);font-size:12px }
 .root .hero { grid-template-columns:1fr;padding:12px 7% 10px;min-height:0 }
 .root .hero-copy { padding-bottom:0 }
 .root .hero-copy h1 { font-size:clamp(48px,12vw,67px);letter-spacing:-3px;margin:22px 0 }
@@ -257,7 +252,12 @@
 .root .secondary-nav-link { display: none; }
 .root .nav-link { color: #203b38; }
 .root .nav-link:hover { color: #38594e; }
-@media (max-width: 620px) {
+@media (max-width: 1000px) {
+  .root .menu-button { display: grid; gap: 5px; place-content: center; width: 37px; height: 37px; border-radius: 50%; background: #fff0dd; }
+  .root .menu-button span { height: 2px; width: 15px; background: var(--ink); }
+  .root .header nav { display: none; position: absolute; z-index: 10; top: calc(100% - 12px); right: 7%; background: #fffefa; border: 1px solid #e9e5db; box-shadow: 0 10px 30px #203b381a; border-radius: 14px; padding: 15px 24px; align-items: flex-start; min-width: 170px; }
+  .root .header nav.open { display: flex; flex-direction: column; gap: 7px; }
+  .root .nav-link { font-size: 12px; }
   .root .secondary-nav-link { display: block; }
 }
 

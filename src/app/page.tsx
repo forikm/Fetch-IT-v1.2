@@ -8,6 +8,7 @@ import { ModeSelect } from "@/components/fetchit/customer/mode-select";
 import { CustomerDashboard } from "@/components/fetchit/customer/customer-dashboard";
 import { RideDashboard } from "@/components/fetchit/customer/ride-dashboard";
 import { FetchItLoadingScreen } from "@/components/fetchit/shared/loading";
+import { SignupPlaces } from "@/components/fetchit/shared/signup-places";
 
 export default function Home() {
   const { view, user, bootstrapped, bootstrap, openBookingSummary } = useAppStore();
@@ -34,6 +35,7 @@ export default function Home() {
   if (view === "landing") return <LandingView />;
   if (view === "login") return <AuthView initialMode="login" />;
   if (view === "signup") return <AuthView initialMode="signup" />;
+  if (view === "onboarding" && user?.role === "CUSTOMER") return <SignupPlaces key={user.id} />;
   if (view === "mode-select") return <ModeSelect />;
   if (view === "customer-dashboard") return <CustomerDashboard />;
   if (view === "ride-dashboard") return <RideDashboard />;

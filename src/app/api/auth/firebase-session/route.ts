@@ -34,6 +34,7 @@ async function handlePOST(req: NextRequest) {
       include: { user: true },
     });
     let user = linked?.user ?? null;
+    let isNewUser = false;
     if (user && (user.role !== "CUSTOMER" || user.email !== email)) {
       return NextResponse.json({ error: "This account cannot be used in the customer app." }, { status: 403 });
     }
@@ -62,6 +63,7 @@ async function handlePOST(req: NextRequest) {
           authIdentities: { create: { provider: "FIREBASE", providerUserId: identity.uid } },
         },
       });
+      isNewUser = true;
     }
     if (user.isBanned) {
       return NextResponse.json({ error: "This account is restricted. Contact support." }, { status: 403 });
@@ -75,6 +77,7 @@ async function handlePOST(req: NextRequest) {
       createSessionToken({ uid: user.id, email: user.email, name: user.name, role: "CUSTOMER", iat: identity.auth_time * 1000 }),
     );
     return NextResponse.json({
+      isNewUser,
       user: {
         id: user.id,
         name: user.name,
