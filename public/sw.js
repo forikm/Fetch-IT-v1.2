@@ -1,5 +1,5 @@
 // Cache public UI only. Private booking data is saved per account by the app.
-const CACHE_VERSION = "fetchit-customer-v8";
+const CACHE_VERSION = "fetchit-customer-v9";
 const APP_SHELL = ["/", "/help", "/manifest.webmanifest", "/pwa-icon-any-v2-192.png", "/pwa-icon-any-v2-512.png", "/pwa-icon-maskable-v2-192.png", "/pwa-icon-maskable-v2-512.png", "/fetch-logo-final.png", "/fetch-loading.gif"];
 
 function staticAssets(text) {
@@ -69,12 +69,72 @@ self.addEventListener("fetch", event => {
     return network;
   })());
 });
-self.addEventListener("message", event => { if (event.data === "SKIP_WAITING") self.skipWaiting(); });
+// Persist only the active account identifier, never notification text or credentials.
+// A worker can start while every page is closed, so in-memory state is insufficient.
+function pushAccount(write, customerId) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("fetchit-notification-state", 1);
+    request.onupgradeneeded = () => request.result.createObjectStore("settings");
+    request.onerror = () => reject(new Error("Notification state unavailable"));
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction("settings", write ? "readwrite" : "readonly");
+      const store = tx.objectStore("settings");
+      const operation = write ? store.put(customerId, "customer") : store.get("customer");
+      tx.oncomplete = () => { db.close(); resolve(write ? customerId : operation.result ?? null); };
+      tx.onabort = tx.onerror = () => { db.close(); reject(new Error("Notification state unavailable")); };
+    };
+  });
+}
+let accountWrite = Promise.resolve();
+self.addEventListener("message", event => {
+  if (event.data === "SKIP_WAITING") { self.skipWaiting(); return; }
+  if (event.data?.type !== "PUSH_ACCOUNT" || (event.data.customerId !== null && (typeof event.data.customerId !== "string" || event.data.customerId.length > 100))) return;
+  accountWrite = accountWrite.catch(() => {}).then(() => pushAccount(true, event.data.customerId));
+  event.waitUntil(accountWrite.then(async () => {
+    if (event.data.customerId === null) for (const notification of await self.registration.getNotifications()) notification.close();
+  }));
+});
+function notificationUrl(value) {
+  try {
+    const url = new URL(value, self.location.origin);
+    return url.origin === self.location.origin && ["/", "/help"].includes(url.pathname) ? url : null;
+  } catch { return null; }
+}
+self.addEventListener("push", event => {
+  event.waitUntil((async () => {
+    let data;
+    try { data = event.data?.json(); } catch { return; }
+    const labels = { DELIVERY: "Deliveries", RIDE: "Rides", SUPPORT: "Support" };
+    if (!data || !labels[data.category] || typeof data.id !== "string" || typeof data.title !== "string" || !notificationUrl(data.url)) return;
+    await accountWrite;
+    // Account switches and offline sign-out must not expose another user's alerts.
+    if (await pushAccount(false) !== data.customerId) return;
+    await self.registration.showNotification(`${labels[data.category]} · ${data.title}`, {
+      body: typeof data.body === "string" ? data.body : "Open Fetch-It to view this update.",
+      icon: "/pwa-icon-any-v2-192.png", badge: "/pwa-icon-any-v2-192.png", tag: data.id,
+      data: { url: data.url, notificationId: data.id, customerId: data.customerId },
+    });
+    for (const client of await self.clients.matchAll({ type: "window", includeUncontrolled: true })) {
+      if (new URL(client.url).origin === self.location.origin) client.postMessage({ type: "FETCHIT_PUSH", customerId: data.customerId });
+    }
+  })());
+});
 self.addEventListener("notificationclick", event => {
   event.notification.close();
-  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async clients => {
+  event.waitUntil((async () => {
+    await accountWrite;
+    const data = event.notification.data;
+    const owner = await pushAccount(false);
+    const url = owner && owner === data?.customerId ? notificationUrl(data.url) : null;
+    if (url && typeof data.notificationId === "string") url.searchParams.set("notice", data.notificationId);
+    const target = url?.href ?? self.location.origin + "/";
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const client = clients.find(item => new URL(item.url).origin === self.location.origin);
-    if (client) return client.focus();
-    return self.clients.openWindow("/");
-  }));
+    if (client) {
+      const navigated = await client.navigate(target);
+      return (navigated ?? client).focus();
+    }
+    return self.clients.openWindow(target);
+  })());
 });

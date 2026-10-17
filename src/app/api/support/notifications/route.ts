@@ -27,10 +27,14 @@ export async function PATCH(request: NextRequest) {
     const latest = new Map<string, Date>();
     for (const m of messages) if (!latest.has(m.ticketId) || m.createdAt > latest.get(m.ticketId)!) latest.set(m.ticketId, m.createdAt);
     // Reading must not invalidate an admin's unsaved form or mark a later reply as read.
-    await db.$transaction([...latest].map(([id, at]) => db.$executeRaw`
-      UPDATE "SupportTicket" SET "customerReadAt" = ${at}
-      WHERE "id" = ${id} AND "customerId" = ${session.uid}
-      AND ("customerReadAt" IS NULL OR "customerReadAt" < ${at})`));
+    await db.$transaction(async tx => {
+      for (const [id, at] of latest) {
+        await tx.$executeRaw`UPDATE "SupportTicket" SET "customerReadAt" = ${at}
+          WHERE "id" = ${id} AND "customerId" = ${session.uid}
+          AND ("customerReadAt" IS NULL OR "customerReadAt" < ${at})`;
+        await tx.customerNotification.updateMany({ where: { customerId: session.uid, ticketId: id, createdAt: { lte: at }, readAt: null }, data: { readAt: new Date() } });
+      }
+    });
     return NextResponse.json({ ok: true });
   } catch (error) { return customerErrorResponse(error); }
 }

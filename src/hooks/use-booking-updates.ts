@@ -1,5 +1,5 @@
 "use client";
-import { createBookingNotifications, mergeBookingNotifications, type BookingNotification } from "@/lib/booking-notifications";
+import { createBookingNotifications } from "@/lib/booking-notifications";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useCustomerData } from "@/hooks/use-customer-data";
@@ -15,7 +15,6 @@ export function useBookingUpdates<T extends Update>(userId: string, type: string
   const callback = useRef(onUpdate);
   const [preferences] = useCustomerData(userId, "notifications", { inApp: true, browser: false }, true);
   const preferenceRef = useRef(preferences);
-  const [, saveInbox] = useCustomerData<BookingNotification[]>(userId, "notification-inbox-v2", [], true);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [offline, setOffline] = useState(false);
   const cache = useRef<T[] | null>(null);
@@ -52,13 +51,8 @@ export function useBookingUpdates<T extends Update>(userId: string, type: string
         if (signal.aborted) return;
         const updates = createBookingNotifications(bookings, baseline.current, new Date().toISOString(), startedAt.current);
         if (updates.length) {
-          saveInbox((previous) => mergeBookingNotifications(previous, updates));
+          window.dispatchEvent(new Event("fetchit:notifications-updated"));
           if (preferenceRef.current.inApp) toast({ title: updates.length > 1 ? "Booking updates" : "Booking update", description: updates.map((item) => item.refCode + " · " + statusLabel(item.status, item.type)).join("; ") });
-          for (const item of updates) {
-            if (preferenceRef.current.browser && "Notification" in window && Notification.permission === "granted" && "serviceWorker" in navigator) {
-              void navigator.serviceWorker.ready.then((registration) => registration.showNotification("Fetch-It booking update", { body: item.refCode + " · " + statusLabel(item.status, item.type), icon: "/fetch-icon-final-192.png", tag: item.bookingId, data: { url: "/" } })).catch(() => {});
-            }
-          }
         }
         baseline.current = { ...baseline.current, ...Object.fromEntries(bookings.map((booking) => [booking.id, booking.status])) };
         cache.current = bookings;

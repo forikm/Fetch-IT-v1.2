@@ -142,6 +142,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   logout: async () => {
     const epoch = ++sessionEpoch;
+    // Stop alerts locally even when the network logout has to wait for reconnect.
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.controller?.postMessage({ type: "PUSH_ACCOUNT", customerId: null });
+      void navigator.serviceWorker.getRegistration().then(registration => registration?.active?.postMessage({ type: "PUSH_ACCOUNT", customerId: null })).catch(() => {});
+    }
     clearAuthProgress();
     clearOfflineAccount(get().user?.id);
     setPendingLogout(true);

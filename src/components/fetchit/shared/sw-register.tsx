@@ -5,6 +5,8 @@
 // immediately when ready.
 
 import { useEffect } from "react";
+import { useAppStore } from "@/lib/store";
+import { setPushAccount } from "@/lib/customer-push";
 
 export function ServiceWorkerRegister() {
   useEffect(() => {
@@ -17,11 +19,20 @@ export function ServiceWorkerRegister() {
     const onLoad = () => {
       navigator.serviceWorker
         .register("/sw.js", { scope: "/" })
+        .then(syncAccount)
         .catch((err) => console.warn("[sw] registration failed", err));
     };
+    const syncAccount = () => {
+      const state = useAppStore.getState();
+      if (state.bootstrapped) void setPushAccount(state.user?.role === "CUSTOMER" ? state.user.id : null).catch(() => {});
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", syncAccount);
     if (document.readyState === "complete") onLoad();
     else window.addEventListener("load", onLoad, { once: true });
-    return () => window.removeEventListener("load", onLoad);
+    return () => {
+      window.removeEventListener("load", onLoad);
+      navigator.serviceWorker.removeEventListener("controllerchange", syncAccount);
+    };
   }, []);
   return null;
 }
