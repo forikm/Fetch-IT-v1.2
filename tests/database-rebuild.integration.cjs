@@ -234,8 +234,8 @@ async function main() {
 
     const photoBooking = await createBooking(customerAuth);
     await advance(photoBooking, riderAuth, ["ACCEPTED", "PICKED_UP", "IN_TRANSIT"]);
-    const photo = await request("rider", `/api/bookings/${photoBooking.id}/proof`, riderAuth, "POST", { photoDataUrl: "data:image/png;base64,aGVsbG8=" });
-    assert.equal(photo.data.proofs[0].verified, false);
+    // Invalid image bytes must be rejected before spending a Blob operation.
+    await request("rider", `/api/bookings/${photoBooking.id}/proof`, riderAuth, "POST", { photoDataUrl: "data:image/png;base64,aGVsbG8=" }, 400);
     assert.equal((await db.booking.findUnique({ where: { id: photoBooking.id } })).status, "IN_TRANSIT");
     await request("rider", `/api/bookings/${photoBooking.id}/proof`, riderAuth, "POST", { signatureSvg: '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L1 1"/></svg>' });
     const signature = (await request("customer", `/api/bookings/${photoBooking.id}`, customerAuth)).data.booking.deliveryProofs.find(p => p.proofType === "SIGNATURE");

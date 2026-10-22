@@ -94,10 +94,9 @@ after deployment.
 
 ## Deliberately deferred
 
-No Supabase or other external image service is configured. Existing inline photo
-storage remains bounded to 200,000 characters per photo; the rider file picker
-allows 140 KB photos to account for base64 overhead. Signatures are bounded too.
-This is temporary storage, not the completed file-storage migration.
+New ePOD photos use private Vercel Blob storage; Neon keeps their file paths.
+Historical inline photos remain readable by authorized staff. See
+[ePOD Blob setup](epod-blob.md) for configuration, access rules and verification.
 
 Saved places remain device-local. No multi-role accounts, payment ledger,
 commission calculation, or rider payout records are introduced. The dashboard
