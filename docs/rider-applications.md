@@ -40,9 +40,9 @@ Direct Gmail sending is implemented. No cross-deployment email relay exists.
 
 ## Coordinated rollout
 
-Production has the staff/owner platform and owner-password migrations already applied (read-only check on 24 October 2026). The new onboarding migration has **not** been applied by this task.
+Production has the staff/owner platform and owner-password migrations already applied (read-only check on 24 October 2026). The onboarding migration was applied successfully on 24 October 2026 after an encrypted snapshot of all 36 existing application tables was created and verified. Existing rider access was preserved (5 Delivery and 4 Ride approvals marked LEGACY_EXISTING); Customer remains unable to write application documents.
 
-1. Configure and verify the existing Gmail sender in Rider, Staff and Superadmin. The connected Vercel account currently exposes only Customer, so the other projects need access through their owning accounts.
+1. Configure and verify the existing Gmail sender in Rider, Staff and Superadmin. The connected Vercel API exposes only Customer. The browser can access Staff; Rider and Superadmin require sign-in to their owning aldoususer account.
 2. Take a current database-provider backup or branch using the maintenance account. The older application JSON backup script has an incomplete model list and must not be treated as a complete backup of the expanded system.
 3. Review and apply `prisma/migrations/202610240001_rider_applications/migration.sql` through the canonical Customer migration workflow using the maintenance database credential (`npx prisma migrate deploy`). Never run migrations using app runtime credentials.
 4. Keep the runtime groups restricted. The migration grants onboarding table access and limited RiderProfile/RiderPresence column updates to the Staff/Owner roles. The canonical `scripts/setup-runtime-roles.sql` also contains these grants for future role setup. Customer gets approval reads, not applicant-document writes.
@@ -61,4 +61,4 @@ Final local result on 24 October 2026: all four production builds passed; all fo
 - All four apps have passed production builds. Customer/Rider also require `npx tsc --noEmit` because their existing build configuration skips TypeScript build errors. Windows local verification used `npx next build --webpack` after a Turbopack CSS worker failure; package deployment scripts remain unchanged.
 - Actual Rider, Staff and Owner browser screens were checked against the disposable fixture, including a narrow mobile viewport. The orientation PDF was rendered and visually inspected.
 
-Local screenshots in Customer `output/` contain synthetic fixture data and are not production screenshots. Live Gmail delivery, Vercel production deployment and production migrations remain release steps.
+Local screenshots in Customer `output/` contain synthetic fixture data and are not production screenshots. The production database migration is complete. Live Gmail delivery and the remaining Vercel production deployments still require verification during release.
