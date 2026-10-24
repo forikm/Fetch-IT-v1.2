@@ -69,7 +69,8 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   await applicant({action:'save',padding:'x'.repeat(17000)},413);
   let app=(await applicant()).application;
   assert.equal((await approvedServices(db,user.id)).length,0);assertions++;
-  await applicant({action:'save',version:app.version,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE'],fields});app=(await applicant()).application;
+  await applicant({action:'save',version:app.version,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE'],fields:{...fields,registrationStep:'documents'}});app=(await applicant()).application;
+  assert.equal(app.fields.registrationStep,'documents');assertions++;
   await applicant({action:'submit',version:app.version,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE'],fields},400);
   await applicant({action:'send-code'});const code=messages.at(-1).text.match(/code is (\d{6})/)[1];
   await applicant({action:'verify-code',code:'000000'===code?'000001':'000000'},400);

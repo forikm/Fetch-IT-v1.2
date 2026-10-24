@@ -4,15 +4,19 @@ Implemented across the existing Customer, Rider, Staff and separate Superadmin p
 
 ## Applicant flow
 
-1. Create a Rider account. New signups choose Motorcycle, Tricycle or Car.
-2. Choose Delivery, Passenger rides or both. This records a request, not permission to work.
-3. Verify the applicant email using a short-lived, single-use code.
+1. **Account:** create a Rider account using name, email and password, then verify the applicant email using a short-lived, single-use code.
+2. **Vehicle & services:** choose Motorcycle, Tricycle or Car, then Delivery, Passenger rides or both. This records a request, not permission to work.
+3. **Details:** complete the prefilled application. The same five-step progress navigation continues from signup through Review.
 4. Save personal, emergency, licence, vehicle, ownership and operating-area details.
 5. Upload the checklist: profile photo, licence front/back, NBI, OR and CR. Borrowed vehicles require owner authorization and ID; pending transfers require a deed of sale. Tricycle/car passenger requests also require the applicable passenger permit and insurance. Additional medical/drug-test documents may be requested through review.
 6. Submit. Details and uploads are locked during review.
 7. If corrections are requested, replace only flagged items. Accepted items keep their decisions and earlier uploads remain in history.
 8. Receive an orientation invitation with a personalized PDF, attend orientation and pass the recorded assessments.
 9. An independent Admin or Owner activates each eligible service. Only activated, unexpired services can receive new jobs.
+
+The registration UI saves changes on Continue, Back, step navigation, Save draft and Save & exit. Uploads save immediately. Unsaved edits warn before closing the tab. `fields.registrationStep` is an optional allowlisted resume hint, not a review decision or eligibility flag. Returning users resume their saved step; correction requests open the relevant details or document step. Review lists missing/invalid requirements with links back to their step. Existing drafts without a hint remain compatible.
+
+Account-only signup creates a provisional Motorcycle profile because the existing schema requires a vehicle. Applicants choose the actual vehicle in step 2; no work approval is created. Older signup payloads containing a supported vehicle still work. Staff and Superadmin see the same application fields and statuses, with no schema change.
 
 The initial checklist is in `src/lib/rider-application-policy.ts`. Review it against the actual operating area's requirements before accepting applicants. Document acceptance is a human review decision, not automatic verification with government systems. Commercial delivery vehicle classes remain available to existing riders; new applications currently cover the three agreed vehicle types.
 
