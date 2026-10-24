@@ -5,7 +5,7 @@ import { CustomerError, requireCustomer, customerErrorResponse } from "@/lib/cus
 export async function GET() {
   try {
     const session = await requireCustomer();
-    const messages = await db.supportMessage.findMany({ where: { authorRole: "ADMIN", ticket: { customerId: session.uid } },
+    const messages = await db.supportMessage.findMany({ where: { authorRole: { in: ["ADMIN","SUPPORT","SUPPORT_SUPERVISOR","SUPERADMIN"] }, ticket: { customerId: session.uid } },
       select: { id: true, ticketId: true, body: true, createdAt: true,
         ticket: { select: { category: true, customerReadAt: true, booking: { select: { refCode: true } } } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100,
@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json().catch(() => null);
     if (!body || !Array.isArray(body.ids) || body.ids.length > 100 || body.ids.some((id: unknown) => typeof id !== "string"))
       throw new CustomerError("Choose valid notifications.", 400);
-    const messages = await db.supportMessage.findMany({ where: { id: { in: body.ids }, authorRole: "ADMIN", ticket: { customerId: session.uid } },
+    const messages = await db.supportMessage.findMany({ where: { id: { in: body.ids }, authorRole: { in: ["ADMIN","SUPPORT","SUPPORT_SUPERVISOR","SUPERADMIN"] }, ticket: { customerId: session.uid } },
       select: { ticketId: true, createdAt: true } });
     const latest = new Map<string, Date>();
     for (const m of messages) if (!latest.has(m.ticketId) || m.createdAt > latest.get(m.ticketId)!) latest.set(m.ticketId, m.createdAt);

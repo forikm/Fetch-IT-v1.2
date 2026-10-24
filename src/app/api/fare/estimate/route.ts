@@ -15,6 +15,7 @@ import { quoteFare, quoteRideFare } from "@/lib/fare";
 import { VEHICLES, isBookingVehicle, PASSENGER_CAPACITY, type VehicleClass } from "@/lib/constants";
 import { withRequestLog, safeErrorCode } from "@/lib/request-guard";
 import { parsePickupSchedule } from "@/lib/pickup-schedule";
+import { platformSettings } from "@/lib/platform-settings";
 
 async function handlePOST(req: NextRequest) {
   try {
@@ -50,6 +51,8 @@ async function handlePOST(req: NextRequest) {
     if (!isBookingVehicle(vehicleClass)) {
       return NextResponse.json({ error: "Choose Motor, Tricycle or Car." }, { status: 400 });
     }
+    const {settings}=await platformSettings();
+    if((type==="RIDE"&&!settings.rideEnabled)||(type==="DELIVERY"&&!settings.deliveryEnabled)||!settings.vehicles.includes(vehicleClass)) return NextResponse.json({error:"This service or vehicle is temporarily unavailable for new bookings."},{status:409});
     let when: Date;
     try { when = parsePickupSchedule(scheduledAt) ?? new Date(); }
     catch { return NextResponse.json({ error: "Choose a valid pickup date and time (Philippine time)." }, { status: 400 }); }
@@ -63,7 +66,7 @@ async function handlePOST(req: NextRequest) {
       if (!Number.isInteger(pax) || pax < 1 || pax > capacity) {
         return NextResponse.json({ error: `Choose 1${capacity > 1 ? `–${capacity}` : ""} passenger${capacity > 1 ? "s" : ""} for ${VEHICLES[vehicleClass].label}.` }, { status: 400 });
       }
-      const quote = quoteRideFare({ pickup, dropoff, vehicleClass, when });
+      const quote = quoteRideFare({ pickup, dropoff, vehicleClass, when, settings });
       return NextResponse.json({
         distanceKm: quote.distanceKm,
         straightLineKm: quote.straightLineKm,
@@ -97,6 +100,7 @@ async function handlePOST(req: NextRequest) {
     }
 
     const quote = quoteFare({
+      settings,
       pickup,
       dropoff,
       vehicleClass,

@@ -25,9 +25,9 @@ import { quoteFare, quoteRideFare } from "@/lib/fare";
 import { omitTicket } from "@/lib/ticket";
 import { bookingAttemptId, findBookingAttempt, createBookingWithRetry } from "@/lib/booking-create";
 import { PAYMENT_METHOD_LABEL, isDemoPayment, type PaymentMethod } from "@/lib/payment-policy";
-import { demoCommissionBps } from "@/lib/demo-payments";
 import { prepareOnlineCheckout } from "@/lib/online-checkout";
 import { parsePickupSchedule } from "@/lib/pickup-schedule";
+import { platformSettings } from "@/lib/platform-settings";
 
 async function handleGET(req: NextRequest) {
   try {
@@ -106,7 +106,8 @@ async function handlePOST(req: NextRequest) {
     if (!body || typeof body !== "object") throw new CustomerError("Booking details are required.", 400);
     const paymentMethod = body.paymentMethod ?? "CASH";
     if (typeof paymentMethod !== "string" || !Object.hasOwn(PAYMENT_METHOD_LABEL, paymentMethod)) throw new CustomerError("Choose a valid payment method.", 400);
-    const paymentData = { paymentMethod: paymentMethod as PaymentMethod, ...(isDemoPayment(paymentMethod) ? { demoCommissionBps: demoCommissionBps() } : {}) };
+    const {settings}=await platformSettings();
+    const paymentData = { paymentMethod: paymentMethod as PaymentMethod, ...(isDemoPayment(paymentMethod) ? { demoCommissionBps: Math.round(settings.commissionPercent*100) } : {}) };
     const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
     const previous = await findBookingAttempt(db, attemptId, body);
     if (previous) return NextResponse.json({ booking: omitTicket(bookingView(previous)) });
@@ -152,6 +153,8 @@ async function handlePOST(req: NextRequest) {
     if (type !== "RIDE" && type !== "DELIVERY") {
       return NextResponse.json({ error: "Choose ride or delivery." }, { status: 400 });
     }
+    if((type==="RIDE" && !settings.rideEnabled)||(type==="DELIVERY" && !settings.deliveryEnabled)) throw new CustomerError("This service is temporarily paused for new bookings.",409);
+    if(!settings.vehicles.includes(vehicleClass)) throw new CustomerError("This vehicle is temporarily unavailable for new bookings.",409);
     if (!isBookingVehicle(vehicleClass)) {
       return NextResponse.json({ error: "Choose Motor, Tricycle or Car." }, { status: 400 });
     }
@@ -186,6 +189,7 @@ async function handlePOST(req: NextRequest) {
       }
 
       const quote = quoteRideFare({
+        settings,
         pickup,
         dropoff,
         vehicleClass,
@@ -234,6 +238,7 @@ async function handlePOST(req: NextRequest) {
     }
 
     const quote = quoteFare({
+      settings,
       pickup,
       dropoff,
       vehicleClass,

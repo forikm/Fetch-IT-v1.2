@@ -21,6 +21,7 @@ import {
   type VehicleClass,
   type VehicleMeta,
 } from "@/lib/constants";
+import { configuredSurge, type PlatformSettings } from "./platform-policy";
 
 export interface LatLng {
   lat: number;
@@ -155,11 +156,12 @@ export function quoteFare(params: {
   vehicleClass: VehicleClass;
   cargoWeightKg: number;
   when?: Date;
+  settings?: PlatformSettings;
 }): Quote {
-  const vehicle = VEHICLES[params.vehicleClass];
+  const vehicle = { ...VEHICLES[params.vehicleClass], ...params.settings?.fares[params.vehicleClass] };
   const straightLineKm = round2(haversineKm(params.pickup, params.dropoff));
   const distanceKm = roadDistanceKm(params.pickup, params.dropoff);
-  const surgeMultiplier = computeSurgeMultiplier(params.when ?? new Date());
+  const surgeMultiplier = params.settings ? configuredSurge(params.settings, params.when) : computeSurgeMultiplier(params.when ?? new Date());
 
   const fare = computeFare({
     distanceKm,
@@ -197,11 +199,12 @@ export function quoteRideFare(params: {
   dropoff: LatLng;
   vehicleClass: VehicleClass;
   when?: Date;
+  settings?: PlatformSettings;
 }): RideQuote {
-  const vehicle = VEHICLES[params.vehicleClass];
+  const vehicle = { ...VEHICLES[params.vehicleClass], ...params.settings?.fares[params.vehicleClass] };
   const straightLineKm = round2(haversineKm(params.pickup, params.dropoff));
   const distanceKm = roadDistanceKm(params.pickup, params.dropoff);
-  const surgeMultiplier = computeSurgeMultiplier(params.when ?? new Date());
+  const surgeMultiplier = params.settings ? configuredSurge(params.settings, params.when) : computeSurgeMultiplier(params.when ?? new Date());
 
   const fare = computeFare({
     distanceKm,

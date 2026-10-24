@@ -127,7 +127,7 @@ function SupportConversation({ id, onBack }: { id: string; onBack: () => void })
         return { ...next, messages: [...older, ...next.messages], nextCursor: older.length ? previous!.nextCursor : next.nextCursor };
       });
       setError("");
-      await markSupportRead(next.messages.filter(m => m.authorRole === "ADMIN" && (!next.ticket.customerReadAt || m.createdAt > next.ticket.customerReadAt)).map(m => m.id));
+      await markSupportRead(next.messages.filter(m => m.authorRole !== "CUSTOMER" && (!next.ticket.customerReadAt || m.createdAt > next.ticket.customerReadAt)).map(m => m.id));
     } catch (e) { if (!signal?.aborted) setError((e as Error).message); }
   }
   useVisiblePoll(userId ? `${userId}:conversation:${id}` : "", refresh, 10000);
@@ -143,7 +143,7 @@ function SupportConversation({ id, onBack }: { id: string; onBack: () => void })
           setOlderBusy(true);
           try { const older = await customerResponse<Conversation>(await fetch(`/api/support/${encodeURIComponent(id)}?cursor=${encodeURIComponent(data.nextCursor!)}`, { cache: "no-store" }), "Couldn’t load earlier messages.");
             setData(previous => previous ? { ...previous, messages: [...older.messages.filter(m => !previous.messages.some(p => p.id === m.id)), ...previous.messages], nextCursor: older.nextCursor } : previous);
-            await markSupportRead(older.messages.filter(m => m.authorRole === "ADMIN" && (!older.ticket.customerReadAt || m.createdAt > older.ticket.customerReadAt)).map(m => m.id));
+            await markSupportRead(older.messages.filter(m => m.authorRole !== "CUSTOMER" && (!older.ticket.customerReadAt || m.createdAt > older.ticket.customerReadAt)).map(m => m.id));
           } catch (e) { setError((e as Error).message); } finally { setOlderBusy(false); }
         }}>Load earlier messages</Button>}
         {data.messages.map(m => <MessageBubble key={m.id} body={m.body} at={m.createdAt} customer={m.authorRole === "CUSTOMER"} />)}
