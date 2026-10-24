@@ -37,7 +37,7 @@ for (const app of targets) {
     else fs.writeFileSync(dest,source);
   }
 }
-const staffApplicationFiles = ["src/components/rider-applications.tsx", "src/components/rider-applications.css", "src/app/dashboard/applications/page.tsx", "src/app/dashboard/applications/[id]/page.tsx", "src/app/api/rider-applications/route.ts", "src/app/api/rider-applications/[id]/route.ts"];
+const staffApplicationFiles = ["src/components/overview-onboarding.tsx", "src/components/rider-applications.tsx", "src/components/rider-applications.css", "src/app/dashboard/applications/page.tsx", "src/app/dashboard/applications/[id]/page.tsx", "src/app/api/rider-applications/route.ts", "src/app/api/rider-applications/[id]/route.ts"];
 if (targets.includes("fetch-superadmin")) for (const file of staffApplicationFiles) {
  const source = fs.readFileSync(path.resolve(root, "../fetch-admin", file));
  const dest = path.resolve(root, "../fetch-superadmin", file);
