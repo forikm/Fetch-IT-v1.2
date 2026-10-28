@@ -67,7 +67,7 @@ test("orientation letters contain actual PDF pages and the email uses the applic
 });
 test("approval readiness requires every section and document, not just an accepted application label", () => {
   const policy = load('src/lib/rider-application-policy.ts');
-  const { applicationReady } = load('src/lib/rider-application.ts', { './db': { db: {} }, './rider-application-policy': policy, './rider-eligibility': {}, './application-demo-policy': load('src/lib/application-demo-policy.ts', { './rider-application-policy': policy }) });
+  const { applicationReady } = load('src/lib/rider-application.ts', { './db': { db: {} }, './rider-application-policy': policy, './rider-eligibility': {} });
   const app = { vehicleClass: 'TRICYCLE', services: ['RIDE'], fields, fieldReviews: Object.fromEntries(Object.keys(SECTION_FIELDS).map(s => [s, { status: 'ACCEPTED' }])), emailVerifiedAt: new Date(), verifiedEmail: 'sample@example.invalid', user: { email: 'sample@example.invalid' }, documents: requiredDocuments('TRICYCLE', ['RIDE'], fields).map(kind => ({ kind, current: true, status: 'ACCEPTED' })) };
   applicationReady(app);
   assert.throws(() => applicationReady({ ...app, documents: app.documents.filter(d => d.kind !== 'NBI') }));

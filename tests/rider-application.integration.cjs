@@ -175,9 +175,13 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   demo=(await applicant(null,200,demoUser.id)).application;
   demo=(await applicant({action:'save',version:demo.version,fields:{...fields,address:'Saved original real draft address'},vehicleClass:'TRICYCLE',services:['RIDE']},200,demoUser.id)).application;
   demo=(await applicant({action:'demo-enable',version:demo.version},200,demoUser.id)).application;
-  assert.equal(demo.isDemo,true);assertions++;
+  assert.equal(demo.isDemo,true);assert.equal(demo.vehicleClass,'TRICYCLE');assert.deepEqual(demo.services,['RIDE']);assert.equal(demo.fields.address,'Saved original real draft address');assertions+=4;
   demo=(await applicant({action:'save',version:demo.version,isDemo:false,fields,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE']},200,demoUser.id)).application;
   assert.equal(demo.isDemo,true);assertions++;
+  demo=(await applicant({action:'demo-reset',version:demo.version},200,demoUser.id)).application;
+  assert.equal(demo.isDemo,false);assert.equal(demo.fields.address,'Saved original real draft address');assert.equal(demo.vehicleClass,'TRICYCLE');assert.deepEqual(demo.services,['RIDE']);assertions+=4;
+  demo=(await applicant({action:'demo-enable',version:demo.version},200,demoUser.id)).application;
+  demo=(await applicant({action:'save',version:demo.version,fields,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE']},200,demoUser.id)).application;
   const {POST:demoStep}=load('../fetch-rider/src/app/api/rider/application/demo/route.ts');
   async function step(body,expected=200,origin='http://fixture.invalid',complete=true) {
     let data, parts=0;
@@ -218,16 +222,15 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   await staff(actors.reviewer,{action:'review',documentId:app.documents.find(d=>d.current&&d.kind==='OR').id,status:'ACCEPTED'});
   await staff(actors.reviewer,{action:'recommend'});
   await staff(actors.admin,{action:'schedule',orientationAt:new Date(Date.now()+60000).toISOString(),venue:'Demo orientation room',instructions:'Demonstration appointment only. Do not attend a real venue.'});
-  assert(messages.at(-1).subject.startsWith('[DEMO]'));assert.equal(messages.at(-1).to,demoUser.email);assert.equal(messages.at(-1).attachments[0].content.subarray(0,5).toString(),'%PDF-');assertions+=3;
+  assert(!messages.at(-1).subject.startsWith('[DEMO]'));assert.equal(messages.at(-1).to,demoUser.email);assert.equal(messages.at(-1).attachments[0].content.subarray(0,5).toString(),'%PDF-');assertions+=3;
   await db.riderApplication.update({where:{id:app.id},data:{orientationAt:new Date(Date.now()-60000)}});app=(await applicant(null,200,demoUser.id)).application;
   await staff(actors.reviewer,{action:'assessment',attended:true,passed:true,notes:'Demo orientation and vehicle assessment completed.'});
-  await staff(actors.admin,{action:'activate',services:app.services},403);
-  await staff(actors.admin,{action:'complete-demo',services:app.services});
-  assert.equal(app.status,'DEMO_COMPLETED');assert.equal(await db.riderServiceApproval.count({where:{userId:demoUser.id}}),0);assert(!messages.at(-1).text.includes('are activated'));assertions+=3;
-  const oldDocumentCount=app.documents.length;
-  app=(await applicant({action:'demo-reset',version:app.version},200,demoUser.id)).application;
-  assert.equal(app.isDemo,false);assert.equal(app.status,'DRAFT');assert.equal(app.documents.filter(d=>d.current).length,0);assert.equal(app.documents.length,oldDocumentCount);assert.deepEqual(Object.keys(app.fieldReviews),[]);assert(app.emailVerifiedAt);assertions+=6;
-  assert.equal(app.fields.address,'Saved original real draft address');assert.equal(app.vehicleClass,'TRICYCLE');assert.deepEqual(app.services,['RIDE']);assertions+=3;
+  await staff(actors.admin,{action:'activate',services:app.services},400);
+  const zone=[[120.20,16.00],[120.40,16.00],[120.40,16.15],[120.20,16.15],[120.20,16.00]];
+  await staff(actors.admin,{action:'activate',services:app.services,operatingZone:zone});
+  assert.equal(app.status,'ACTIVE');assert.equal(await db.riderServiceApproval.count({where:{userId:demoUser.id}}),2);assert(messages.at(-1).text.includes('are activated'));assert(!messages.at(-1).subject.startsWith('[DEMO]'));assertions+=4;
+  const access=await applicant(null,200,demoUser.id);assert.equal(access.canWork,true);assert.equal(access.approvals.length,2);assertions+=2;
+  await applicant({action:'demo-reset',version:app.version},409,demoUser.id);
   await applicant({action:'demo-enable',version:app.version},409,original);
   if(process.env.ONBOARDING_BROWSER==='1') {
    const password='Fixture-only-onboarding-2026!';
