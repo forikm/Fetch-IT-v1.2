@@ -11,7 +11,7 @@ import { SupportCenter } from "./support-center";
 import { PaymentCard } from "./payment-card";
 
 type Review = { rating: number; comment: string | null };
-export function BookingActions({ booking, readOnly = false }: { readOnly?: boolean; booking: { id: string; refCode: string; status: string; riderId: string | null } }) {
+export function BookingActions({ booking, readOnly = false }: { readOnly?: boolean; booking: { id: string; refCode: string; type?: "RIDE" | "DELIVERY"; status: string; riderId: string | null } }) {
   const online = useOnlineStatus();
   const offlineAccess = useAppStore(state => state.offlineAccess);
   const unavailable = readOnly || !online || offlineAccess;

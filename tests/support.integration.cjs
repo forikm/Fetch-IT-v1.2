@@ -1,4 +1,4 @@
-// Exercises real PostgreSQL migrations and both production apps in a fresh,
+// Exercises real PostgreSQL migrations and customer/staff apps in a fresh,
 // disposable schema. Never changes the configured application's schema or data.
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -23,8 +23,9 @@ const adminEnv = parseEnv(fs.readFileSync(path.join(adminRoot, ".env"), "utf8"))
 const servers = [];
 const ports = { customer: 3210, admin: 3212 };
 const previewPassword = "support-test-only";
+const staffSessionId = crypto.randomUUID();
 function cookie(user, admin = false) {
-  const value = Buffer.from(JSON.stringify({ uid: user.id, email: user.email, name: user.name, role: user.role, iat: Date.now(), exp: Date.now() + 600000 })).toString("base64url");
+  const value = Buffer.from(JSON.stringify({ uid: user.id, ...(admin ? { sid: staffSessionId } : {}), email: user.email, name: user.name, role: user.role, iat: Date.now(), exp: Date.now() + 600000 })).toString("base64url");
   const secret = admin ? adminEnv.ADMIN_SESSION_SECRET || "fetch-it-admin-dev-secret-please-rotate" : process.env.SESSION_SECRET || "fetch-it-dev-secret-please-rotate";
   return `${admin ? "fetchit_admin_session" : "fetchit_session"}=${value}.${crypto.createHmac("sha256", secret).update(value).digest("base64url")}`;
 }
@@ -38,13 +39,16 @@ async function request(route, auth, expected = 200, method = "GET", body, admin 
 }
 async function startServers() {
   for (const [appRoot, port, extra] of [[root, ports.customer, {}], [adminRoot, ports.admin, adminEnv]]) {
-    const child = spawn(process.execPath, [path.join(appRoot, "node_modules/next/dist/bin/next"), "start", "-p", String(port)], {
-      cwd: appRoot, env: { ...process.env, ...extra, DATABASE_URL: databaseUrl }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    // Staff production credentials must use a restricted runtime role. Local
+    // development allows the schema owner to exercise this disposable schema.
+    const admin = appRoot === adminRoot;
+    const child = spawn(process.execPath, [path.join(appRoot, "node_modules/next/dist/bin/next"), ...(admin ? ["dev", "--webpack"] : ["start"]), "-p", String(port)], {
+      cwd: appRoot, env: { ...process.env, ...extra, NODE_ENV: admin ? "development" : "production", DATABASE_URL: databaseUrl }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     servers.push(child);
     // Consume logs without printing credentials or unrelated database query data.
     child.stdout.resume(); child.stderr.resume();
   }
-  for (let attempt = 0; attempt < 60; attempt++) {
+  for (let attempt = 0; attempt < 120; attempt++) {
     if (servers.some(s => s.exitCode !== null)) throw new Error("A support test server exited before becoming ready.");
     const ready = await Promise.all(Object.values(ports).map(async port => {
       try { await fetch(`http://localhost:${port}/api`, { signal: AbortSignal.timeout(1000) }); return true; } catch { return false; }
@@ -79,6 +83,7 @@ async function main() {
       actors[label] = await db.user.create({ data: { name: `Support test ${label}`, email, role, isBanned: label === "banned",
         authIdentities: { create: { provider: "PASSWORD", providerUserId: email, passwordHash: `${salt}:${crypto.scryptSync(previewPassword, salt, 64).toString("hex")}` } } } });
     }
+    await db.staffSession.create({ data: { id: staffSessionId, userId: actors.admin.id, expiresAt: new Date(Date.now() + 600000) } });
     const token = cookie(actors.customer), otherToken = cookie(actors.other), adminToken = cookie(actors.admin, true);
     await request("/api/support", null, 401);
     await request("/api/support/notifications", cookie(actors.rider), 403);
@@ -94,6 +99,19 @@ async function main() {
     assert.equal(ticket.bookingId, null);
     const active = (await request("/api/support", token, 201, "POST", { bookingId: booking.id, category: "BOOKING", message: "My rider has not arrived" })).data.ticket;
     assert.equal(active.priority, "HIGH");
+    // Guided support retains issue context in the existing staff conversation.
+    const guidedRide = (await request("/api/support", token, 201, "POST", { bookingId: booking.id, topic: "ride", issue: "rider", message: "The rider was rude during pickup." })).data.ticket;
+    assert.equal(guidedRide.category, "RIDER");
+    assert.equal(guidedRide.message, "Issue with the Ride · Issue with the rider\n\nThe rider was rude during pickup.");
+    await request("/api/support", token, 400, "POST", { bookingId: booking.id, topic: "delivery", issue: "damaged", message: "The package arrived damaged." });
+    await request("/api/support", token, 400, "POST", { topic: "ride", issue: "rider", message: "There was a problem with the rider." });
+    const delivery = await db.booking.create({ data: { refCode: "SUPPORT-DELIVERY", customerId: actors.customer.id, type: "DELIVERY", pickupLabel: "Test pickup", pickupLat: 14.6, pickupLng: 121,
+      dropoffLabel: "Test dropoff", dropoffLat: 14.7, dropoffLng: 121.1, vehicleClass: "MOTORCYCLE", distanceKm: 2, baseFare: 50, totalFare: 50 } });
+    const guidedDelivery = (await request("/api/support", token, 201, "POST", { bookingId: delivery.id, topic: "delivery", issue: "missing", message: "Marked delivered, but no package arrived." })).data.ticket;
+    assert.equal(guidedDelivery.category, "BOOKING");
+    assert(guidedDelivery.message.startsWith("Issue with Delivery · Package is missing or marked delivered\n\n"));
+    const staffView = (await request(`/dashboard/support?q=${encodeURIComponent(delivery.refCode)}`, adminToken, 200, "GET", undefined, true)).data;
+    assert(staffView.includes("Package is missing or marked delivered"));
     await assert.rejects(db.supportTicket.create({ data: { customerId: actors.rider.id, category: "OTHER", message: "Invalid account" } }));
     await assert.rejects(db.supportTicket.create({ data: { customerId: actors.other.id, bookingId: booking.id, category: "BOOKING", message: "Invalid ownership" } }));
     for (const method of ["GET", "POST"]) await request(`/api/support/${ticket.id}`, otherToken, 404, method, method === "POST" ? { message: "Forged reply" } : undefined);
@@ -144,7 +162,7 @@ async function main() {
     const tickets = (await request("/api/support", token)).data;
     assert.equal(tickets.tickets.length, 20); assert(tickets.nextCursor);
     const olderTickets = (await request(`/api/support?cursor=${tickets.nextCursor}`, token)).data;
-    assert.equal(new Set([...tickets.tickets, ...olderTickets.tickets].map(t => t.id)).size, 24);
+    assert.equal(new Set([...tickets.tickets, ...olderTickets.tickets].map(t => t.id)).size, 26);
     assert.equal((await request("/api/support", otherToken)).data.tickets.length, 0);
     await request(`/api/support?cursor=${ticket.id}`, otherToken, 404);
     await request("/api/support/notifications", token, 400, "PATCH", { ids: Array(101).fill(firstReplyId) });

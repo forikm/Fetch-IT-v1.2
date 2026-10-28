@@ -5,6 +5,28 @@ includes FAQs, booking and account requests, and full conversations. Booking
 cards retain **Get help**, using the same conversation interface scoped to that
 booking. A support notification links directly to `/help?ticket=<id>`.
 
+## Guided requests
+
+The request form starts with **What’s the issue?** and offers **Issue with
+Delivery**, **Issue with the Ride**, **Account or app help**, and **Something
+else**. Delivery and ride each reveal **Issue with the rider**, payment and
+cancellation help, plus service-specific choices such as missing packages or
+items left behind. The customer then links a matching booking and receives a
+writing prompt for the selected concern. A booking’s **Get help** dialog keeps
+that booking linked and shows its service’s issue choices.
+
+The form preserves unsent descriptions when changing choices and when a send
+fails. It displays the description limit, explains where replies appear, and
+confirms a successful send in the conversation. Account and general questions
+do not require a booking. FAQs use the same button and option labels as the form.
+
+The API validates the topic/issue combination and booking service, derives the
+existing staff category, and prefixes the initial message with both selected
+labels. Staff can read the full context using the existing inbox; older clients
+and tickets remain supported. No database migration is required for guided
+requests. The complete message, including the issue labels, stays within 2,000
+characters.
+
 Customers can send follow-ups and reopen resolved requests. Replies stay in the
 same ticket. Messages and requests are paginated, drafts survive navigation in
 the current browser tab, and errors keep unsent text available for retry.
@@ -75,12 +97,23 @@ $env:RUN_SUPPORT_INTEGRATION='1'
 node tests/support.integration.cjs
 ```
 
-Build the admin app first as well. The integration check starts both production
-apps on ports 3210 and 3212 and applies migrations to a fresh random PostgreSQL
+The integration check starts the production customer app on port 3210 and the
+development admin app on port 3212, and applies migrations to a fresh random PostgreSQL
 schema. It tests ownership, roles, duplicates, general requests, priorities,
 two-way replies, reopening, optimistic conflicts, the unanswered queue, read
 receipts, and pagination. It removes only its own temporary schema and servers
 on completion. It does not deploy the migration to the application schema.
+The staff fixture includes a live staff session. The admin app runs in development
+because production requires restricted database credentials, while the test uses
+the schema owner only inside its disposable schema.
+
+`tests/support-ux.browser.mjs` checks the browser interactions with isolated API
+fixtures: issue choices, matching and older bookings, drafts, failed sends,
+reopening, empty/error states, and desktop/mobile widths. Start a local customer
+build on port 3215 and run the script with Playwright available. Use
+`SUPPORT_UX_URL` for another preview URL, `SUPPORT_PLAYWRIGHT_MODULE` for a bundled
+Playwright module URL, and `SUPPORT_BROWSER_CHANNEL` to override the default
+installed Edge browser. Screenshots are saved in the ignored `output/` folder.
 
 Use `SUPPORT_TEST_DATABASE_URL` to choose a dedicated test database; otherwise
 the configured database hosts the isolated schema. All test connections explicitly

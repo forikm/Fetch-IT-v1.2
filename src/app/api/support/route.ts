@@ -2,7 +2,7 @@ import { withRequestLog, RateLimitError } from "@/lib/request-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CustomerError, requireCustomer, customerErrorResponse } from "@/lib/customer-access";
-import { supportInput } from "@/lib/support-input";
+import { supportInput, supportTopic } from "@/lib/support-input";
 
 async function handleGET(request: NextRequest) {
   try {
@@ -29,15 +29,18 @@ async function handlePOST(request: NextRequest) {
   try {
     const session = await requireCustomer();
     let input: ReturnType<typeof supportInput>;
-    try { input = supportInput(await request.json().catch(() => null)); }
+    const body = await request.json().catch(() => null);
+    try { input = supportInput(body); }
     catch (error) {
       throw new CustomerError((error as Error).message, 400);
     }
     const ticket = await db.$transaction(async (tx) => {
       // Serializes duplicate submissions, including general requests without a booking.
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${session.uid} FOR UPDATE`;
-      const booking = input.bookingId ? await tx.booking.findFirst({ where: { id: input.bookingId, customerId: session.uid }, select: { status: true } }) : null;
+      const booking = input.bookingId ? await tx.booking.findFirst({ where: { id: input.bookingId, customerId: session.uid }, select: { status: true, type: true } }) : null;
       if (input.bookingId && !booking) throw new CustomerError("Booking not found.", 404);
+      const bookingType = supportTopic(body?.topic)?.bookingType;
+      if (bookingType && booking?.type !== bookingType) throw new CustomerError(`Choose a ${bookingType === "RIDE" ? "ride" : "delivery"} booking for this issue.`, 400);
       const existing = await tx.supportTicket.findFirst({ where: { bookingId: input.bookingId, customerId: session.uid,
         status: { in: ["OPEN", "IN_PROGRESS"] }, category: input.category } });
       if (existing) throw new CustomerError("You already have an open request for this issue. Open it in your requests to add a reply.", 409);
