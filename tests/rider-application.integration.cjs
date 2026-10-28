@@ -133,6 +133,7 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   await applicant({action:'send-code'},200,demoUser.id);
   await applicant({action:'verify-code',code:messages.at(-1).text.match(/code is (\d{6})/)[1]},200,demoUser.id);
   demo=(await applicant(null,200,demoUser.id)).application;
+  demo=(await applicant({action:'save',version:demo.version,fields:{...fields,address:'Saved original real draft address'},vehicleClass:'TRICYCLE',services:['RIDE']},200,demoUser.id)).application;
   demo=(await applicant({action:'demo-enable',version:demo.version},200,demoUser.id)).application;
   assert.equal(demo.isDemo,true);assertions++;
   demo=(await applicant({action:'save',version:demo.version,isDemo:false,fields,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE']},200,demoUser.id)).application;
@@ -163,6 +164,7 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   const oldDocumentCount=app.documents.length;
   app=(await applicant({action:'demo-reset',version:app.version},200,demoUser.id)).application;
   assert.equal(app.isDemo,false);assert.equal(app.status,'DRAFT');assert.equal(app.documents.filter(d=>d.current).length,0);assert.equal(app.documents.length,oldDocumentCount);assert.deepEqual(Object.keys(app.fieldReviews),[]);assert(app.emailVerifiedAt);assertions+=6;
+  assert.equal(app.fields.address,'Saved original real draft address');assert.equal(app.vehicleClass,'TRICYCLE');assert.deepEqual(app.services,['RIDE']);assertions+=3;
   await applicant({action:'demo-enable',version:app.version},409,original);
   if(process.env.ONBOARDING_BROWSER==='1') {
    const password='Fixture-only-onboarding-2026!';
