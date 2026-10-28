@@ -34,7 +34,9 @@ function fixture(overrides = {}) {
   const copy = () => structuredClone(app);
   const db = {
     $queryRaw: async () => [],
+    user: { findUnique: async () => ({ ...app.user, role: 'RIDER' }) },
     riderApplication: {
+      upsert: async () => copy(),
       findUnique: async () => { snapshots++; return copy(); },
       findUniqueOrThrow: async () => { snapshots++; return copy(); },
       update: async ({ data, include }) => { assert.equal(include, undefined); writes++; for (const [key, value] of Object.entries(data)) app[key] = key === 'version' ? app.version + value.increment : value; return copy(); },
@@ -53,7 +55,7 @@ function fixture(overrides = {}) {
     method: 'POST', headers: { origin: 'https://admin.example.invalid', 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'review', section: 'identity', status: 'ACCEPTED', version: 3, ...body }),
   }), person, app.id);
-  return { app, call, counts: () => ({ snapshots, writes, mails }) };
+  return { app, call, remove: documentId => load('src/lib/rider-application.ts').removeApplicationDocument('rider', app.version, documentId), counts: () => ({ snapshots, writes, mails }) };
 }
 
 test('save returns the committed decision, incremented version and its audit event using only two detail snapshots', async () => {
@@ -86,6 +88,23 @@ test('stale versions, another reviewer, banned applicants and expired documents 
   ]) {
     const f = fixture(overrides), response = await f.call(body, actor);
     assert.equal(response.status, status); assert.equal(f.counts().writes, 0);
+  }
+});
+
+test('undoing a replacement restores only feedback from the current submission, never an older real or demo application cycle', async () => {
+  for (const currentCycle of [true, false]) {
+    const submittedAt = new Date('2026-10-28T00:00:00Z');
+    const f = fixture({ status: 'NEEDS_CORRECTION', submittedAt, documents: [
+      { id: 'replacement', kind: 'OR', version: 2, current: true, status: 'PENDING' },
+      { id: 'flagged', kind: 'OR', version: 1, current: false, status: 'NEEDS_CORRECTION', reason: 'Upload the clear receipt.', reviewedAt: new Date(currentCycle ? '2026-10-28T01:00:00Z' : '2026-10-27T00:00:00Z') },
+    ] });
+    const saved = await f.remove('replacement');
+    assert.equal(saved.version, 4);
+    assert.equal(saved.documents.find(d => d.id === 'replacement').current, false);
+    assert.equal(saved.documents.find(d => d.id === 'flagged').current, currentCycle);
+    assert.equal(saved.documents.find(d => d.id === 'flagged').reason, 'Upload the clear receipt.');
+    assert.equal(saved.events[0].action, 'DOCUMENT_REMOVED');
+    assert.equal(f.counts().mails, 0);
   }
 });
 
