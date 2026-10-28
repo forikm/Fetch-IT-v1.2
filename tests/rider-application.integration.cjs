@@ -83,7 +83,20 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   const sharp=require('sharp');const image=await sharp({create:{width:900,height:700,channels:3,background:'#fff'}}).png().toBuffer();
   async function upload(kind,expected=200){const form=new FormData();form.set('file',new File([image],'fixture.png',{type:'image/png'}));form.set('kind',kind);form.set('version',String(app.version));const res=await applicantRequest(new NextRequest('http://fixture.invalid/api/rider/application',{method:'POST',body:form}),user.id);const data=await res.json();assert.equal(res.status,expected,JSON.stringify(data));assertions++;if(data.application)app=data.application;return data;}
   for(const kind of requiredDocuments('TRICYCLE',['DELIVERY','RIDE'],fields))await upload(kind);
+  // Removing a draft upload clears its slot, keeps history and preserves ownership/version checks.
+  const accidental=app.documents.find(d=>d.current&&d.kind==='NBI');
+  const otherDraft=(await applicant(undefined,200,other.id)).application;
+  await applicant({action:'remove-document',version:otherDraft.version,documentId:accidental.id},404,other.id);
+  await applicant({action:'remove-document',version:app.version-1,documentId:accidental.id},409);
+  app=(await applicant({action:'remove-document',version:app.version,documentId:accidental.id})).application;
+  assert(!app.documents.some(d=>d.current&&d.kind==='NBI'));assertions++;
+  assert(app.documents.some(d=>d.id===accidental.id&&!d.current));assertions++;
+  assert.equal(app.events[0].action,'DOCUMENT_REMOVED');assertions++;
+  await applicant({action:'remove-document',version:app.version,documentId:accidental.id},404);
+  await applicant({action:'submit',version:app.version,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE'],fields},400);
+  await upload('NBI');
   app=(await applicant({action:'submit',version:app.version,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE'],fields})).application;
+  await applicant({action:'remove-document',version:app.version,documentId:app.documents.find(d=>d.current).id},409);
   async function staff(actor,body,expected=200){const res=await staffApplicationRequest(new NextRequest('http://fixture.invalid/api/rider-applications/'+app.id,body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({version:app.version,...body})}:{}),actor,app.id);const data=await res.json();assert.equal(res.status,expected,JSON.stringify(data));assertions++;if(data.application)app=data.application;return data;}
   await staff(actors.support,null,403);await staff(actors.reviewer,{action:'claim'});
   for(const section of Object.keys(SECTION_FIELDS))await staff(actors.reviewer,{action:'review',section,status:'ACCEPTED'});
@@ -91,7 +104,17 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   await staff(actors.reviewer,{action:'recommend'},400);await staff(actors.reviewer,{action:'corrections'});
   assert(messages.at(-1).text.includes('official receipt'));assertions++;
   const acceptedNbi=app.documents.find(d=>d.current&&d.kind==='NBI').id;
+  await applicant({action:'remove-document',version:app.version,documentId:acceptedNbi},409);
+  const flaggedReceipt=app.documents.find(d=>d.current&&d.kind==='OR');
+  await applicant({action:'remove-document',version:app.version,documentId:flaggedReceipt.id},409);
   await upload('NBI',400);await upload('OR');
+  const accidentalReplacement=app.documents.find(d=>d.current&&d.kind==='OR');
+  app=(await applicant({action:'remove-document',version:app.version,documentId:accidentalReplacement.id})).application;
+  assert.equal(app.documents.find(d=>d.current&&d.kind==='OR').id,flaggedReceipt.id);assertions++;
+  assert.equal(app.documents.find(d=>d.current&&d.kind==='OR').reason,flaggedReceipt.reason);assertions++;
+  assert.equal(app.documents.find(d=>d.id===accidentalReplacement.id).current,false);assertions++;
+  await applicant({action:'submit',version:app.version,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE'],fields},400);
+  await upload('OR');
   app=(await applicant({action:'submit',version:app.version,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE'],fields})).application;
   assert.equal(app.documents.find(d=>d.id===acceptedNbi).status,'ACCEPTED');assertions++;
   await staff(actors.reviewer,{action:'review',documentId:app.documents.find(d=>d.current&&d.kind==='OR').id,status:'ACCEPTED'});
