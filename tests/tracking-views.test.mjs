@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import * as bookingUi from "../src/lib/customer-booking-ui.ts";
 
 const jsx = { jsx: (type, props, key) => ({ type, props, key }), jsxs: (type, props, key) => ({ type, props, key }) };
 function load(file, mocks) {
@@ -12,6 +13,7 @@ function load(file, mocks) {
   }).outputText;
   vm.runInNewContext(compiled, { exports, ...mocks.globals, require(name) {
     if (name === "react/jsx-runtime") return jsx;
+    if (name === "@/lib/customer-booking-ui") return bookingUi;
     return mocks[name] ?? new Proxy({}, { get: (_, key) => key === "cn" ? (...args) => args.join(" ") : String(key) });
   } });
   return exports;
@@ -23,13 +25,14 @@ function nodes(node) {
 }
 const constants = { VEHICLES: { MOTORCYCLE: { label: "Motor" } }, statusLabel: status => status };
 const ride = { id: "ride-1", refCode: "RIDE-TEST", status: "ACCEPTED", etaMinutes: 10, riderId: "rider-1", rider: { name: "Test driver", rating: 5 },
-  vehicleClass: "MOTORCYCLE", passengers: 1, totalFare: 60, pickupLat: 14.6, pickupLng: 120.9, dropoffLat: 14.7, dropoffLng: 121, trackingUpdates: [] };
+  type: "RIDE", vehicleClass: "MOTORCYCLE", passengers: 1, totalFare: 60, pickupLat: 14.6, pickupLng: 120.9, dropoffLat: 14.7, dropoffLng: 121, trackingUpdates: [] };
 
 test("ride tracking renders current booking GPS and clears it after reassignment", () => {
   let props = { ride: { ...ride }, onClose() {}, onUpdated(update) { props.ride = { ...props.ride, ...update }; } };
   let update;
   const { RideTrackingView } = load("../src/components/fetchit/customer/ride-tracking-view.tsx", {
     "@/lib/constants": constants,
+    "@/hooks/use-ride-location": { useRideLocation: () => ({ location: null, message: "" }) },
     "@/hooks/use-tracking-updates": { useTrackingUpdates: (_, callback) => { update = callback; } },
   });
   const render = () => nodes(RideTrackingView(props));
@@ -46,6 +49,148 @@ test("ride tracking renders current booking GPS and clears it after reassignment
   assert.equal(render().find(node => node.type === "RidePickupOtp").key, "ride-1:rider-2");
   update({ status: "PICKED_UP" });
   assert(!render().some(node => node.type === "RidePickupOtp"));
+});
+
+test("accepted ride cards open details by card or keyboard button without intercepting other actions", () => {
+  let opened = 0;
+  const { CustomerBookingCard } = load("../src/components/fetchit/customer/customer-booking-card.tsx", { "@/lib/constants": constants });
+  const props = { booking: ride, readOnly: false, onTrack: () => opened++, onRefresh() {}, onRepeat() {} };
+  const tree = CustomerBookingCard(props);
+  tree.props.onClick({ target: { closest: () => null } });
+  assert.equal(opened, 1);
+  for (const element of ["button", "a", "[role='dialog']"]) {
+    tree.props.onClick({ target: { closest: selector => { assert(selector.includes(element)); return {}; } } });
+  }
+  assert.equal(opened, 1);
+  const button = nodes(tree).find(node => node.type === "button" && node.props["aria-label"]?.includes("profile and map"));
+  button.props.onClick();
+  assert.equal(opened, 2);
+  for (const status of ["PENDING", "MATCHED", "CANCELLED", "DELIVERED"]) {
+    assert.equal(CustomerBookingCard({ ...props, booking: { ...ride, status } }).props.onClick, undefined);
+  }
+  assert.equal(CustomerBookingCard({ ...props, booking: { ...ride, type: "DELIVERY" } }).props.onClick, undefined);
+});
+
+test("ride details show the rider profile, local position, and an emergency dialer link", () => {
+  const local = { lat: 14.61, lng: 120.91 };
+  let trackingEnabled;
+  const { RideTrackingView } = load("../src/components/fetchit/customer/ride-tracking-view.tsx", {
+    "@/lib/constants": constants,
+    "@/hooks/use-tracking-updates": { useTrackingUpdates() {} },
+    "@/hooks/use-ride-location": { useRideLocation(enabled) { trackingEnabled = enabled; return { location: enabled ? local : null, message: "Location enabled" }; } },
+  });
+  const booking = { ...ride, rider: { ...ride.rider, phone: "+639171234567", vehiclePlate: "ABC 123", totalDeliveries: 24 } };
+  const render = status => nodes(RideTrackingView({ ride: { ...booking, status }, onClose() {}, onUpdated() {} }));
+  const tree = render("ACCEPTED");
+  assert.equal(trackingEnabled, true);
+  assert.equal(tree.find(node => node.type === "LiveTrackingMap").props.customer, local);
+  assert.equal(tree.find(node => node.type === "a" && node.props.children?.includes("Dial 911")).props.href, "tel:911");
+  assert(tree.some(node => node.type === "dd" && node.props.children === "ABC 123"));
+  assert(tree.some(node => node.type === "dd" && node.props.children === 24));
+  assert(tree.some(node => node.type === "a" && node.props.href === "tel:+639171234567"));
+  assert(tree.some(node => node.type === "CancelBooking"));
+  for (const status of ["PICKED_UP", "IN_TRANSIT", "DELIVERED", "CANCELLED"]) {
+    const next = render(status);
+    assert(!next.some(node => node.type === "CancelBooking"));
+    assert.equal(trackingEnabled, ["PICKED_UP", "IN_TRANSIT"].includes(status));
+  }
+});
+
+test("cancellation submits Driver asked for cancellation as the saved reason", async () => {
+  const states = [], pending = { current: false };
+  let index = 0, submitted, cancelled = 0;
+  const { CancelBooking } = load("../src/components/fetchit/shared/cancel-booking.tsx", {
+    react: { useRef: () => pending, useState(initial) { const slot = index++; if (!(slot in states)) states[slot] = initial; return [states[slot], value => { states[slot] = value; }]; } },
+    "@/hooks/use-online-status": { useOnlineStatus: () => true },
+    "@/lib/customer-request": { customerResponse: async response => response },
+    globals: { fetch: async (url, options) => { submitted = { url, body: JSON.parse(options.body) }; return {}; } },
+  });
+  const render = () => { index = 0; return nodes(CancelBooking({ bookingId: ride.id, onCancelled: () => cancelled++ })); };
+  let tree = render();
+  assert(tree.some(node => node.type === "option" && node.props.children === "Driver asked for cancellation"));
+  tree.find(node => node.type === "select").props.onChange({ target: { value: "Driver asked for cancellation" } });
+  tree = render();
+  await tree.find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
+  assert.equal(submitted.url, `/api/bookings/${ride.id}/cancel`);
+  assert.equal(submitted.body.reason, "Driver asked for cancellation");
+  assert.equal(cancelled, 1);
+});
+
+test("device location updates and permission failure clear the marker and stop watching on close", () => {
+  const states = [], effects = [];
+  let index = 0, success, failure, cleared;
+  const { useRideLocation: readLocation } = load("../src/hooks/use-ride-location.ts", {
+    react: {
+      useState(initial) { const slot = index++; if (!(slot in states)) states[slot] = initial; return [states[slot], value => { states[slot] = value; }]; },
+      useEffect(effect) { effects.push(effect); },
+    },
+    globals: { navigator: { geolocation: {
+      watchPosition(onSuccess, onError) { success = onSuccess; failure = onError; return 7; },
+      clearWatch(id) { cleared = id; },
+    } } },
+  });
+  const render = enabled => { index = 0; return readLocation(enabled); };
+  assert.equal(render(true).location, null);
+  const cleanup = effects[0]();
+  success({ coords: { latitude: 14.62, longitude: 120.92 } });
+  assert.equal(render(true).location.lat, 14.62);
+  failure({ code: 1 });
+  assert.equal(render(true).location, null);
+  assert.match(render(true).message, /Location access is off/);
+  cleanup();
+  assert.equal(cleared, 7);
+  success({ coords: { latitude: 99, longitude: 99 } });
+  assert.equal(render(true).location, null);
+  assert.equal(render(false).location, null);
+  assert.equal(effects.at(-1)(), undefined);
+});
+
+test("the map draws, moves and removes the customer marker alongside booking markers", async () => {
+  const states = [], refs = [], markers = [];
+  let index = 0, refIndex = 0, effects = [];
+  class Marker {
+    constructor(options) { this.options = options; this.position = options.position; this.map = options.map; markers.push(this); }
+    setMap(map) { this.map = map; }
+    setPosition(point) { this.position = point; }
+  }
+  class Map {
+    fitBounds(bounds) { this.bounds = bounds; }
+    getBounds() { return { contains: () => true }; }
+  }
+  class LatLngBounds {
+    points = [];
+    extend(point) { this.points.push(point); }
+  }
+  const { LiveTrackingMap } = load("../src/components/fetchit/shared/live-tracking-map.tsx", {
+    react: {
+      useRef(initial) { const slot = refIndex++; return refs[slot] ??= { current: initial }; },
+      useState(initial) { const slot = index++; if (!(slot in states)) states[slot] = initial; return [states[slot], value => { states[slot] = value; }]; },
+      useEffect(effect) { effects.push(effect); },
+    },
+    "@/lib/google-maps-loader": { loadGoogleMaps: async () => {} },
+    globals: { window: { google: { maps: { Marker, Map, LatLngBounds, Polyline: class { setMap() {} }, SymbolPath: { CIRCLE: 0 } } } } },
+  });
+  const props = { pickup: { lat: 14.6, lng: 120.9 }, dropoff: { lat: 14.7, lng: 121 }, rider: null, customer: { lat: 14.61, lng: 120.91 } };
+  function render() { index = 0; refIndex = 0; effects = []; LiveTrackingMap(props); }
+  render();
+  refs[0].current = {};
+  const cleanup = effects[0]();
+  await Promise.resolve();
+  render();
+  effects[2]();
+  const customer = markers.find(marker => marker.options.title === "Your current location");
+  assert(customer);
+  assert.equal(customer.options.icon.fillColor, "#2563eb");
+  assert.equal(customer.map.bounds.points.length, 3);
+  props.customer = { lat: 14.62, lng: 120.92 };
+  render(); effects[2]();
+  assert.equal(customer.position, props.customer);
+  assert.equal(markers.length, 3);
+  props.customer = null;
+  render(); effects[2]();
+  assert.equal(customer.map, null);
+  cleanup();
+  assert(markers.every(marker => marker.map === null));
 });
 
 function riderHarness({ lists = { active: [ride] }, tab = "active", selected = ride, request } = {}) {

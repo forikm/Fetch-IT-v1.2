@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { customerResponse } from "@/lib/customer-request";
-const reasons = ["Booked by mistake", "Plans changed", "Waiting too long", "Wrong pickup or destination", "Other"];
+const reasons = ["Booked by mistake", "Plans changed", "Waiting too long", "Wrong pickup or destination", "Driver asked for cancellation", "Other"];
 export function CancelBooking({ bookingId, readOnly, onCancelled }: { bookingId: string; readOnly?: boolean; onCancelled: () => void }) {
   const online = useOnlineStatus();
   const pending = useRef(false);

@@ -131,6 +131,7 @@ export interface Booking {
     vehicleClass: string | null;
     vehiclePlate: string | null;
     rating: number;
+    totalDeliveries?: number;
   } | null;
   trackingUpdates?: { lat: number; lng: number; createdAt: string }[];
   deliveryProofs: {
@@ -444,7 +445,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
       <Dialog open={!!trackingBooking} onOpenChange={(o) => !o && setTrackingBooking(null)}>
         <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
           {trackingBooking && (trackingBooking.type === "RIDE" ? (
-            <RideTrackingView ride={trackingBooking} onClose={() => setTrackingBooking(null)} onUpdated={(updated) => setTrackingBooking((prev) => prev ? { ...prev, ...updated } : prev)} />
+            <RideTrackingView key={trackingBooking.id} ride={trackingBooking} readOnly={!online || offlineAccess || !!savedAt} onClose={() => setTrackingBooking(null)} onCancelled={load} onUpdated={(updated) => setTrackingBooking((prev) => prev ? { ...prev, ...updated } : prev)} />
           ) : (
             <>
               <DialogHeader>

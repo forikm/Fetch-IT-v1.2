@@ -22,8 +22,12 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
   const canCancel = ["PENDING", "MATCHED", "ACCEPTED"].includes(booking.status);
   const finished = ["DELIVERED", "CANCELLED"].includes(booking.status);
   const delivered = booking.status === "DELIVERED";
+  const openRide = ride && !!booking.rider && ["ACCEPTED", "PICKED_UP", "IN_TRANSIT"].includes(booking.status);
 
-  return <Card className="min-w-0 border hover:shadow-md transition flex flex-col">
+  return <Card className={`min-w-0 border hover:shadow-md transition flex flex-col ${openRide ? "cursor-pointer" : ""}`} onClick={openRide ? event => {
+    if ((event.target as HTMLElement).closest("button, a, input, select, textarea, [role='dialog']")) return;
+    onTrack();
+  } : undefined}>
     <CardHeader className="min-w-0 grid-cols-[minmax(0,1fr)] pb-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -31,7 +35,7 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
             <span className="font-mono text-sm text-muted-foreground">{booking.refCode}</span>
             <StatusBadge status={booking.status} type={booking.type} />
           </div>
-          <CardTitle className="text-base mt-1.5 [overflow-wrap:anywhere]">{booking.dropoffLabel}</CardTitle>
+          <CardTitle className="text-base mt-1.5 [overflow-wrap:anywhere]">{openRide ? <button type="button" onClick={onTrack} aria-label={`View rider profile and map for ${booking.refCode}`} className="rounded text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">{booking.dropoffLabel}</button> : booking.dropoffLabel}</CardTitle>
           <CardDescription className="flex w-full min-w-0 items-start gap-1 mt-0.5">
             <MapPin className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 [overflow-wrap:anywhere]">from {booking.pickupLabel}</span>
           </CardDescription>
@@ -58,6 +62,7 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
       </div>}
 
       <BookingTimeline status={booking.status} type={booking.type} scheduled={scheduled} />
+      {openRide && <p className="text-xs text-muted-foreground">Tap this booking to view your rider, map and safety options.</p>}
       <div className="flex flex-wrap gap-2 pt-1">
         {booking.status !== "CANCELLED" && !readOnly && !(delivered && !ride) && <Button size="sm" className="flex-1" onClick={onTrack}><Navigation className="h-3.5 w-3.5" />{delivered ? "View ride details" : ride ? "Track ride" : "Track delivery"}</Button>}
         {canCancel && <CancelBooking bookingId={booking.id} readOnly={readOnly} onCancelled={onRefresh} />}

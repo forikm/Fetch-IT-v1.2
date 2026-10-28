@@ -73,6 +73,7 @@ declare namespace google.maps {
   }
 
   enum SymbolPath {
+    CIRCLE,
     FORWARD_CLOSED_ARROW,
   }
 

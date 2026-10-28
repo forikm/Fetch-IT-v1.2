@@ -12,16 +12,19 @@ export function LiveTrackingMap({
   pickup,
   dropoff,
   rider,
+  customer = null,
   className = "h-full w-full",
 }: {
   pickup: Point;
   dropoff: Point;
   rider: Point | null;
+  customer?: Point | null;
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const riderMarkerRef = useRef<google.maps.Marker | null>(null);
+  const customerMarkerRef = useRef<google.maps.Marker | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -83,6 +86,8 @@ export function LiveTrackingMap({
       routeLine?.setMap(null);
       riderMarkerRef.current?.setMap(null);
       riderMarkerRef.current = null;
+      customerMarkerRef.current?.setMap(null);
+      customerMarkerRef.current = null;
       mapRef.current = null;
     };
     // Pickup/drop-off belong to one booking and do not change while mounted.
@@ -119,6 +124,42 @@ export function LiveTrackingMap({
     const visible = map.getBounds();
     if (visible && !visible.contains(rider)) map.panTo(rider);
   }, [ready, rider?.lat, rider?.lng]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    if (!customer) {
+      customerMarkerRef.current?.setMap(null);
+      customerMarkerRef.current = null;
+      return;
+    }
+    if (!customerMarkerRef.current) {
+      customerMarkerRef.current = new window.google.maps.Marker({
+        position: customer,
+        map,
+        title: "Your current location",
+        zIndex: 20,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          fillColor: "#2563eb",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 3,
+          scale: 8,
+        },
+      });
+      const bounds = new window.google.maps.LatLngBounds();
+      bounds.extend(pickup);
+      bounds.extend(dropoff);
+      bounds.extend(customer);
+      if (rider) bounds.extend(rider);
+      map.fitBounds(bounds, 64);
+    } else {
+      customerMarkerRef.current.setPosition(customer);
+      const visible = map.getBounds();
+      if (visible && !visible.contains(customer)) map.panTo(customer);
+    }
+  }, [ready, customer?.lat, customer?.lng, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng]);
 
   if (failed) {
     return (
