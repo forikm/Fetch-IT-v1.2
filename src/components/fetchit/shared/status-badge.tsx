@@ -1,19 +1,18 @@
 "use client";
 
-// Reusable status badge mapping for booking status values. Mode-aware:
-// ride bookings show passenger-facing labels ("Driver accepted"), while
-// delivery bookings keep freight wording ("Rider accepted").
+// Customer badges use the same four stages as the tracking timeline.
 
 import { Badge } from "@/components/ui/badge";
-import { statusLabel, type BookingStatus } from "@/lib/constants";
+import { type BookingStatus } from "@/lib/constants";
+import { customerStatusLabel } from "@/lib/customer-booking-ui";
 import { cn } from "@/lib/utils";
 
 const STATUS_CLASS: Record<BookingStatus, string> = {
   PENDING: "bg-amber-100 text-amber-800 border-amber-200",
-  MATCHED: "bg-sky-100 text-sky-800 border-sky-200",
+  MATCHED: "bg-amber-100 text-amber-800 border-amber-200",
   ACCEPTED: "bg-indigo-100 text-indigo-800 border-indigo-200",
   PICKED_UP: "bg-violet-100 text-violet-800 border-violet-200",
-  IN_TRANSIT: "bg-orange-100 text-orange-800 border-orange-200",
+  IN_TRANSIT: "bg-violet-100 text-violet-800 border-violet-200",
   DELIVERED: "bg-emerald-100 text-emerald-800 border-emerald-200",
   CANCELLED: "bg-rose-100 text-rose-800 border-rose-200",
 };
@@ -34,7 +33,7 @@ export function StatusBadge({
         cls,
       )}
     >
-      {statusLabel(status, type) ?? status}
+      {customerStatusLabel(status, type)}
     </Badge>
   );
 }

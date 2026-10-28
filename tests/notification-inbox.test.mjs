@@ -15,7 +15,7 @@ function nodes(node) {
   if (Array.isArray(node)) return node.flatMap(nodes);
   return [node, ...nodes(node.props?.children)];
 }
-const grouping = load("../src/lib/notification-inbox.ts", { "./constants": { statusLabel: status => status } });
+const grouping = load("../src/lib/notification-inbox.ts", { "./customer-booking-ui": { customerStatusLabel: status => status } });
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function harness() {
   const states = [], refs = [], requests = [], opened = [];

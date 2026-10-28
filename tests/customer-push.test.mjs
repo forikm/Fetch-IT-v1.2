@@ -22,7 +22,7 @@ test("push subscriptions accept browser services and reject local, forged and ma
 });
 
 test("inbox groups delivery, ride and support separately without replaying legacy duplicates", () => {
-  const { combineInbox } = load("../src/lib/notification-inbox.ts", { "./constants": { statusLabel: status => status } });
+  const { combineInbox } = load("../src/lib/notification-inbox.ts", { "./customer-booking-ui": { customerStatusLabel: status => status } });
   const page = { unread: { DELIVERY: 1, RIDE: 3, SUPPORT: 1 }, items: [
     { id: "new-delivery", bookingId: "d", category: "DELIVERY", status: "ACCEPTED", createdAt: "2026-10-17T12:00:00Z", read: false },
     { id: "new-support", sourceId: "support:s1", category: "SUPPORT", createdAt: "2026-10-17T12:01:00Z", read: false },

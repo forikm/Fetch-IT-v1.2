@@ -3,9 +3,9 @@
 import { NotificationInbox } from "../shared/notification-inbox";
 import { BookingHistoryRow } from "../shared/booking-history-row";
 import { BookingSummary } from "../shared/booking-summary";
-import { CancelBooking } from "../shared/cancel-booking";
-import { BookingActions } from "../shared/booking-actions";
 import { BookingTimeline } from "../shared/booking-timeline";
+import { CustomerBookingCard } from "./customer-booking-card";
+import { customerStatusLabel, formatPeso, locationUpdateLabel, routeTimeLabel } from "@/lib/customer-booking-ui";
 import { CustomerBottomNav } from "../shared/customer-bottom-nav";
 import { ProfileSettings } from "../shared/profile-settings";
 import { NotificationSettings } from "../shared/notification-settings";
@@ -31,29 +31,22 @@ import {
   MapPin,
   Plus,
   Truck,
-  Calculator,
   Clock,
-  Star,
   History,
-  X,
   ShieldCheck,
   PenTool,
   KeyRound,
   Camera,
-  Bike,
   Car,
   Navigation,
   Phone,
   CheckCircle2,
   AlertCircle,
   ArrowLeft,
-  Users,
-  CircleDot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -81,7 +74,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore, type AuthUser } from "@/lib/store";
 import {
@@ -92,14 +84,13 @@ import {
   VEHICLES,
   type VehicleClass,
   type BookingStatus,
-  BOOKING_STATUS_LABEL,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { BrandNavigation } from "../shared/brand-navigation";
-import { StatusBadge } from "../shared/status-badge";
 import { PlaceAutocompleteInput } from "../shared/place-autocomplete-input";
 import { LocationMap } from "../shared/location-map";
 import { ProfileMenu } from "../shared/profile-menu";
+import { StatusBadge } from "../shared/status-badge";
 import { BookingRouteMap } from "../shared/booking-route-map";
 import { LiveTrackingMap } from "../shared/live-tracking-map";
 import { RideTrackingView } from "./ride-tracking-view";
@@ -273,7 +264,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     if (demo) setSummaryBooking(b);
     toast({
       title: "Booking created",
-      description: b.scheduledAt && new Date(b.scheduledAt) > new Date() ? `${b.refCode} · Scheduled for ${formatPickupSchedule(b.scheduledAt)} Philippine time. Riders will see it when pickup is due.` : `${b.refCode} · ₱${b.totalFare.toFixed(2)} · ${
+      description: b.scheduledAt && new Date(b.scheduledAt) > new Date() ? `${b.refCode} · Scheduled for ${formatPickupSchedule(b.scheduledAt)} Philippine time. Riders will see it when pickup is due.` : `${b.refCode} · ${formatPeso(b.totalFare)} · ${
         b.rider ? (isRide ? "Driver matched!" : "Rider matched!") : (isRide ? "Searching for a driver…" : "Searching for a rider…")
       }`,
     });
@@ -321,11 +312,11 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
               Good to see you, {user?.name?.split(" ")[0] ?? "there"}.
             </h1>
             <p className="text-muted-foreground mt-1">
-              {isRide ? "Ready to go somewhere? Track your active rides or book a new pickup." : "Ready to ship something today? Track your active deliveries or book a new pickup."}
+              {isRide ? "Book a ride or follow your current trip." : "Book a delivery or follow your package."}
             </p>
           </div>
           <Button size="lg" onClick={() => { setRepeatBooking(null); setShowNew(true); }} className="gap-2">
-            <Plus className="h-4 w-4" /> New booking
+            <Plus className="h-4 w-4" /> {isRide ? "Book a ride" : "Book a delivery"}
           </Button>
         </div>
 
@@ -337,9 +328,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium">
                   <MapPin className="h-4 w-4 shrink-0 text-primary" /> Most recent booking
-                  <span className="min-w-0 text-muted-foreground font-normal [overflow-wrap:anywhere]">
-                    · {bookings[0].refCode}
-                  </span>
+                  <span className="min-w-0 text-muted-foreground font-normal [overflow-wrap:anywhere]">· {bookings[0].refCode}</span>
                 </div>
                 <StatusBadge status={bookings[0].status} type={bookings[0].type} />
               </div>
@@ -347,7 +336,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
                 pickup={{ lat: bookings[0].pickupLat, lng: bookings[0].pickupLng }}
                 dropoff={{ lat: bookings[0].dropoffLat, lng: bookings[0].dropoffLng }}
                 className="h-48"
-              /> : <p className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">Route map available when you reconnect. Your saved pickup and destination are below.</p>}
+              /> : <p className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">Route map available when you reconnect. Your saved pickup and drop-off are below.</p>}
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-1 text-xs text-muted-foreground">
                 <span className="flex min-w-0 items-start gap-1.5">
                   <span className="h-4 w-4 shrink-0 rounded-full bg-emerald-600 text-white text-[9px] font-bold grid place-items-center">A</span>
@@ -361,7 +350,6 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
             </CardContent>
           </Card>
         )}
-
         <div ref={listRef} />
         {/* Tabs */}
         <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "history")}>
@@ -380,8 +368,8 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
           </TabsList>
         </Tabs>
 
-<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{!online || offline || savedAt ? "Live updates paused. Saved statuses may be out of date." : lastChecked ? "Status checked at " + lastChecked.toLocaleTimeString() : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading || !online} onClick={() => void load()}>Refresh bookings</Button></div>
-        {tab === "history" && <HistoryFilters value={filters} onChange={setFilters} />}
+<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{!online || offline || savedAt ? "Live updates paused. Saved statuses may be out of date." : lastChecked ? "Updated " + lastChecked.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading || !online} onClick={() => void load()}>Refresh bookings</Button></div>
+        {tab === "history" && <HistoryFilters bookingType={bookingType} value={filters} onChange={setFilters} />}
                 {/* List */}
         {loading ? (
           <div role="status" className="flex flex-col items-center gap-3 py-16 text-sm text-muted-foreground">
@@ -396,7 +384,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
           <div className={tab === "history" ? "min-w-0 space-y-2" : "grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4"}>
             {bookings.map((b) => (
               tab === "history" ? <BookingHistoryRow key={b.id} booking={b} onOpen={() => setSummaryBooking(b)} /> : (
-              <BookingCard
+              <CustomerBookingCard
                 key={b.id}
                 booking={b}
                 readOnly={!online || offlineAccess || !!savedAt}
@@ -465,7 +453,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
                   Track delivery · {trackingBooking.refCode}
                 </DialogTitle>
                 <DialogDescription>
-                  Status: {BOOKING_STATUS_LABEL[trackingBooking.status]}
+                  Follow your package from pickup to drop-off.
                 </DialogDescription>
               </DialogHeader>
               <TrackingView
@@ -514,130 +502,6 @@ function EmptyState({ onNew, bookingType }: { onNew: () => void; bookingType: Bo
         </Button>
       </CardContent>
     </Card>
-  );
-}
-
-// ------------------------------ Booking card ------------------------------
-function BookingCard({
-  booking,
-  readOnly,
-  onTrack,
-  onRefresh,
-  onRepeat,
-}: {
-  booking: Booking;
-  readOnly: boolean;
-  onTrack: () => void;
-  onRefresh: () => void;
-  onRepeat: () => void;
-}) {
-  const { toast } = useToast();
-  const v = VEHICLES[booking.vehicleClass];
-  const vIcon = useVehicleIcon(booking.vehicleClass);
-  const canCancel = ["PENDING", "MATCHED", "ACCEPTED"].includes(booking.status);
-  const canTrack = !!booking.riderId && !["CANCELLED"].includes(booking.status);
-  const isDelivered = booking.status === "DELIVERED";
-
-  return (
-    <Card className="min-w-0 border hover:shadow-md transition flex flex-col">
-      <CardHeader className="min-w-0 grid-cols-[minmax(0,1fr)] pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-sm text-muted-foreground">
-                {booking.refCode}
-              </span>
-              <StatusBadge status={booking.status} type={booking.type} />
-            </div>
-            <CardTitle className="text-base mt-1.5 [overflow-wrap:anywhere]">
-              {booking.dropoffLabel}
-            </CardTitle>
-            <CardDescription className="flex w-full min-w-0 items-start gap-1 mt-0.5">
-              <MapPin className="h-3.5 w-3.5 shrink-0" /> <span className="min-w-0 [overflow-wrap:anywhere]">from {booking.pickupLabel}</span>
-            </CardDescription>
-          </div>
-          <div className="grid place-items-center h-10 w-10 rounded-lg bg-primary/10 text-primary shrink-0">
-            {vIcon}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="min-w-0 space-y-3 flex-1">
-        {booking.status === "PENDING" && booking.scheduledAt && new Date(booking.scheduledAt) > new Date() && <p className="rounded-lg bg-muted p-3 text-sm">Scheduled for {formatPickupSchedule(booking.scheduledAt)} Philippine time. This booking will appear to riders when pickup is due.</p>}
-        <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
-          <Stat label="Vehicle" value={v?.label ?? booking.vehicleClass} icon={vIcon} />
-          <Stat label="Distance" value={`${booking.distanceKm} km`} icon={<Navigation className="h-4 w-4" />} />
-          <Stat label="Fare" value={`₱${booking.totalFare.toFixed(2)}`} icon={<Calculator className="h-4 w-4" />} />
-          <Stat
-            label="ETA"
-            value={
-              booking.status === "DELIVERED"
-                ? (booking.type === "RIDE" ? "Completed" : "Delivered")
-                : booking.etaMinutes != null
-                  ? `${booking.etaMinutes} min`
-                  : "—"
-            }
-            icon={<Clock className="h-4 w-4" />}
-          />
-        </div>
-
-        {booking.rider && (
-          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
-            <div className="grid place-items-center h-9 w-9 rounded-full bg-primary/15 text-primary">
-              <Truck className="h-4 w-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{booking.rider.name}</p>
-              <p className="text-xs text-muted-foreground truncate">
-                {booking.rider.vehiclePlate} · ★ {booking.rider.rating.toFixed(1)}
-              </p>
-            </div>
-            {booking.rider.phone && (
-              <a href={`tel:${booking.rider.phone}`}>
-                <Button size="icon" variant="outline" className="h-8 w-8">
-                  <Phone className="h-4 w-4" />
-                </Button>
-              </a>
-            )}
-          </div>
-        )}
-
-        <BookingTimeline status={booking.status} type={booking.type} />
-        <div className="flex flex-wrap gap-2 pt-1">
-          {canTrack && !readOnly && (
-            <Button size="sm" className="flex-1" onClick={onTrack}>
-              <Navigation className="h-3.5 w-3.5" /> Track
-            </Button>
-          )}
-          {canCancel && <CancelBooking bookingId={booking.id} readOnly={readOnly} onCancelled={onRefresh} />}
-          {["DELIVERED", "CANCELLED"].includes(booking.status) && <Button size="sm" variant="outline" onClick={onRepeat}>Book again</Button>}
-          {isDelivered && booking.type === "DELIVERY" && !readOnly && (
-            <Button size="sm" variant="outline" className="flex-1" onClick={onTrack}>
-              <ShieldCheck className="h-3.5 w-3.5" /> View proof
-            </Button>
-          )}
-        </div>
-        <BookingActions booking={booking} readOnly={readOnly} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-0.5">
-      <div className="text-xs text-muted-foreground flex items-center gap-1">
-        {icon} {label}
-      </div>
-      <div className="font-medium text-sm [overflow-wrap:anywhere]">{value}</div>
-    </div>
   );
 }
 
@@ -895,7 +759,7 @@ function BookingForm({
   const v = VEHICLES[vehicleClass];
   const pickupChosen = !!pickupLabel && (!connected || !!(pickupLat && pickupLng));
   const dropoffChosen = !!dropoffLabel && (!connected || !!(dropoffLat && dropoffLng));
-  const stepLabels = ["Pickup", "Drop-off", "Details", "Review & pay"];
+  const stepLabels = ["Pickup", "Drop-off", "Details", "Review booking"];
 
   return (
     <form
@@ -946,7 +810,7 @@ function BookingForm({
       {step === 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium flex items-center gap-1.5">
+            <Label htmlFor="booking-pickup" className="text-sm font-medium flex items-center gap-1.5">
               <MapPin className="h-4 w-4 text-emerald-600" /> Pickup
             </Label>
             <Button
@@ -962,8 +826,9 @@ function BookingForm({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {connected ? <PlaceAutocompleteInput
+              id="booking-pickup"
               onTextChange={setPickupLabel}
-              placeholder="Search pickup address (e.g. Marina Bay Sands)"
+              placeholder="Search pickup address"
               value={pickupLabel}
               onInvalid={() => { setPickupLat(""); setPickupLng(""); }}
               onChange={(place) => {
@@ -972,30 +837,21 @@ function BookingForm({
                 setPickupLng(String(place.lng));
               }}
               required
-            /> : <Input aria-label="Pickup address" className="sm:col-span-3" placeholder="Type pickup address or choose a saved place" value={pickupLabel} onChange={(e) => { setPickupLabel(e.target.value); setPickupLat(""); setPickupLng(""); }} />}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setPickupLabel("Marina Bay Sands");
-                setPickupLat("1.2834");
-                setPickupLng("103.8607");
-              }}
-              className="text-xs"
-            >
-              Use demo
-            </Button>
+            /> : <Input id="booking-pickup" aria-label="Pickup address" className="sm:col-span-3" placeholder="Type pickup address or choose a saved place" value={pickupLabel} onChange={(e) => { setPickupLabel(e.target.value); setPickupLat(""); setPickupLng(""); }} />}
+
           </div>
           <SavedPlaces place={pickupLabel && pickupLat && pickupLng ? { label: pickupLabel, lat: Number(pickupLat), lng: Number(pickupLng) } : null} onSelect={(place) => { setPickupLabel(place.label); setPickupLat(String(place.lat)); setPickupLng(String(place.lng)); }} />
           {connected && <LocationMap
             lat={pickupLat ? Number(pickupLat) : null}
             lng={pickupLng ? Number(pickupLng) : null}
             pinColor="#16a34a"
-            mapClassName="h-64 sm:h-80"
+            confirmLabel="Use this pickup"
+            mapClassName="h-48 sm:h-64"
             onConfirm={(place) => {
               setPickupLabel(place.label);
               setPickupLat(String(place.lat));
               setPickupLng(String(place.lng));
+              if (reviewDraft) { setReviewDraft(null); goToStep(3); } else goToStep(1);
             }}
           />}
         </div>
@@ -1005,7 +861,7 @@ function BookingForm({
       {step === 1 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium flex items-center gap-1.5">
+            <Label htmlFor="booking-dropoff" className="text-sm font-medium flex items-center gap-1.5">
               <MapPin className="h-4 w-4 text-rose-600" /> Drop-off
             </Label>
             <Button
@@ -1021,8 +877,9 @@ function BookingForm({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {connected ? <PlaceAutocompleteInput
+              id="booking-dropoff"
               onTextChange={setDropoffLabel}
-              placeholder="Search drop-off address (e.g. Changi Airport)"
+              placeholder="Search drop-off address"
               value={dropoffLabel}
               onInvalid={() => { setDropoffLat(""); setDropoffLng(""); }}
               onChange={(place) => {
@@ -1031,30 +888,21 @@ function BookingForm({
                 setDropoffLng(String(place.lng));
               }}
               required
-            /> : <Input aria-label="Drop-off address" className="sm:col-span-3" placeholder="Type drop-off address or choose a saved place" value={dropoffLabel} onChange={(e) => { setDropoffLabel(e.target.value); setDropoffLat(""); setDropoffLng(""); }} />}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setDropoffLabel("Changi Airport T3");
-                setDropoffLat("1.3562");
-                setDropoffLng("103.9892");
-              }}
-              className="text-xs"
-            >
-              Use demo
-            </Button>
+            /> : <Input id="booking-dropoff" aria-label="Drop-off address" className="sm:col-span-3" placeholder="Type drop-off address or choose a saved place" value={dropoffLabel} onChange={(e) => { setDropoffLabel(e.target.value); setDropoffLat(""); setDropoffLng(""); }} />}
+
           </div>
           <SavedPlaces place={dropoffLabel && dropoffLat && dropoffLng ? { label: dropoffLabel, lat: Number(dropoffLat), lng: Number(dropoffLng) } : null} onSelect={(place) => { setDropoffLabel(place.label); setDropoffLat(String(place.lat)); setDropoffLng(String(place.lng)); }} />
           {connected && <LocationMap
             lat={dropoffLat ? Number(dropoffLat) : null}
             lng={dropoffLng ? Number(dropoffLng) : null}
             pinColor="#dc2626"
-            mapClassName="h-64 sm:h-80"
+            confirmLabel="Use this drop-off"
+            mapClassName="h-48 sm:h-64"
             onConfirm={(place) => {
               setDropoffLabel(place.label);
               setDropoffLat(String(place.lat));
               setDropoffLng(String(place.lng));
+              if (reviewDraft) { setReviewDraft(null); goToStep(3); } else goToStep(2);
             }}
           />}
         </div>
@@ -1080,7 +928,7 @@ function BookingForm({
               <p className="text-xs text-muted-foreground">{isRide ? `Up to ${passengerCapacity} passenger${passengerCapacity === 1 ? "" : "s"}` : `Up to ${v.capacityKg} kg`}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="booking-size">{isRide ? "Passengers" : "Cargo weight (kg)"}</Label>
+              <Label htmlFor="booking-size">{isRide ? "Passengers" : "Package weight (kg)"}</Label>
               <Input
                 id="booking-size"
                 type="number"
@@ -1164,31 +1012,28 @@ function BookingForm({
                   </div>
                 ) : estimate ? (
                   <div className="space-y-3">
-                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span>{estimate.distanceKm} km</span><span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Estimated time ~{estimate.etaMinutes} min</span></p>
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span>{estimate.distanceKm} km</span><span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {routeTimeLabel(bookingType)}: about {estimate.etaMinutes} min</span></p>
                     <details>
                       <summary className="cursor-pointer text-sm font-medium">View fare breakdown</summary>
                       <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                      <FareLine label="Base" value={`₱${estimate.fare.baseFare}`} />
+                      <FareLine label="Base" value={formatPeso(estimate.fare.baseFare)} />
                       <FareLine
                         label={`Distance charge (${estimate.fare.billableKm} km)`}
-                        value={`₱${estimate.fare.distanceFare}`}
+                        value={formatPeso(estimate.fare.distanceFare)}
                       />
                       {!isRide && <FareLine
                         label={
                           estimate.fare.chargeableKg > 0
-                            ? `Weight (${estimate.fare.chargeableKg} kg over free)`
-                            : `Weight (within free ${v!.freeWeightKg} kg)`
+                            ? `Extra weight (${estimate.fare.chargeableKg} kg)`
+                            : `Weight (first ${v!.freeWeightKg} kg included)`
                         }
-                        value={`₱${estimate.fare.weightFare}`}
+                        value={formatPeso(estimate.fare.weightFare)}
                       />}
-                      <FareLine
-                        label="Surge"
-                        value={`×${estimate.surgeMultiplier.toFixed(2)} (+₱${estimate.fare.surgeFare})`}
-                      />
+                      {estimate.fare.surgeFare > 0 && <FareLine label="Busy-period charge" value={formatPeso(estimate.fare.surgeFare)} />}
                       {estimate.fare.minimumAdjustment > 0 && (
                         <FareLine
                           label="Minimum fare top-up"
-                          value={`₱${estimate.fare.minimumAdjustment}`}
+                          value={formatPeso(estimate.fare.minimumAdjustment)}
                         />
                       )}
                       </div>
@@ -1221,7 +1066,7 @@ function BookingForm({
 
       {/* Navigation */}
       <div className="shrink-0 space-y-3 border-t bg-background px-4 py-3 sm:px-6">
-      {step === 3 && <div aria-live="polite" className="flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">Total fare</span><strong className="text-2xl">{estimate ? `₱${estimate.fare.totalFare.toLocaleString("en-PH")}` : estimating ? "Calculating…" : "—"}</strong></div>}
+      {step === 3 && <div aria-live="polite" className="flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">Total fare</span><strong className="text-2xl">{estimate ? formatPeso(estimate.fare.totalFare) : estimating ? "Calculating…" : "—"}</strong></div>}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">
         <Button
           type="button"
@@ -1237,7 +1082,7 @@ function BookingForm({
             disabled={step === 0 ? !pickupChosen : step === 1 ? !dropoffChosen : !pickupChosen || !dropoffChosen || !detailsValid}
             onClick={() => reviewDraft ? returnToReview(true) : goToStep((step + 1) as 1 | 2 | 3)}
           >
-            {reviewDraft ? "Save changes" : step === 2 ? "Review & pay" : "Next"}
+            {reviewDraft ? "Save changes" : step === 2 ? "Review booking" : step === 0 ? "Next: drop-off" : "Next: details"}
           </Button>
         ) : (
           <Button type="button" className="min-w-0 px-3 text-xs sm:text-sm" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
@@ -1327,6 +1172,7 @@ function TrackingView({
 
   return (
     <div className="space-y-4">
+      <BookingTimeline status={status} type="DELIVERY" scheduled={status === "PENDING" && !!booking.scheduledAt && new Date(booking.scheduledAt).getTime() > Date.now()} />
       {/* Map */}
       <div className="relative rounded-xl overflow-hidden border bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:from-amber-950/30 dark:via-orange-950/30 dark:to-amber-900/30 aspect-[16/10]">
         <LiveTrackingMap
@@ -1340,18 +1186,18 @@ function TrackingView({
           <span
             className={cn(
               "h-1.5 w-1.5 rounded-full",
-              status === "DELIVERED" ? "bg-emerald-500" : "bg-primary animate-fit-pulse",
+              status === "CANCELLED" ? "bg-rose-500" : status === "DELIVERED" ? "bg-emerald-500" : "bg-primary animate-fit-pulse",
             )}
           />
-          {BOOKING_STATUS_LABEL[status]}
-          {eta != null && !isDelivered && (
-            <span className="text-muted-foreground">· Estimated arrival {eta} min</span>
+          {customerStatusLabel(status, "DELIVERY")}
+          {eta != null && !isDelivered && status !== "CANCELLED" && (
+            <span className="text-muted-foreground">· Est. delivery duration {eta} min</span>
           )}
         </div>
       </div>
       {lastGpsAt && (
         <p className="text-xs text-muted-foreground">
-          Last phone GPS update: {new Date(lastGpsAt).toLocaleString()}
+          {locationUpdateLabel(lastGpsAt)}
         </p>
       )}
 
@@ -1365,15 +1211,15 @@ function TrackingView({
             <div className="flex-1 min-w-0">
               <p className="font-semibold">{booking.rider.name}</p>
               <p className="text-sm text-muted-foreground truncate">
-                {booking.rider.vehicleClass?.replace("_", " ").toLowerCase()} · {booking.rider.vehiclePlate} · ★ {booking.rider.rating.toFixed(1)}
+                {VEHICLES[booking.vehicleClass]?.label ?? booking.vehicleClass} · {booking.rider.vehiclePlate} · ★ {booking.rider.rating.toFixed(1)}
               </p>
             </div>
             {booking.rider.phone && (
-              <a href={`tel:${booking.rider.phone}`}>
-                <Button size="icon" variant="outline" className="h-9 w-9">
+                <Button asChild size="icon" variant="outline" className="h-9 w-9 shrink-0">
+                  <a href={`tel:${booking.rider.phone}`} aria-label={`Call ${booking.rider.name}`}>
                   <Phone className="h-4 w-4" />
+                  </a>
                 </Button>
-              </a>
             )}
           </CardContent>
         </Card>
@@ -1410,7 +1256,7 @@ function TrackingView({
               <ShieldCheck className="h-5 w-5 text-emerald-600" /> Proof of delivery
             </CardTitle>
             <CardDescription>
-              Verified e-POD captured at drop-off.
+              Delivery confirmed at drop-off.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1479,22 +1325,4 @@ function ProofChip({
       <span>{ok ? "Verified" : "—"}</span>
     </div>
   );
-}
-
-// ------------------------------ Vehicle icon helper ------------------------------
-function useVehicleIcon(vc: VehicleClass) {
-  switch (vc) {
-    case "MOTORCYCLE":
-      return <Bike className="h-5 w-5" />;
-    case "TRICYCLE":
-      return <CircleDot className="h-5 w-5" />;
-    case "SEDAN":
-      return <Car className="h-5 w-5" />;
-    case "CLOSED_VAN":
-      return <Truck className="h-5 w-5" />;
-    case "FLATBED":
-      return <Truck className="h-5 w-5" />;
-    case "REFRIGERATED":
-      return <Truck className="h-5 w-5" />;
-  }
 }

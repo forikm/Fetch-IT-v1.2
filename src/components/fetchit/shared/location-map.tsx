@@ -23,6 +23,7 @@ export function LocationMap({
   pinColor = "#dc2626",
   mapClassName = "h-48",
   className,
+  confirmLabel = "Use this location",
 }: {
   lat: number | null;
   lng: number | null;
@@ -30,6 +31,7 @@ export function LocationMap({
   pinColor?: string;
   mapClassName?: string;
   className?: string;
+  confirmLabel?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -60,7 +62,6 @@ export function LocationMap({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-center (e.g. after picking an address in the search box above) —
@@ -126,7 +127,7 @@ export function LocationMap({
               <FetchItLoader className="h-3 w-3 mr-1.5" /> Looking up address…
             </>
           ) : (
-            "Confirm this location"
+            confirmLabel
           )}
         </Button>
       )}

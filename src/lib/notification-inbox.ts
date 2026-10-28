@@ -1,5 +1,5 @@
 import type { BookingNotification } from "./booking-notifications";
-import { statusLabel } from "./constants";
+import { customerStatusLabel as statusLabel } from "./customer-booking-ui";
 export const NOTIFICATION_CATEGORIES = ["DELIVERY", "RIDE", "SUPPORT"] as const;
 export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
 export const NOTIFICATION_LABELS: Record<NotificationCategory, string> = { DELIVERY: "Deliveries", RIDE: "Rides", SUPPORT: "Support" };
