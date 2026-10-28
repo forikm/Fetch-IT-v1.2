@@ -17,14 +17,17 @@ target.searchParams.set('schema',schema);target.searchParams.set('options',`-c s
 const databaseUrl=target.toString(),db=new PrismaClient({datasourceUrl:databaseUrl});
 class RateLimitError extends Error {}
 const messages=[],blobs=new Map(),cache=new Map(); let failMail=false, assertions=0, ownsSchema=false;
+let demoSession=null;
 const previousSecret=process.env.SESSION_SECRET;
 process.env.SESSION_SECRET=crypto.randomBytes(32).toString('hex');process.env.GMAIL_SENDER='fixture@gmail.com';process.env.GMAIL_APP_PASSWORD='fixture-password-1234';
 function load(file){
  const filename=path.resolve(root,file);if(cache.has(filename))return cache.get(filename);
  const exports={};cache.set(filename,exports);
  const source=ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
- vm.runInNewContext(source,{exports,Buffer,Uint8Array,Array,Date,Response,File,console:{info(){},warn(){},error(){}},process,require(name){
+ const localRequire=function(name){
   if(name==='./db'||name==='@/lib/db')return {db};
+  if(name==='@/lib/session')return {getSession:async()=>demoSession};
+  if(name==='@/lib/rider-demo-data')return {...load('../fetch-rider/src/lib/rider-demo-data.ts'),demoPortrait:async()=>fs.readFileSync(path.resolve(root,'../fetch-rider/assets/rider-demo/portraits/mateo.png'))};
   if(name==='nodemailer')return {createTransport:()=>({async sendMail(message){if(failMail)throw Error('Simulated SMTP disconnect');messages.push(message);return {accepted:[message.to]};},close(){}})};
   if(name==='@vercel/blob')return {put:async(p,bytes)=>{blobs.set(p,bytes);return {pathname:p};},del:async p=>blobs.delete(p),get:async p=>blobs.has(p)?{statusCode:200,stream:new Blob([blobs.get(p)]).stream()}:null};
   if(name==='./request-guard')return {limitRequests:async()=>{},RateLimitError};
@@ -34,7 +37,8 @@ function load(file){
   if(name.startsWith('@/'))return load('src/'+name.slice(2)+'.ts');
   if(name.startsWith('.'))return load(path.resolve(path.dirname(filename),name+'.ts'));
   return require(name);
- }});return exports;
+ };
+ new Function('exports','require','process','console',source)(exports,localRequire,process,{info(){},warn(){},error(){}});return exports;
 }
 function migrate(schemaFile){const result=spawnSync(process.execPath,[path.join(root,'node_modules/prisma/build/index.js'),'migrate','deploy','--schema',schemaFile],{cwd:root,env:{...process.env,DATABASE_URL:databaseUrl},encoding:'utf8',timeout:90000,windowsHide:true});assert.equal(result.status,0,'Isolated migration failed: '+(result.stderr||result.stdout).slice(-1200));}
 async function scopeFunctions(){for(const fn of await db.$queryRaw`SELECT p.proname AS name FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=${schema}`){assert(/^fetch_[a-z_]+$/.test(fn.name));await db.$executeRawUnsafe(`ALTER FUNCTION "${schema}"."${fn.name}"() SET search_path TO "${schema}", pg_catalog`);}}
@@ -43,7 +47,7 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
  try{
   assert.equal((await db.$queryRaw`SELECT nspname FROM pg_namespace WHERE nspname=${schema}`).length,0);ownsSchema=true;
   const before=path.join(root,'tmp',schema);fs.mkdirSync(path.join(before,'migrations'),{recursive:true});fs.copyFileSync(path.join(root,'prisma/schema.prisma'),path.join(before,'schema.prisma'));
-  for(const entry of fs.readdirSync(path.join(root,'prisma/migrations'),{withFileTypes:true}))if(entry.name!=='202610240001_rider_applications')fs.cpSync(path.join(root,'prisma/migrations',entry.name),path.join(before,'migrations',entry.name),{recursive:true});
+  for(const entry of fs.readdirSync(path.join(root,'prisma/migrations'),{withFileTypes:true}))if(!['202610240001_rider_applications','202610280001_rider_application_demo'].includes(entry.name))fs.cpSync(path.join(root,'prisma/migrations',entry.name),path.join(before,'migrations',entry.name),{recursive:true});
   migrate(path.join(before,'schema.prisma'));await scopeFunctions();
   const legacy=await db.user.create({data:{email:'legacy-'+schema+'@example.invalid',name:'Legacy Fixture',role:'RIDER',riderProfile:{create:{vehicleClass:'TRICYCLE'}},riderPresence:{create:{}}}});
   migrate(path.join(root,'prisma/schema.prisma'));await scopeFunctions();
@@ -122,6 +126,44 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   await staff(actors.admin,{action:'reopen',reason:'Fixture reapplication after vehicle detail change'});
   assert.equal((await approvedServices(db,user.id)).length,0);assert.equal((await db.riderPresence.findUnique({where:{userId:user.id}})).isOnline,false);assertions+=2;
   await staff(actors.admin,{action:'email',emailId:uncertain.id,confirmResend:true},409);
+  // Live demo feature: real authentication/verification semantics, simulated SMTP and private Blob.
+  const demoUser=await db.user.create({data:{email:'demo-'+schema+'@example.invalid',name:'Demo Integration Rider',role:'RIDER',riderProfile:{create:{vehicleClass:'MOTORCYCLE'}},riderPresence:{create:{}}}});
+  let demo=(await applicant(null,200,demoUser.id)).application;
+  await applicant({action:'demo-enable',version:demo.version},400,demoUser.id);
+  await applicant({action:'send-code'},200,demoUser.id);
+  await applicant({action:'verify-code',code:messages.at(-1).text.match(/code is (\d{6})/)[1]},200,demoUser.id);
+  demo=(await applicant(null,200,demoUser.id)).application;
+  demo=(await applicant({action:'demo-enable',version:demo.version},200,demoUser.id)).application;
+  assert.equal(demo.isDemo,true);assertions++;
+  demo=(await applicant({action:'save',version:demo.version,isDemo:false,fields,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE']},200,demoUser.id)).application;
+  assert.equal(demo.isDemo,true);assertions++;
+  const {POST:demoStep}=load('../fetch-rider/src/app/api/rider/application/demo/route.ts');
+  async function step(body,expected=200,origin='http://fixture.invalid') {
+    const response=await demoStep(new NextRequest('http://fixture.invalid/api/rider/application/demo',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({version:demo.version,...body})}));
+    const data=await response.json();assert.equal(response.status,expected,JSON.stringify(data));assertions++;if(data.application)demo=data.application;return data;
+  }
+  await step({action:'documents'},401); demoSession={uid:other.id,role:'RIDER'}; await step({action:'documents'},403);
+  demoSession={uid:demoUser.id,role:'RIDER'};
+  await step({action:'documents'},403,'https://other.invalid'); await step({action:'verify'},400); await step({action:'details',version:demo.version-1},409);
+  await step({action:'details'}); await step({action:'documents'}); await step({action:'review'});
+  assert(demo.documents.every(d=>d.current));assertions++;
+  const original=user.id; // Review helpers below use app; real user's previous assertions are complete.
+  app=(await applicant({action:'submit',version:demo.version,fields:demo.fields,vehicleClass:demo.vehicleClass,services:demo.services},200,demoUser.id)).application;
+  await staff(actors.reviewer,{action:'claim'});
+  for(const section of Object.keys(SECTION_FIELDS))await staff(actors.reviewer,{action:'review',section,status:'ACCEPTED'});
+  for(const document of app.documents.filter(d=>d.current))await staff(actors.reviewer,{action:'review',documentId:document.id,status:'ACCEPTED'});
+  await staff(actors.reviewer,{action:'recommend'});
+  await staff(actors.admin,{action:'schedule',orientationAt:new Date(Date.now()+60000).toISOString(),venue:'Demo orientation room',instructions:'Demonstration appointment only. Do not attend a real venue.'});
+  assert(messages.at(-1).subject.startsWith('[DEMO]'));assert.equal(messages.at(-1).to,demoUser.email);assert.equal(messages.at(-1).attachments[0].content.subarray(0,5).toString(),'%PDF-');assertions+=3;
+  await db.riderApplication.update({where:{id:app.id},data:{orientationAt:new Date(Date.now()-60000)}});app=(await applicant(null,200,demoUser.id)).application;
+  await staff(actors.reviewer,{action:'assessment',attended:true,passed:true,notes:'Demo orientation and vehicle assessment completed.'});
+  await staff(actors.admin,{action:'activate',services:app.services},403);
+  await staff(actors.admin,{action:'complete-demo',services:app.services});
+  assert.equal(app.status,'DEMO_COMPLETED');assert.equal(await db.riderServiceApproval.count({where:{userId:demoUser.id}}),0);assert(!messages.at(-1).text.includes('are activated'));assertions+=3;
+  const oldDocumentCount=app.documents.length;
+  app=(await applicant({action:'demo-reset',version:app.version},200,demoUser.id)).application;
+  assert.equal(app.isDemo,false);assert.equal(app.status,'DRAFT');assert.equal(app.documents.filter(d=>d.current).length,0);assert.equal(app.documents.length,oldDocumentCount);assert.deepEqual(Object.keys(app.fieldReviews),[]);assert(app.emailVerifiedAt);assertions+=6;
+  await applicant({action:'demo-enable',version:app.version},409,original);
   if(process.env.ONBOARDING_BROWSER==='1') {
    const password='Fixture-only-onboarding-2026!';
    const {hashPassword}=load('src/lib/password.ts');

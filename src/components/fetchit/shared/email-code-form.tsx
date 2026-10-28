@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { FetchItLoader } from "./loading";
 import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH, PASSWORD_REQUIREMENT, validNewPassword } from "@/lib/password-policy";
@@ -60,9 +61,9 @@ export function EmailCodeForm({ purpose, email, initialChallenge, onSend, onConf
         <p className="text-xs text-muted-foreground" role="status">{expires ? `Code expires in ${Math.floor(expires / 60)}:${String(expires % 60).padStart(2, "0")}.` : "This code has expired. Request a new one."}</p>
       </div>
       {purpose === "reset" && <>
-        <div className="space-y-2"><Label htmlFor="reset-password">New password</Label><Input id="reset-password" type="password" autoComplete="new-password" required
+        <div className="space-y-2"><Label htmlFor="reset-password">New password</Label><PasswordInput visibilityLabel="new password" id="reset-password" autoComplete="new-password" required
           minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} value={password} disabled={busy} onChange={e => setPassword(e.target.value)} placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`} /></div>
-        <div className="space-y-2"><Label htmlFor="reset-password-confirm">Confirm new password</Label><Input id="reset-password-confirm" type="password" autoComplete="new-password" required
+        <div className="space-y-2"><Label htmlFor="reset-password-confirm">Confirm new password</Label><PasswordInput visibilityLabel="confirmation password" id="reset-password-confirm" autoComplete="new-password" required
           minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} value={confirmation} disabled={busy} onChange={e => setConfirmation(e.target.value)} /></div>
       </>}
       <Button type="submit" className="w-full" disabled={busy || !expires}>{busy && <FetchItLoader className="h-4 w-4" />}{purpose === "reset" ? "Reset password" : "Verify email"}</Button>

@@ -10,6 +10,7 @@ import { requiredDocuments, normalizeFields, validateApplication, approvalExpiry
 const require = createRequire(import.meta.url);
 const fields = { legalName: "Sample Applicant", birthDate: "1995-01-01", address: "Lingayen, Pangasinan", mobile: "09171234567", emergencyName: "Sample Contact", emergencyRelationship: "Sibling", emergencyPhone: "+639181234567", licenceNumber: "SAMPLE-123", licenceCodes: "A, A1, B", licenceExpiry: "2030-10-31", nbiExpiry: "2030-01-31", vehicleMake: "Sample", vehicleModel: "Model", vehicleYear: "2024", plateNumber: "SAMPLE01", registrationExpiry: "2030-06-30", capacity: "2", displacement: "125", ownership: "OWNER", operatingArea: "Lingayen approved zone", permitNumber: "SAMPLE-PERMIT" };
 export function load(file, mocks = {}) {
+  mocks = { "./local-demo-runtime": { localDemoEnabled: () => false }, "./local-demo-files": {}, ...mocks };
   const exports = {};
   const source = ts.transpileModule(fs.readFileSync(new URL('../'+file, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   vm.runInNewContext(source, { exports, Buffer, Uint8Array, Response, Date, console, process, require: name => Object.hasOwn(mocks, name) ? mocks[name] : require(name) });
@@ -66,7 +67,7 @@ test("orientation letters contain actual PDF pages and the email uses the applic
 });
 test("approval readiness requires every section and document, not just an accepted application label", () => {
   const policy = load('src/lib/rider-application-policy.ts');
-  const { applicationReady } = load('src/lib/rider-application.ts', { './db': { db: {} }, './rider-application-policy': policy, './rider-eligibility': {} });
+  const { applicationReady } = load('src/lib/rider-application.ts', { './db': { db: {} }, './rider-application-policy': policy, './rider-eligibility': {}, './application-demo-policy': load('src/lib/application-demo-policy.ts', { './rider-application-policy': policy }) });
   const app = { vehicleClass: 'TRICYCLE', services: ['RIDE'], fields, fieldReviews: Object.fromEntries(Object.keys(SECTION_FIELDS).map(s => [s, { status: 'ACCEPTED' }])), emailVerifiedAt: new Date(), verifiedEmail: 'sample@example.invalid', user: { email: 'sample@example.invalid' }, documents: requiredDocuments('TRICYCLE', ['RIDE'], fields).map(kind => ({ kind, current: true, status: 'ACCEPTED' })) };
   applicationReady(app);
   assert.throws(() => applicationReady({ ...app, documents: app.documents.filter(d => d.kind !== 'NBI') }));

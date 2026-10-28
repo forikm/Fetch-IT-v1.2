@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, '..');
 class ApplicationError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
 class RateLimitError extends Error { constructor() { super('Wait before resending.'); this.retryAfter = 47; } }
 function load(file, mocks, env = {}, logs = []) {
+  mocks = { "./local-demo-runtime": { localDemoEnabled: () => false }, "./local-demo-files": {}, "./application-demo-mode": {}, ...mocks };
   const exports = {};
   const source = ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   vm.runInNewContext(source, { exports, Buffer, Response, File, Date, Uint8Array, process: { env }, console: { error: (...args) => logs.push(args) }, require: name => Object.hasOwn(mocks, name) ? mocks[name] : require(name) });

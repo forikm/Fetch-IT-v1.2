@@ -57,3 +57,11 @@ server.log
 # Local artifact authoring and exports
 /tmp/
 /output/
+
+# Keep localhost lab source; test data remains ignored.
+!src/lib/local-demo-runtime.ts
+!src/lib/local-demo-files.ts
+!src/lib/local-rider-demo.ts
+!tests/local-demo.test.cjs
+
+!docs/local-rider-lab.md
