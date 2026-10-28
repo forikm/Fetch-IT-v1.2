@@ -33,8 +33,7 @@ export function SavedPlaces({ place, onSelect }: { place: PlaceValue | null; onS
           <Button type="button" size="sm" variant="ghost" title={[p.label, p.details].filter(Boolean).join(", ")} onClick={() => onSelect({ label: [p.details, p.label].filter(Boolean).join(", "), lat: p.lat, lng: p.lng })}>{p.name}</Button>
           <button type="button" className="p-2 text-muted-foreground hover:text-destructive" aria-label={`Remove ${p.name}`} onClick={() => setPlaces((previous) => previous.filter((item) => item.id !== p.id))}><X className="h-3.5 w-3.5" /></button>
         </div>
-      ))}</div> : <p className="text-xs text-muted-foreground">Choose an address to save Home, Work, or another favorite.</p>}
-      <p className="text-[10px] text-muted-foreground">Saved for your account on this device.</p>
+      ))}</div> : <p className="text-xs text-muted-foreground">Save Home or Work after choosing an address.</p>}
     </div>
   );
 }

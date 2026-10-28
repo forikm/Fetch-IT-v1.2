@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { customerResponse } from "@/lib/customer-request";
 import { SupportCenter } from "./support-center";
-import { PaymentCard } from "./payment-card";
+import { CustomerPaymentCard } from "./customer-payment-card";
 
 type Review = { rating: number; comment: string | null };
 export function BookingActions({ booking, readOnly = false }: { readOnly?: boolean; booking: { id: string; refCode: string; type?: "RIDE" | "DELIVERY"; status: string; riderId: string | null } }) {
@@ -35,7 +35,7 @@ export function BookingActions({ booking, readOnly = false }: { readOnly?: boole
     finally { setBusy(false); }
   }
   return <>
-    <PaymentCard key={booking.id} bookingId={booking.id} role="CUSTOMER" readOnly={unavailable} />
+    <CustomerPaymentCard key={booking.id} bookingId={booking.id} type={booking.type} readOnly={unavailable} />
     <div className="flex flex-wrap gap-2 pt-2 border-t">
       <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={async () => {
         setError("");
@@ -46,13 +46,13 @@ export function BookingActions({ booking, readOnly = false }: { readOnly?: boole
           const link = document.createElement("a"); link.href = url; link.download = `fetchit-${booking.refCode}.txt`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         } catch { setError("Couldn’t download your receipt. Please retry."); }
       }}>Download receipt</Button>
-      {booking.status === "DELIVERED" && booking.riderId && <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => void open("review")}>Rate rider</Button>}
+      {booking.status === "DELIVERED" && booking.riderId && <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => void open("review")}>Rate {booking.type === "RIDE" ? "driver" : "rider"}</Button>}
       <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => void open("help")}>Get help</Button>
     </div>
     {!dialog && error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     <Dialog open={!!dialog} onOpenChange={(open) => !open && setDialog(null)}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{dialog === "review" ? "Rate your rider" : "Booking help"}</DialogTitle><DialogDescription>{booking.refCode} · {dialog === "review" ? "Tell us how your completed booking went." : "Send a request or continue a conversation with Fetch-It support."}</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{dialog === "review" ? `Rate your ${booking.type === "RIDE" ? "driver" : "rider"}` : "Booking help"}</DialogTitle><DialogDescription>{booking.refCode} · {dialog === "review" ? "Tell us how your completed booking went." : "Send a request or continue a conversation with Fetch-It support."}</DialogDescription></DialogHeader>
         {error && <div role="alert" className="space-y-2"><p className="text-sm text-destructive">{error}</p>{!loaded && <Button disabled={busy} onClick={() => dialog && void open(dialog)} variant="outline">Try again</Button>}</div>}
         {notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
         {busy && !loaded && <p className="text-sm text-muted-foreground">Loading…</p>}

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 export type HistoryFilter = { query: string; status: string; from: string; to: string };
 export const emptyHistoryFilter: HistoryFilter = { query: "", status: "", from: "", to: "" };
-export function HistoryFilters({ value, onChange }: { value: HistoryFilter; onChange: (value: HistoryFilter) => void }) {
+export function HistoryFilters({ value, onChange, bookingType = "DELIVERY" }: { value: HistoryFilter; onChange: (value: HistoryFilter) => void; bookingType?: "DELIVERY" | "RIDE" }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const activeCount = [value.status, value.from, value.to].filter(Boolean).length;
@@ -17,7 +17,7 @@ export function HistoryFilters({ value, onChange }: { value: HistoryFilter; onCh
     </div>
     <div id={`${id}-filters`} hidden={!open}>
       <div className="grid min-w-0 gap-3 border-t pt-3 sm:grid-cols-3 [&>*]:min-w-0">
-        <div className="space-y-1"><Label htmlFor={`${id}-status`}>Status</Label><select id={`${id}-status`} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={value.status} onChange={(e) => onChange({ ...value, status: e.target.value })}><option value="">All history</option><option value="DELIVERED">Completed</option><option value="CANCELLED">Cancelled</option></select></div>
+        <div className="space-y-1"><Label htmlFor={`${id}-status`}>Status</Label><select id={`${id}-status`} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={value.status} onChange={(e) => onChange({ ...value, status: e.target.value })}><option value="">All history</option><option value="DELIVERED">{bookingType === "RIDE" ? "Arrived" : "Delivered"}</option><option value="CANCELLED">Cancelled</option></select></div>
         <div className="space-y-1"><Label htmlFor={`${id}-from`}>From date</Label><Input id={`${id}-from`} type="date" value={value.from} max={value.to || undefined} onChange={(e) => onChange({ ...value, from: e.target.value })} /></div>
         <div className="space-y-1"><Label htmlFor={`${id}-to`}>To date</Label><Input id={`${id}-to`} type="date" value={value.to} min={value.from || undefined} onChange={(e) => onChange({ ...value, to: e.target.value })} /></div>
         <Button type="button" size="sm" variant="ghost" className="justify-self-start" onClick={() => onChange(emptyHistoryFilter)}>Clear filters</Button>
