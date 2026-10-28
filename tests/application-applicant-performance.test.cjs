@@ -61,5 +61,6 @@ test('an upload returns its committed document without a trailing reload or prel
   assert.equal(response.status,200);
   const result=await response.json();assert.equal(result.application.documents.find(d=>d.current&&d.kind==='OR').id,'new-document');
   assert.equal(result.application.events[0].action,'DOCUMENT_UPLOADED');
+  assert.equal(result.application.documents.find(d=>d.current&&d.kind==='OR').originalName,'fixture.jpg');
   assert.deepEqual(f.counts,{snapshots:3,uploads:1,writes:1});
 });

@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, "..");
 const commonFiles = ["prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/booking-events.ts", "src/lib/customer-notifications.ts", "src/lib/push-delivery.ts", "src/lib/push-input.ts", "src/lib/session-secret.ts", "src/lib/request-guard.ts", "src/lib/password-policy.ts", "src/lib/payment-policy.ts", "src/lib/payments.ts", "src/lib/demo-payments.ts", "src/lib/dispatch.ts"];
 commonFiles.push('src/lib/local-demo-runtime.ts', 'src/lib/local-demo-files.ts', 'src/lib/application-demo-mode.ts', 'src/lib/application-demo-policy.ts', 'src/hooks/use-local-demo.ts', 'src/hooks/use-visible-poll.ts');
 commonFiles.push('prisma/migrations/202610280001_rider_application_demo/migration.sql');
+commonFiles.push('prisma/migrations/202610280002_application_document_names/migration.sql');
 const riderFiles = ["src/lib/application-applicant-api.ts", "src/lib/application-upload.ts", "src/lib/delivery-challenge.ts", "src/lib/ticket.ts", "src/hooks/use-visible-poll.ts", "src/components/fetchit/shared/payment-card.tsx"];
 riderFiles.push('src/components/ui/password-input.tsx');
 commonFiles.push("src/lib/rider-application-policy.ts", "src/lib/rider-eligibility.ts");

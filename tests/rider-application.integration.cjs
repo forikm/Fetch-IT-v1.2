@@ -47,7 +47,7 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
  try{
   assert.equal((await db.$queryRaw`SELECT nspname FROM pg_namespace WHERE nspname=${schema}`).length,0);ownsSchema=true;
   const before=path.join(root,'tmp',schema);fs.mkdirSync(path.join(before,'migrations'),{recursive:true});fs.copyFileSync(path.join(root,'prisma/schema.prisma'),path.join(before,'schema.prisma'));
-  for(const entry of fs.readdirSync(path.join(root,'prisma/migrations'),{withFileTypes:true}))if(!['202610240001_rider_applications','202610280001_rider_application_demo'].includes(entry.name))fs.cpSync(path.join(root,'prisma/migrations',entry.name),path.join(before,'migrations',entry.name),{recursive:true});
+  for(const entry of fs.readdirSync(path.join(root,'prisma/migrations'),{withFileTypes:true}))if(!['202610240001_rider_applications','202610280001_rider_application_demo','202610280002_application_document_names'].includes(entry.name))fs.cpSync(path.join(root,'prisma/migrations',entry.name),path.join(before,'migrations',entry.name),{recursive:true});
   migrate(path.join(before,'schema.prisma'));await scopeFunctions();
   const legacy=await db.user.create({data:{email:'legacy-'+schema+'@example.invalid',name:'Legacy Fixture',role:'RIDER',riderProfile:{create:{vehicleClass:'TRICYCLE'}},riderPresence:{create:{}}}});
   migrate(path.join(root,'prisma/schema.prisma'));await scopeFunctions();
@@ -81,6 +81,23 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   await applicant({action:'verify-code',code});await applicant({action:'verify-code',code},400);app=(await applicant()).application;
   const {requiredDocuments,SECTION_FIELDS}=load('src/lib/rider-application-policy.ts');
   const sharp=require('sharp');const image=await sharp({create:{width:900,height:700,channels:3,background:'#fff'}}).png().toBuffer();
+  async function parallelUpload(kind,base,name){const form=new FormData();form.set('file',new File([image],name,{type:'image/png'}));form.set('kind',kind);form.set('version',String(base.version));form.set('uploadContext',base.uploadContext);form.set('documentId',base.documents.find(d=>d.current&&d.kind===kind)?.id??'');const response=await applicantRequest(new NextRequest('http://fixture.invalid/api/rider/application',{method:'POST',body:form}),user.id);return {status:response.status,data:await response.json()};}
+  // Independent document slots share a context, but may commit different app versions.
+  const parallelBase=app;
+  const concurrent=await Promise.all([parallelUpload('PROFILE',parallelBase,'my-portrait.png'),parallelUpload('OR',parallelBase,'my-receipt.png')]);
+  assert(concurrent.every(r=>r.status===200),JSON.stringify(concurrent));assertions++;
+  app=(await applicant()).application;
+  assert.equal(app.version,parallelBase.version+2);assertions++;
+  assert.equal(app.documents.find(d=>d.current&&d.kind==='PROFILE').originalName,'my-portrait.png');assertions++;
+  assert.equal(app.documents.find(d=>d.current&&d.kind==='OR').originalName,'my-receipt.png');assertions++;
+  const sameSlotBase=app;
+  const sameSlot=await Promise.all([parallelUpload('CR',sameSlotBase,'first.png'),parallelUpload('CR',sameSlotBase,'second.png')]);
+  assert.deepEqual(sameSlot.map(r=>r.status).sort(),[200,409]);assertions++;
+  app=(await applicant()).application;assert.equal(app.documents.filter(d=>d.current&&d.kind==='CR').length,1);assertions++;
+  const oldContext=app;
+  app=(await applicant({action:'save',version:app.version,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE'],fields:{...fields,legalName:'Changed fixture'}})).application;
+  assert.equal((await parallelUpload('NBI',oldContext,'stale.png')).status,409);assertions++;
+  app=(await applicant({action:'save',version:app.version,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE'],fields})).application;
   async function upload(kind,expected=200){const form=new FormData();form.set('file',new File([image],'fixture.png',{type:'image/png'}));form.set('kind',kind);form.set('version',String(app.version));const res=await applicantRequest(new NextRequest('http://fixture.invalid/api/rider/application',{method:'POST',body:form}),user.id);const data=await res.json();assert.equal(res.status,expected,JSON.stringify(data));assertions++;if(data.application)app=data.application;return data;}
   for(const kind of requiredDocuments('TRICYCLE',['DELIVERY','RIDE'],fields))await upload(kind);
   // Removing a draft upload clears its slot, keeps history and preserves ownership/version checks.
