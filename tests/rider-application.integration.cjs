@@ -139,20 +139,43 @@ const fields={legalName:'Fixture Applicant',birthDate:'1990-01-01',address:'Ling
   demo=(await applicant({action:'save',version:demo.version,isDemo:false,fields,vehicleClass:'TRICYCLE',services:['DELIVERY','RIDE']},200,demoUser.id)).application;
   assert.equal(demo.isDemo,true);assertions++;
   const {POST:demoStep}=load('../fetch-rider/src/app/api/rider/application/demo/route.ts');
-  async function step(body,expected=200,origin='http://fixture.invalid') {
-    const response=await demoStep(new NextRequest('http://fixture.invalid/api/rider/application/demo',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({version:demo.version,...body})}));
-    const data=await response.json();assert.equal(response.status,expected,JSON.stringify(data));assertions++;if(data.application)demo=data.application;return data;
+  async function step(body,expected=200,origin='http://fixture.invalid',complete=true) {
+    let data, parts=0;
+    do {
+      const before=demo.documents?.length||0;
+      const response=await demoStep(new NextRequest('http://fixture.invalid/api/rider/application/demo',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({version:demo.version,...body})}));
+      data=await response.json();assert.equal(response.status,expected,JSON.stringify(data));assertions++;if(data.application)demo=data.application;
+      if(expected===200) { assert(demo.documents.length-before<=1,'A request must upload at most one document');assertions++; }
+      assert(++parts<=15,'Demo continuation must terminate');
+    } while(complete && data.demoContinue);
+    return data;
   }
   await step({action:'documents'},401); demoSession={uid:other.id,role:'RIDER'}; await step({action:'documents'},403);
   demoSession={uid:demoUser.id,role:'RIDER'};
   await step({action:'documents'},403,'https://other.invalid'); await step({action:'verify'},400); await step({action:'details',version:demo.version-1},409);
-  await step({action:'details'}); await step({action:'documents'}); await step({action:'review'});
-  assert(demo.documents.every(d=>d.current));assertions++;
+  await step({action:'details'});
+  const firstPart=await step({action:'documents'},200,'http://fixture.invalid',false);assert(firstPart.demoContinue);assert.equal(demo.documents.length,1);assertions+=2;
+  const archivedProfile=demo.documents[0].id;
+  await step({action:'details'});assert(demo.documents.every(d=>!d.current));assertions++;
+  await step({action:'documents'},200,'http://fixture.invalid',false);
+  const savedProfile=demo.documents.find(d=>d.current&&d.kind==='PROFILE').id;
+  assert.notEqual(savedProfile,archivedProfile);assert(demo.documents.some(d=>d.id===archivedProfile&&!d.current));assertions+=2;
+  await step({action:'documents'});assert(demo.documents.some(d=>d.id===savedProfile&&d.current));assertions++;
+  const completedCount=demo.documents.length;await step({action:'documents'});assert.equal(demo.documents.length,completedCount);assertions++;
+  await step({action:'review'});
+  assert(requiredDocuments(demo.vehicleClass,demo.services,demo.fields).every(kind=>demo.documents.some(d=>d.current&&d.kind===kind)));assertions++;
   const original=user.id; // Review helpers below use app; real user's previous assertions are complete.
   app=(await applicant({action:'submit',version:demo.version,fields:demo.fields,vehicleClass:demo.vehicleClass,services:demo.services},200,demoUser.id)).application;
   await staff(actors.reviewer,{action:'claim'});
   for(const section of Object.keys(SECTION_FIELDS))await staff(actors.reviewer,{action:'review',section,status:'ACCEPTED'});
   for(const document of app.documents.filter(d=>d.current))await staff(actors.reviewer,{action:'review',documentId:document.id,status:'ACCEPTED'});
+  const demoNbi=app.documents.find(d=>d.current&&d.kind==='NBI').id;
+  await staff(actors.reviewer,{action:'review',documentId:app.documents.find(d=>d.current&&d.kind==='OR').id,status:'NEEDS_CORRECTION',reason:'Replace only this demo official receipt.'});
+  await staff(actors.reviewer,{action:'corrections'});demo=app;
+  await step({action:'documents'});
+  app=(await applicant({action:'submit',version:demo.version,fields:demo.fields,vehicleClass:demo.vehicleClass,services:demo.services},200,demoUser.id)).application;
+  assert(app.documents.some(d=>d.id===demoNbi&&d.current&&d.status==='ACCEPTED'));assertions++;
+  await staff(actors.reviewer,{action:'review',documentId:app.documents.find(d=>d.current&&d.kind==='OR').id,status:'ACCEPTED'});
   await staff(actors.reviewer,{action:'recommend'});
   await staff(actors.admin,{action:'schedule',orientationAt:new Date(Date.now()+60000).toISOString(),venue:'Demo orientation room',instructions:'Demonstration appointment only. Do not attend a real venue.'});
   assert(messages.at(-1).subject.startsWith('[DEMO]'));assert.equal(messages.at(-1).to,demoUser.email);assert.equal(messages.at(-1).attachments[0].content.subarray(0,5).toString(),'%PDF-');assertions+=3;
