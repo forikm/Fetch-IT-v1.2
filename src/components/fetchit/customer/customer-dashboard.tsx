@@ -1,4 +1,5 @@
 "use client";
+import { RiderProfile } from "../shared/rider-profile";
 
 import { NotificationInbox } from "../shared/notification-inbox";
 import { BookingHistoryRow } from "../shared/booking-history-row";
@@ -131,6 +132,7 @@ export interface Booking {
     vehicleClass: string | null;
     vehiclePlate: string | null;
     rating: number;
+    ratingCount?: number;
     totalDeliveries?: number;
   } | null;
   trackingUpdates?: { lat: number; lng: number; createdAt: string }[];
@@ -1210,10 +1212,8 @@ function TrackingView({
               <Truck className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold">{booking.rider.name}</p>
-              <p className="text-sm text-muted-foreground truncate">
-                {VEHICLES[booking.vehicleClass]?.label ?? booking.vehicleClass} · {booking.rider.vehiclePlate} · ★ {booking.rider.rating.toFixed(1)}
-              </p>
+              <RiderProfile bookingId={booking.id} {...booking.rider} type={booking.type} />
+              <p className="text-sm text-muted-foreground break-words">{VEHICLES[booking.vehicleClass]?.label} · {booking.rider.vehiclePlate || "Plate not set"}</p>
             </div>
             {booking.rider.phone && (
                 <Button asChild size="icon" variant="outline" className="h-9 w-9 shrink-0">

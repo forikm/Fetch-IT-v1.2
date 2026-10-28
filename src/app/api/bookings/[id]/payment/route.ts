@@ -1,3 +1,4 @@
+import { scheduleReceiptDelivery } from "@/lib/receipt-email";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCustomer, customerErrorResponse } from "@/lib/customer-access";
@@ -12,6 +13,7 @@ async function get(_req: NextRequest, { params }: Params) {
     const { id } = await params;
     const booking = await db.booking.findFirst({ where: { id, customerId: session.uid } });
     if (!booking) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+    if (booking.paymentStatus === "PAID") scheduleReceiptDelivery(db);
     return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
   } catch (error) { return customerErrorResponse(error); }
 }

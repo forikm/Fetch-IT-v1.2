@@ -76,7 +76,7 @@ export function ModeSelect() {
             icon={<Package className="h-7 w-7" />}
             accent="delivery"
             features={[
-              { icon: MapPin, text: "Motor, tricycle or car" },
+              { icon: MapPin, text: "Motorcycle, tricycle or car" },
               { icon: Calculator, text: "Upfront fare by weight & distance" },
               { icon: ShieldCheck, text: "Signature & photo e-POD" },
             ]}
@@ -89,7 +89,7 @@ export function ModeSelect() {
             icon={<Car className="h-7 w-7" />}
             accent="ride"
             features={[
-              { icon: Bike, text: "Motor, tricycle or car" },
+              { icon: Bike, text: "Motorcycle, tricycle or car" },
               { icon: Users, text: "Up to 4 passengers, fare per trip" },
               { icon: Navigation, text: "Live map & driver ETA" },
               { icon: ShieldCheck, text: "Pickup OTP before boarding" },

@@ -1,3 +1,4 @@
+import { scheduleReceiptDelivery } from "./receipt-email";
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { CustomerError } from "./customer-access";
@@ -64,13 +65,16 @@ export async function resolveOnlineCheckout(db: PrismaClient, checkoutId: string
     const ticketId = await generateTicketId(tx, data.type);
     const booking = await tx.booking.create({ data: { ...data, id: draft.id, scheduledAt,
       ticketId, refCode: generateRefCode(data.type === "RIDE" ? "RIDE" : "FIT"),
-      paymentStatus: "PAID", paidAt: now, customerPaidAt: now, customerPaidAmount: data.totalFare,
+      paymentStatus: "PAID", paidAt: now, receiptEmailQueuedAt: now, receiptEmailNextAttemptAt: now, customerPaidAt: now, customerPaidAmount: data.totalFare,
       paymentReference: `TEST-${checkout.id}`,
       paymentEvents: { create: { actorId: actor.uid, actorName: actor.name, actorRole: "CUSTOMER", action: "DEMO_CHECKOUT_SUCCEEDED", fromStatus: "UNPAID", toStatus: "PAID", amount: data.totalFare, reference: `TEST-${checkout.id}`, reason: "Test settlement; no money charged. Booking created after payment success." } },
     } });
     await tx.checkoutDraft.update({ where: { id: draft.id }, data: { bookingId: booking.id } });
     return booking;
-  }, { maxWait: 10000, timeout: 20000 });
+  }, { maxWait: 10000, timeout: 20000 }).then(booking => {
+    if (booking?.paymentStatus === "PAID") scheduleReceiptDelivery(db);
+    return booking;
+  });
 }
 
 export async function retryOnlineCheckout(db: PrismaClient, checkoutId: string, actor: Actor) {

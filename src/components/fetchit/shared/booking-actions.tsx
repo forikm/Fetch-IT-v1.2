@@ -15,6 +15,7 @@ export function BookingActions({ booking, readOnly = false }: { readOnly?: boole
   const online = useOnlineStatus();
   const offlineAccess = useAppStore(state => state.offlineAccess);
   const unavailable = readOnly || !online || offlineAccess;
+  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [dialog, setDialog] = useState<"review" | "help" | null>(null);
   const [review, setReview] = useState<Review | null>(null);
   const [rating, setRating] = useState(5);
@@ -35,17 +36,17 @@ export function BookingActions({ booking, readOnly = false }: { readOnly?: boole
     finally { setBusy(false); }
   }
   return <>
-    <CustomerPaymentCard key={booking.id} bookingId={booking.id} type={booking.type} readOnly={unavailable} />
+    <CustomerPaymentCard key={booking.id} bookingId={booking.id} type={booking.type} readOnly={unavailable} onPaymentStatus={setPaymentStatus} />
     <div className="flex flex-wrap gap-2 pt-2 border-t">
-      <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={async () => {
+      {paymentStatus === "PAID" && <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={async () => {
         setError("");
         try {
           const response = await fetch(`/api/bookings/${booking.id}/receipt`, { cache: "no-store" });
           if (!response.ok) { await customerResponse(response, "Couldn’t download your receipt. Please retry."); return; }
           const url = URL.createObjectURL(await response.blob());
-          const link = document.createElement("a"); link.href = url; link.download = `fetchit-${booking.refCode}.txt`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+          const link = document.createElement("a"); link.href = url; link.download = `fetchit-${booking.refCode}.pdf`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         } catch { setError("Couldn’t download your receipt. Please retry."); }
-      }}>Download receipt</Button>
+      }}>Download PDF receipt</Button>}
       {booking.status === "DELIVERED" && booking.riderId && <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => void open("review")}>Rate {booking.type === "RIDE" ? "driver" : "rider"}</Button>}
       <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => void open("help")}>Get help</Button>
     </div>

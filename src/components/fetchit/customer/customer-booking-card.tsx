@@ -1,4 +1,5 @@
 "use client";
+import { RiderProfile } from "../shared/rider-profile";
 
 import { Bike, Calculator, Car, CircleDot, Clock, MapPin, Navigation, Phone, ShieldCheck, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,14 +56,14 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
       {booking.rider && <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
         <div className="grid place-items-center h-9 w-9 rounded-full bg-primary/15 text-primary shrink-0"><Truck className="h-4 w-4" /></div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{booking.rider.name}</p>
-          <p className="text-xs text-muted-foreground truncate">{booking.rider.vehiclePlate} · ★ {booking.rider.rating.toFixed(1)}</p>
+          <RiderProfile bookingId={booking.id} {...booking.rider} type={booking.type} />
+          <p className="text-xs text-muted-foreground truncate">{booking.rider.vehiclePlate || "Plate not set"}</p>
         </div>
         {booking.rider.phone && <Button asChild size="icon" variant="outline" className="h-8 w-8 shrink-0"><a href={`tel:${booking.rider.phone}`} aria-label={`Call ${booking.rider.name}`}><Phone className="h-4 w-4" /></a></Button>}
       </div>}
 
       <BookingTimeline status={booking.status} type={booking.type} scheduled={scheduled} />
-      {openRide && <p className="text-xs text-muted-foreground">Tap this booking to view your rider, map and safety options.</p>}
+      {openRide && <p className="text-xs text-muted-foreground">Tap this booking to view your driver, map and safety options.</p>}
       <div className="flex flex-wrap gap-2 pt-1">
         {booking.status !== "CANCELLED" && !readOnly && !(delivered && !ride) && <Button size="sm" className="flex-1" onClick={onTrack}><Navigation className="h-3.5 w-3.5" />{delivered ? "View ride details" : ride ? "Track ride" : "Track delivery"}</Button>}
         {canCancel && <CancelBooking bookingId={booking.id} readOnly={readOnly} onCancelled={onRefresh} />}

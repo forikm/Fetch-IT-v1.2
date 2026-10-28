@@ -102,7 +102,7 @@ function ServiceCard({ kind, onStart }: { kind: "delivery" | "ride"; onStart: ()
       <div className="flex items-start justify-between gap-4"><span className="rounded-full border border-current/15 px-3 py-1 text-xs font-medium">{delivery ? "Delivery" : "Ride"}</span><Icon className="h-10 w-10 stroke-[1.3] sm:h-14 sm:w-14" /></div>
       <h3 className="mt-10 text-3xl font-semibold tracking-tight">{delivery ? "Send a package" : "Book a ride"}</h3>
       <p className="mt-4 max-w-sm text-sm leading-7 opacity-75">{delivery ? "Choose a vehicle and pickup time." : "Choose a vehicle and review your fare."}</p>
-      <div className="mt-6 flex flex-wrap gap-2 text-xs">{["Motor", "Tricycle", "Car"].map((item) => <span key={item} className="rounded-full bg-white/40 px-3 py-1.5">{item}</span>)}</div>
+      <div className="mt-6 flex flex-wrap gap-2 text-xs">{["Motorcycle", "Tricycle", "Car"].map((item) => <span key={item} className="rounded-full bg-white/40 px-3 py-1.5">{item}</span>)}</div>
       <button type="button" onClick={onStart} className="mt-9 inline-flex items-center gap-3 rounded-md text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{delivery ? "Book a delivery" : "Book a ride"}<span className="grid h-9 w-9 place-items-center rounded-full bg-white/60 transition group-hover:translate-x-1"><ArrowRight className="h-4 w-4" /></span></button>
     </div>
   );

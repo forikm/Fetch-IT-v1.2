@@ -1,4 +1,5 @@
 "use client";
+import { RiderProfile } from "../shared/rider-profile";
 
 import { Navigation, Phone, Calculator, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,7 +52,7 @@ export function RideTrackingView({
           <Navigation className="h-5 w-5 text-emerald-600" />
           Your ride · {ride.refCode}
         </DialogTitle>
-        <DialogDescription>View your rider&apos;s profile, follow your trip and access safety options.</DialogDescription>
+        <DialogDescription>View your driver&apos;s profile, follow your trip and access safety options.</DialogDescription>
       </DialogHeader>
 
       <BookingTimeline status={status} type="RIDE" scheduled={status === "PENDING" && !!ride.scheduledAt && new Date(ride.scheduledAt).getTime() > Date.now()} />
@@ -77,7 +78,7 @@ export function RideTrackingView({
 
       </div>
 
-      <p className="text-xs text-muted-foreground">A: Pickup · B: Drop-off · Orange arrow: Rider{customerLocation ? " · Blue dot: You" : ""}</p>
+      <p className="text-xs text-muted-foreground">A: Pickup · B: Drop-off · Orange arrow: Driver{customerLocation ? " · Blue dot: You" : ""}</p>
       {locationMessage && <p role="status" className="text-xs text-muted-foreground">{locationMessage}</p>}
       {eta != null && !done && !cancelled && <p className="text-xs text-muted-foreground">{routeTimeLabel("RIDE")}: about {eta} min</p>}
       {location?.createdAt && <p className="text-xs text-muted-foreground">{locationUpdateLabel(location.createdAt, Date.now(), "RIDE")}</p>}
@@ -91,15 +92,15 @@ export function RideTrackingView({
                 {ride.rider.name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("")}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-muted-foreground">Your rider&apos;s profile</p>
-                <p className="font-semibold [overflow-wrap:anywhere]">{ride.rider.name}</p>
+                <p className="text-xs text-muted-foreground">Your driver&apos;s profile</p>
+                <RiderProfile bookingId={ride.id} {...ride.rider} type="RIDE" />
               </div>
               {ride.rider.phone && <Button asChild size="icon" variant="outline" className="h-10 w-10 shrink-0"><a href={`tel:${ride.rider.phone}`} aria-label={`Call ${ride.rider.name}`}><Phone className="h-4 w-4" /></a></Button>}
             </div>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div><dt className="text-xs text-muted-foreground">Vehicle</dt><dd className="font-medium">{VEHICLES[ride.vehicleClass]?.label ?? ride.vehicleClass}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Plate number</dt><dd className="font-medium [overflow-wrap:anywhere]">{ride.rider.vehiclePlate || "Not available"}</dd></div>
-              <div><dt className="text-xs text-muted-foreground">Rating</dt><dd className="font-medium">★ {ride.rider.rating.toFixed(1)} / 5</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Rating</dt><dd className="font-medium">{ride.rider.ratingCount ? `★ ${ride.rider.rating.toFixed(1)} / 5 (${ride.rider.ratingCount} ratings)` : "No ratings yet"}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Phone</dt><dd className="font-medium [overflow-wrap:anywhere]">{ride.rider.phone || "Not available"}</dd></div>
               {ride.rider.totalDeliveries != null && <div><dt className="text-xs text-muted-foreground">Completed bookings</dt><dd className="font-medium">{ride.rider.totalDeliveries}</dd></div>}
             </dl>

@@ -7,8 +7,9 @@ const commonFiles = ["prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/book
 commonFiles.push('src/lib/local-demo-runtime.ts', 'src/lib/local-demo-files.ts', 'src/lib/application-demo-mode.ts', 'src/hooks/use-local-demo.ts', 'src/hooks/use-visible-poll.ts');
 commonFiles.push('prisma/migrations/202610280001_rider_application_demo/migration.sql');
 commonFiles.push('prisma/migrations/202610280002_application_document_names/migration.sql');
+commonFiles.push("src/lib/booking-receipt.ts", "src/lib/receipt-email.ts", "prisma/migrations/202610290001_browser_gps_receipts/migration.sql");
 const riderFiles = ["src/lib/application-applicant-api.ts", "src/lib/application-upload.ts", "src/lib/delivery-challenge.ts", "src/lib/ticket.ts", "src/hooks/use-visible-poll.ts", "src/components/fetchit/shared/payment-card.tsx"];
-riderFiles.push('src/components/ui/password-input.tsx');
+riderFiles.push('src/components/ui/password-input.tsx', 'src/lib/rider-profile.ts', 'src/components/fetchit/shared/rider-profile.tsx');
 commonFiles.push("src/lib/rider-application-policy.ts", "src/lib/rider-eligibility.ts");
 const onboardingFiles = ["src/lib/rider-application.ts", "src/lib/application-storage.ts", "src/lib/application-mail.ts", "src/lib/application-staff-api.ts"];
 let failed = false;

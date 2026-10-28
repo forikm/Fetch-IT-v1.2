@@ -13,7 +13,7 @@ type CustomerPayment = {
 };
 
 /** Customer-facing payment details. Rider earnings and payout records stay in the rider app. */
-export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIVERY" }: { bookingId: string; readOnly?: boolean; type?: BookingType }) {
+export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIVERY", onPaymentStatus }: { bookingId: string; readOnly?: boolean; type?: BookingType; onPaymentStatus?: (status: string) => void }) {
   const person = type === "RIDE" ? "driver" : "rider";
   const [booking, setBooking] = useState<CustomerPayment | null>(null);
   const [amount, setAmount] = useState("");
@@ -25,6 +25,8 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
   const pending = useRef(false);
   const initialized = useRef(false);
   const version = useRef(0);
+
+  useEffect(() => { onPaymentStatus?.(booking?.paymentStatus ?? ""); }, [booking?.paymentStatus, onPaymentStatus]);
 
   useEffect(() => {
     if (readOnly) return;

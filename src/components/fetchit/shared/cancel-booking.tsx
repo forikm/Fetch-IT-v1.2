@@ -16,7 +16,7 @@ export function CancelBooking({ bookingId, readOnly, onCancelled }: { bookingId:
   return <>
     <Button size="sm" variant="outline" disabled={readOnly || !online} onClick={() => setOpen(true)}>Cancel booking</Button>
     <Dialog open={open} onOpenChange={value => { if (!pending.current) setOpen(value); }}>
-      <DialogContent><DialogHeader><DialogTitle>Cancel this booking?</DialogTitle><DialogDescription>Your rider will be notified. If payment is already recorded, contact support about a refund.</DialogDescription></DialogHeader>
+      <DialogContent><DialogHeader><DialogTitle>Cancel this booking?</DialogTitle><DialogDescription>Your booking partner will be notified. If payment is already recorded, contact support about a refund.</DialogDescription></DialogHeader>
         <form className="space-y-4" onSubmit={async event => {
           event.preventDefault();
           if (pending.current || readOnly || !online) return;

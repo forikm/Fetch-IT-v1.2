@@ -181,7 +181,7 @@ export function LiveTrackingMap({
       )}
       {ready && !rider && (
         <div className="pointer-events-none absolute bottom-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full border bg-card/95 px-3 py-1.5 text-center text-xs font-medium shadow-sm [overflow-wrap:anywhere]">
-          Waiting for GPS from the rider&apos;s phone app…
+          Waiting for your booking partner to share their location…
         </div>
       )}
     </div>
