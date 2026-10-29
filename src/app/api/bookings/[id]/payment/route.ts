@@ -2,7 +2,7 @@ import { scheduleReceiptDelivery } from "@/lib/receipt-email";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCustomer, customerErrorResponse } from "@/lib/customer-access";
-import { confirmCashPayment, PaymentError } from "@/lib/payments";
+import { confirmCashPayment, dropoffReachedAt, PaymentError } from "@/lib/payments";
 import { bookingView } from "@/lib/db-data";
 import { omitTicket } from "@/lib/ticket";
 import { limitRequests, RateLimitError, withRequestLog } from "@/lib/request-guard";
@@ -14,7 +14,7 @@ async function get(_req: NextRequest, { params }: Params) {
     const booking = await db.booking.findFirst({ where: { id, customerId: session.uid } });
     if (!booking) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
     if (booking.paymentStatus === "PAID") scheduleReceiptDelivery(db);
-    return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
+    return NextResponse.json({ booking: { ...omitTicket(bookingView(booking)), dropoffReachedAt: await dropoffReachedAt(db, id) } }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return customerErrorResponse(error); }
 }
 async function post(req: NextRequest, { params }: Params) {
@@ -22,8 +22,9 @@ async function post(req: NextRequest, { params }: Params) {
     const session = await requireCustomer();
     await limitRequests("customer:payment", session.uid, 30, 60_000);
     const body = await req.json().catch(() => null);
-    const booking = await confirmCashPayment(db, (await params).id, session, body?.amount);
-    return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
+    const { id } = await params;
+    const booking = await confirmCashPayment(db, id, session, body?.amount);
+    return NextResponse.json({ booking: { ...omitTicket(bookingView(booking)), dropoffReachedAt: await dropoffReachedAt(db, id) } });
   } catch (error) {
     if (error instanceof RateLimitError) throw error;
     if (error instanceof PaymentError) return NextResponse.json({ error: error.message }, { status: error.status });

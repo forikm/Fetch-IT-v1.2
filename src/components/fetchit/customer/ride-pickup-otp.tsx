@@ -46,6 +46,7 @@ export function RidePickupOtp({ bookingId }: { bookingId: string }) {
         {otp ? <>
           <p aria-label="Your ride pickup code" className="rounded-lg border bg-card py-3 text-center font-mono text-3xl tracking-[0.25em]">{otp}</p>
           {expiresAt && <p className="text-xs text-muted-foreground">Valid until {new Date(expiresAt).toLocaleTimeString("en-PH", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit" })} Philippine time.</p>}
+          <Button type="button" variant="ghost" size="sm" disabled={loading} onClick={reveal}>{loading ? "Checking code…" : "Refresh pickup code"}</Button>
         </> : <Button variant="outline" disabled={loading} onClick={reveal}>{loading ? <FetchItLoader className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />} Reveal OTP</Button>}
       </CardContent>
     </Card>

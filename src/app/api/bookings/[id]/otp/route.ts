@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCustomer, CustomerError, customerErrorResponse } from "@/lib/customer-access";
-import { createChallenge, readChallenge } from "@/lib/delivery-challenge";
+import { challengeHash, createChallenge, isPortableChallenge, readChallenge } from "@/lib/delivery-challenge";
 
 // Codes belong to the booking, and are never included in general booking responses.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +24,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       }
       if (challenge.attempts >= challenge.maxAttempts)
         throw new CustomerError("Too many incorrect attempts. Wait for the code to expire before requesting a new one.", 429);
-      return { otp: readChallenge(id, challenge.codeCiphertext), expiresAt: challenge.expiresAt };
+      let otp: string;
+      try { otp = readChallenge(id, challenge.codeCiphertext); }
+      catch {
+        // An encryption-key rotation must not leave a ride permanently stuck.
+        const data = createChallenge(id, now);
+        challenge = await tx.deliveryChallenge.update({ where: { bookingId: id }, data: { ...data, attempts: challenge.attempts, createdAt: now } });
+        otp = readChallenge(id, challenge.codeCiphertext);
+      }
+      if (!isPortableChallenge(challenge.codeHash)) {
+        // Upgrade the existing digits without resetting attempts or expiry.
+        await tx.deliveryChallenge.update({ where: { bookingId: id }, data: { codeHash: challengeHash(id, otp) } });
+      }
+      return { otp, expiresAt: challenge.expiresAt };
     });
     return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return customerErrorResponse(error); }

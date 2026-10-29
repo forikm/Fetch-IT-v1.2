@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatPeso } from "@/lib/customer-booking-ui";
 import type { BookingType } from "@/lib/constants";
-import { PAYMENT_METHOD_LABEL, isDemoPayment, type PaymentMethod, type PaymentStatus } from "@/lib/payment-policy";
+import { PAYMENT_METHOD_LABEL, cashConfirmationAvailable, isDemoPayment, type PaymentMethod, type PaymentStatus } from "@/lib/payment-policy";
 
 type CustomerPayment = {
-  paymentMethod: PaymentMethod; paymentStatus: PaymentStatus; status: string; totalFare: number;
+  type?: string; dropoffReachedAt?: string | null; paymentMethod: PaymentMethod; paymentStatus: PaymentStatus; status: string; totalFare: number;
   customerPaidAmount: number | null; riderReceivedAmount: number | null;
   customerPaidAt: string | null; riderReceivedAt: string | null; paidAt: string | null; paymentReference: string | null;
 };
@@ -31,8 +31,10 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
   useEffect(() => {
     if (readOnly) return;
     const controller = new AbortController();
+    let refreshing = false;
     async function refresh() {
-      if (document.hidden || !navigator.onLine || pending.current) return;
+      if (document.hidden || !navigator.onLine || pending.current || refreshing) return;
+      refreshing = true;
       const requestVersion = version.current;
       try {
         const response = await fetch(`/api/bookings/${bookingId}/payment`, { cache: "no-store", signal: controller.signal });
@@ -42,20 +44,23 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
           setBooking(data.booking); setError("");
           if (!initialized.current) { setAmount(Number(data.booking.totalFare).toFixed(2)); initialized.current = true; }
         }
-      } catch (failure) { if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "Payment details unavailable."); }
+      } catch (failure) { if (!controller.signal.aborted && requestVersion === version.current) setError(failure instanceof Error ? failure.message : "Payment details unavailable."); }
+      finally { refreshing = false; }
     }
     void refresh();
-    const timer = setInterval(() => void refresh(), 15000);
+    const timer = setInterval(() => void refresh(), 3000);
     window.addEventListener("online", refresh);
-    return () => { controller.abort(); clearInterval(timer); window.removeEventListener("online", refresh); };
+    window.addEventListener("focus", refresh);
+    return () => { controller.abort(); clearInterval(timer); window.removeEventListener("online", refresh); window.removeEventListener("focus", refresh); };
   }, [bookingId, readOnly, retry]);
 
   if (readOnly) return <p className="text-sm text-muted-foreground">Reconnect to view payment details.</p>;
   const demo = !!booking && isDemoPayment(booking.paymentMethod);
   const canCheckout = demo && booking && ["PENDING", "MATCHED", "ACCEPTED"].includes(booking.status) && !["PAID", "REFUNDED"].includes(booking.paymentStatus);
-  const canConfirm = booking && booking.paymentMethod === "CASH" && ["ACCEPTED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"].includes(booking.status) && !booking.customerPaidAt && !["PAID", "REFUNDED"].includes(booking.paymentStatus);
+  const collectionAvailable = booking && cashConfirmationAvailable(booking.type ?? type, booking.status, booking.dropoffReachedAt);
+  const canConfirm = booking && booking.paymentMethod === "CASH" && collectionAvailable && !booking.customerPaidAt && booking.paymentStatus !== "REFUNDED";
   const mismatch = booking && booking.customerPaidAmount !== null && booking.riderReceivedAmount !== null && (booking.customerPaidAmount !== booking.riderReceivedAmount || booking.customerPaidAmount !== booking.totalFare);
-  const paymentLabel = !booking ? "Loading…" : booking.paymentStatus === "PAID" ? "Paid" : booking.paymentStatus === "REFUNDED" ? "Refunded" : booking.paymentStatus === "FAILED" ? "Payment failed" : mismatch ? "Needs review" : booking.customerPaidAt ? `Waiting for ${person} confirmation` : booking.status === "CANCELLED" ? "Booking cancelled" : booking.paymentStatus === "PENDING" ? "Awaiting confirmation" : booking.paymentMethod === "CASH" ? `Pay your ${person} in cash` : "Payment needed";
+  const paymentLabel = !booking ? "Loading…" : booking.paymentStatus === "PAID" ? "Paid" : booking.paymentStatus === "REFUNDED" ? "Refunded" : booking.paymentStatus === "FAILED" ? "Payment failed" : mismatch ? "Needs review" : booking.customerPaidAt ? `Waiting for ${person} confirmation` : booking.status === "CANCELLED" ? "Booking cancelled" : booking.paymentMethod === "CASH" && type === "DELIVERY" && !collectionAvailable ? "Pay at drop-off. Waiting for the rider to confirm arrival." : booking.paymentStatus === "PENDING" ? "Awaiting confirmation" : booking.paymentMethod === "CASH" ? `Pay your ${person} in cash` : "Payment needed";
 
   return <section className="space-y-3 rounded-xl border p-4 text-sm" aria-label="Payment">
     <div className="flex flex-wrap justify-between gap-2"><h3 className="font-semibold">{booking ? PAYMENT_METHOD_LABEL[booking.paymentMethod] : "Payment"}</h3>{booking && <strong>{formatPeso(Number(booking.totalFare))}</strong>}</div>

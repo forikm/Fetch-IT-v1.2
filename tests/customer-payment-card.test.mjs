@@ -9,7 +9,7 @@ import * as policy from "../src/lib/payment-policy.ts";
 const source = fs.readFileSync(new URL("../src/components/fetchit/shared/customer-payment-card.tsx", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
 const flush = () => new Promise(resolve => setImmediate(resolve));
-const cash = { paymentMethod: "CASH", paymentStatus: "UNPAID", status: "ACCEPTED", totalFare: 89, customerPaidAmount: null, riderReceivedAmount: null, customerPaidAt: null, riderReceivedAt: null, paidAt: null, paymentReference: null };
+const cash = { paymentMethod: "CASH", paymentStatus: "UNPAID", status: "IN_TRANSIT", dropoffReachedAt: "2026-10-29T01:00:00Z", totalFare: 89, customerPaidAmount: null, riderReceivedAmount: null, customerPaidAt: null, riderReceivedAt: null, paidAt: null, paymentReference: null };
 function nodes(node) { return !node || typeof node !== "object" ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)]; }
 const text = tree => nodes(tree).flatMap(n => [n.props?.children].flat().filter(v => typeof v === "string" || typeof v === "number")).join(" ");
 function harness(record = cash, type = "DELIVERY") {
@@ -83,4 +83,13 @@ test("ride payments use driver wording and cancelled unpaid bookings do not requ
   assert.match(text(cancelled.render()), /Booking cancelled/);
   assert.equal(cancelled.find("button", "Confirm cash payment"), undefined);
   assert.doesNotMatch(text(cancelled.render()), /Pay your rider/);
+});
+
+test("delivery cash controls remain hidden before drop-off arrival", async () => {
+  for (const status of ["PENDING", "MATCHED", "ACCEPTED", "PICKED_UP", "IN_TRANSIT"]) {
+    const h = harness({ ...cash, status, dropoffReachedAt: null }); await h.ready();
+    assert.equal(h.find("button", "Confirm cash payment"), undefined, status);
+    assert.equal(h.find("form"), undefined, status);
+    assert.match(text(h.render()), /Pay at drop-off/);
+  }
 });
