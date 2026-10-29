@@ -12,6 +12,8 @@ import { ProfileSettings } from "../shared/profile-settings";
 import { NotificationSettings } from "../shared/notification-settings";
 import { HistoryFilters, emptyHistoryFilter } from "../shared/history-filters";
 import { useTrackingUpdates } from "@/hooks/use-tracking-updates";
+import { useCompletedBookingRatings } from "@/hooks/use-completed-booking-ratings";
+import { BookingActions } from "../shared/booking-actions";
 import { useBookingUpdates } from "@/hooks/use-booking-updates";
 import { SavedPlaces } from "../shared/saved-places";
 import { RequestError } from "../shared/request-error";
@@ -158,6 +160,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   const logout = useAppStore((s) => s.logout);
   const setView = useAppStore((s) => s.setView);
   const { toast } = useToast();
+  const { ratingBooking, observeRatings, dismissRating } = useCompletedBookingRatings();
 
   const [tab, setTab] = useState<"active" | "history">("active");
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -191,6 +194,12 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   const [showNew, setShowNew] = useState(false);
   const [repeatBooking, setRepeatBooking] = useState<Booking | null>(null);
   const [trackingBooking, setTrackingBooking] = useState<Booking | null>(null);
+  const handleTrackingUpdate = useCallback((updated: Partial<Booking>) => {
+    if (!trackingBooking) return;
+    const next = { ...trackingBooking, ...updated };
+    observeRatings([trackingBooking, next]);
+    setTrackingBooking(next);
+  }, [trackingBooking, observeRatings]);
   const [mapsReady, setMapsReady] = useState(false);
   const [mapsFailed, setMapsFailed] = useState(false);
 
@@ -238,13 +247,13 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
       const data = result.data;
       if (sequence === loadSequence.current) setSavedAt(result.cached ? result.savedAt : null);
       if (!Array.isArray(data.bookings)) throw new Error("We couldn’t load your bookings. Please try again.");
-      if (sequence === loadSequence.current) { setBookings(data.bookings ?? []); setNextCursor(data.nextCursor ?? null); setMoreError(null); }
+      if (sequence === loadSequence.current) { if (!result.cached) observeRatings(data.bookings); setBookings(data.bookings ?? []); setNextCursor(data.nextCursor ?? null); setMoreError(null); }
     } catch (e) {
       if (sequence === loadSequence.current) setLoadError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [tab, filters, bookingType, user?.id]);
+  }, [tab, filters, bookingType, user?.id, observeRatings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -258,6 +267,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   }
 
   function onNewBookingCreated(b: Booking) {
+    observeRatings([b]);
     const key = `/api/bookings?filter=active&type=${bookingType}`;
     const saved = readSnapshot<{ bookings: Booking[] }>(user?.id ?? "", key);
     saveSnapshot(user?.id ?? "", `/api/bookings/${b.id}`, { booking: b });
@@ -276,6 +286,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   }
 
   const { lastChecked, offline } = useBookingUpdates<Booking>(user?.id ?? "", bookingType, (updated) => {
+    observeRatings(updated);
     if (tab === "active" && !loading) { setBookings(updated.filter((booking) => !["DELIVERED", "CANCELLED"].includes(booking.status))); setSavedAt(null); }
     setTrackingBooking((previous) => {
       const latest = updated.find((booking) => booking.id === previous?.id);
@@ -449,7 +460,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
       <Dialog open={!!trackingBooking} onOpenChange={(o) => !o && setTrackingBooking(null)}>
         <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
           {trackingBooking && (trackingBooking.type === "RIDE" ? (
-            <RideTrackingView key={trackingBooking.id} ride={trackingBooking} readOnly={!online || offlineAccess || !!savedAt} onClose={() => setTrackingBooking(null)} onCancelled={load} onUpdated={(updated) => setTrackingBooking((prev) => prev ? { ...prev, ...updated } : prev)} />
+            <RideTrackingView key={trackingBooking.id} ride={trackingBooking} readOnly={!online || offlineAccess || !!savedAt} onClose={() => setTrackingBooking(null)} onCancelled={load} onUpdated={handleTrackingUpdate} />
           ) : (
             <>
               <DialogHeader>
@@ -464,9 +475,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
               <TrackingView
                 booking={trackingBooking}
                 onClose={() => setTrackingBooking(null)}
-                onUpdated={(updated) =>
-                  setTrackingBooking((prev) => (prev ? { ...prev, ...updated } : prev))
-                }
+                onUpdated={handleTrackingUpdate}
               />
             </>
           ))}
@@ -478,6 +487,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
         setSummaryBooking(null);
       }} onDetails={() => { setTrackingBooking(summaryBooking); setSummaryBooking(null); }} />}</DialogContent></Dialog>
       <Dialog open={!!summaryError} onOpenChange={(open) => !open && setSummaryError(null)}><DialogContent><DialogHeader><DialogTitle>Summary unavailable</DialogTitle><DialogDescription>{summaryError}</DialogDescription></DialogHeader></DialogContent></Dialog>
+      {ratingBooking && <BookingActions key={"rating:" + ratingBooking.id} booking={ratingBooking} ratingPrompt onRatingPromptClosed={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
       <CustomerBottomNav selected={profileOpen ? "profile" : tab === "history" ? "bookings" : "home"} onHome={() => { setTab("active"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBookings={() => { setTab("history"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} onProfile={() => setProfileOpen(true)} />
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Your profile</DialogTitle><DialogDescription>Manage your contact details and booking alerts.</DialogDescription></DialogHeader><ProfileSettings /><NotificationSettings /></DialogContent></Dialog>
       <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">
