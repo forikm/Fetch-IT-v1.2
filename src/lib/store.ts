@@ -141,6 +141,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   logout: async () => {
+    if (typeof window !== "undefined" && !window.confirm("Are you sure you want to log out of Fetch-It?")) return;
     const epoch = ++sessionEpoch;
     // Stop alerts locally even when the network logout has to wait for reconnect.
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
