@@ -59,7 +59,7 @@ export function serviceAreaIssue(value: unknown): ServiceAreaIssue | null {
 export function serviceAreaMessage(issue: ServiceAreaIssue | null, location = "this location"): string | null {
   if (!issue) return null;
   if (issue === "invalid") return `Choose a valid ${location === "this location" ? "location" : `${location} location`}.`;
-  return `Service unavailable for ${location}. ${issue === "water" ? "Choose a point on land" : "Choose a location within Pangasinan"}.`;
+  return `Area unavailable for ${location}. ${issue === "water" ? "Choose a point on land" : "Choose a location within Pangasinan"}.`;
 }
 
 export function bookingServiceAreaError(pickup: unknown, dropoff: unknown): string | null {

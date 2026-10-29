@@ -98,9 +98,9 @@ test("offline confirmation does not submit or clear the draft", async () => {
 
 test("unavailable locations never submit or discard the saved draft", async () => {
   const app = fixture(() => { throw new Error("Must not send"); });
-  app.coverageError = "Service unavailable for pickup. Choose a location within Pangasinan.";
+  app.coverageError = "Area unavailable for pickup. Choose a location within Pangasinan.";
   await app.handleConfirmBooking();
   assert.equal(app.pendingSubmission, null);
   assert.equal(app.cleared, false);
-  assert.match(app.error, /Service unavailable/);
+  assert.match(app.error, /Area unavailable/);
 });

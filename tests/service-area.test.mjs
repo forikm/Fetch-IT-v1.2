@@ -30,7 +30,7 @@ test("province shape excludes Baguio, Manila, adjacent provinces and Lingayen Gu
 });
 test("mapped inland water is unavailable even with a nearby street label", () => {
   assert.equal(area.serviceAreaIssue(pantal), "water");
-  assert.match(area.bookingServiceAreaError(lingayen, pantal), /Service unavailable for drop-off.*land/);
+  assert.match(area.bookingServiceAreaError(lingayen, pantal), /Area unavailable for drop-off.*land/);
 });
 test("missing, nonnumeric and nonfinite coordinates cannot pass coverage", () => {
   for (const value of [null, {}, { lat: "16.02", lng: 120.23 }, { lat: NaN, lng: 120.23 }, { lat: 16, lng: Infinity }, { lat: 91, lng: 120 }]) assert.equal(area.serviceAreaIssue(value), "invalid");
@@ -67,7 +67,7 @@ test("both APIs reject forged unavailable pickup and drop-off for rides and deli
     const body = { pickup: lingayen, dropoff: dagupan, vehicleClass: "MOTORCYCLE", cargoWeightKg: 2, passengers: 1, type, [side]: point };
     const response = await handler(new Request("https://fixture.invalid/api", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
     assert.equal(response.status, 422);
-    assert.match((await response.json()).error, /Service unavailable/);
+    assert.match((await response.json()).error, /Area unavailable/);
   }
   assert.equal(calls.quotes, 0);
   assert.equal(calls.writes, 0);
@@ -95,7 +95,7 @@ test("an older out-of-area online draft cannot become a booking; cancellation st
     "./receipt-email": { scheduleReceiptDelivery: () => { throw Error("Must not send mail"); } },
   });
   const db = { $transaction: async fn => fn(transaction) }, actor = { uid: "fixture", role: "CUSTOMER" };
-  await assert.rejects(resolveOnlineCheckout(db, "checkout", actor, "SUCCEEDED"), error => error.status === 422 && /Service unavailable/.test(error.message));
+  await assert.rejects(resolveOnlineCheckout(db, "checkout", actor, "SUCCEEDED"), error => error.status === 422 && /Area unavailable/.test(error.message));
   assert.equal(writes, 0);
   assert.equal(await resolveOnlineCheckout(db, "checkout", actor, "CANCELLED"), null);
   assert.equal(writes, 1);
