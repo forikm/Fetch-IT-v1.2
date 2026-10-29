@@ -76,6 +76,7 @@ function submission(overrides = {}) {
     "@/lib/booking-events": { recordBookingEvent: async () => {} },
     "@/lib/rider-access": { requireRider: async session => session, RiderError, riderErrorResponse: error => Response.json({ error: error.message }, { status: error.status ?? 503 }) },
     "@/lib/demo-payments": { settleDemoEarnings: async () => {} }, "@/lib/payment-policy": { isDemoPayment: () => false }, "@/lib/epod-photo": helpers,
+    "@/lib/payments": { deliveryPaymentError: async () => overrides.paymentError ?? null },
     "@/lib/epod-upload": { uploadDeliveryPhoto: async (bookingId, id) => { calls.uploads++; if (overrides.uploadError) throw new RiderError("Storage unavailable", 503); return `epods/${bookingId}/${id}.jpg`; }, removeUncommittedPhoto: async pathname => { calls.deleted.push(pathname); } },
   });
   return { calls, post: async (body = { photoDataUrl }, headers = {}) => {
@@ -148,6 +149,13 @@ test("customer and rider cannot request saved photos directly", async () => {
     assert.equal(response.status, 403);
     assert.equal(response.headers.get("Cache-Control"), "private, no-store");
   }
+});
+
+test("unconfirmed cash signature cannot spend a photo upload or complete delivery", async () => {
+  const app = submission({ paymentError: "Confirm payment before completing delivery." });
+  assert.equal((await app.post({ photoDataUrl, signatureSvg: "<svg/>" })).status, 409);
+  assert.equal(app.calls.uploads, 0);
+  assert.equal(app.calls.creates.length, 0);
 });
 test("admin and superadmin viewing requires their current authorized session", async () => {
   for (const app of ["fetch-admin", "fetch-superadmin"]) {
