@@ -96,6 +96,7 @@ import { StatusBadge } from "../shared/status-badge";
 import { BookingRouteMap } from "../shared/booking-route-map";
 import { LiveTrackingMap } from "../shared/live-tracking-map";
 import { RideTrackingView } from "./ride-tracking-view";
+import { DeliveryPhotoPreview } from "./delivery-photo-preview";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
 export interface Booking {
@@ -1190,6 +1191,7 @@ function TrackingView({
   const proofs = booking.deliveryProofs ?? [];
   const sigProof = proofs.find((p) => p.proofType === "SIGNATURE");
   const photoProof = proofs.find((p) => p.proofType === "PHOTO" && p.photoUrl);
+  const [photoOpen, setPhotoOpen] = useState(false);
   const otpProof = proofs.find((p) => p.proofType === "OTP" && p.verifiedAt);
 
   return (
@@ -1289,6 +1291,7 @@ function TrackingView({
               />
               <ProofChip
                 ok={!!photoProof}
+                onClick={photoProof ? () => setPhotoOpen(true) : undefined}
                 label="Photo"
                 icon={<Camera className="h-4 w-4" />}
               />
@@ -1303,16 +1306,7 @@ function TrackingView({
                 />
               </div>
             )}
-            {photoProof?.photoUrl && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1.5">Drop-off photo</p>
-                <img
-                  src={photoProof.photoUrl}
-                  alt="Drop-off verification"
-                  className="rounded-lg border w-full h-40 object-cover"
-                />
-              </div>
-            )}
+            {photoProof?.photoUrl && <DeliveryPhotoPreview key={photoProof.id} src={photoProof.photoUrl} bookingRef={booking.refCode} open={photoOpen} onOpenChange={setPhotoOpen} />}
           </CardContent>
         </Card>
       )}
@@ -1328,21 +1322,28 @@ function ProofChip({
   ok,
   label,
   icon,
+  onClick,
 }: {
   ok: boolean;
   label: string;
   icon: React.ReactNode;
+  onClick?: () => void;
 }) {
+  const Container = onClick ? "button" : "div";
   return (
-    <div
+    <Container
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      aria-label={onClick ? "View delivery photo" : undefined}
       className={cn(
         "rounded-lg border p-2 flex flex-col items-center gap-1 text-xs",
+        onClick && "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring hover:bg-emerald-200",
         ok ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-muted text-muted-foreground",
       )}
     >
       {icon}
       <span className="font-medium">{label}</span>
       <span>{ok ? "Verified" : "—"}</span>
-    </div>
+    </Container>
   );
 }

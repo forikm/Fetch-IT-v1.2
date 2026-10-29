@@ -11,7 +11,10 @@ const require = createRequire(import.meta.url);
 const root = path.resolve(import.meta.dirname, "..");
 function load(file, mocks = {}, globals = {}) {
   const exports = {};
-  const source = ts.transpileModule(fs.readFileSync(path.resolve(root, file), "utf8"), {
+  const siblingApp = file.split("/")[1];
+  const resolved = process.env.FETCH_SIBLING_ROOT && file.startsWith("../") && ["fetch-rider", "fetch-admin", "fetch-superadmin"].includes(siblingApp)
+    ? path.resolve(process.env.FETCH_SIBLING_ROOT, file.slice(3)) : path.resolve(root, file);
+  const source = ts.transpileModule(fs.readFileSync(resolved, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
   vm.runInNewContext(source, { exports, Buffer, Response, Uint8Array, console: { info() {}, error() {} }, process,
@@ -142,8 +145,8 @@ test("customer and rider booking responses omit new and historical photo proofs"
     assert.equal(booking.deliveryProofs[0].proofType, "SIGNATURE");
   }
 });
-test("customer and rider cannot request saved photos directly", async () => {
-  for (const app of ["fetch-customer", "fetch-rider"]) {
+test("riders cannot request saved photos directly", async () => {
+  for (const app of ["fetch-rider"]) {
     const route = load(`../${app}/src/app/api/bookings/[id]/proof/[proofId]/photo/route.ts`, { "@/lib/request-guard": { withRequestLog } });
     const response = await route.GET(new Request("https://app.invalid/photo"));
     assert.equal(response.status, 403);
@@ -221,7 +224,7 @@ test("photo selection compresses before transmission and releases decoded image 
 test("real staff permission/session checks deny unrelated roles, bans, expiry and revocation", async () => {
   // The Blob release also supports the existing Admin-only portal while the
   // separate staff-portal changes remain under development.
-  if (!fs.existsSync(path.resolve(root, "../fetch-admin/src/lib/staff-access.ts"))) {
+  if (!fs.existsSync(path.resolve(process.env.FETCH_SIBLING_ROOT || path.resolve(root, ".."), "fetch-admin/src/lib/staff-access.ts"))) {
     for (const scenario of [{ role: "ADMIN", allowed: true }, { role: "CUSTOMER" }, { role: "RIDER" }, { role: "ADMIN", isBanned: true }, { role: "ADMIN", authInvalidBefore: new Date(Date.now() + 1000) }]) {
       const admin = load("../fetch-admin/src/lib/admin-access.ts", {
         "./db": { db: { user: { findUnique: async () => ({ id: "staff", ...scenario }) } } },
@@ -238,7 +241,7 @@ test("real staff permission/session checks deny unrelated roles, bans, expiry an
     const access = load("../fetch-admin/src/lib/staff-access.ts", {
       "./db": { db: { user: { findUnique: async () => user }, staffSession: { findUnique: async () => ({ userId: user.id, expiresAt: scenario.expiresAt ?? new Date(Date.now() + 60000), revokedAt: scenario.revokedAt ?? null }) } } },
       "./session": { getAdminSession: async () => ({ uid: user.id, sid: "session", iat: Date.now() }) },
-      "./staff-policy": policy, "next/navigation": { redirect() {} }, "./runtime-access": { assertRuntimeAccess: async () => {} },
+      "./staff-demo": { getDemoController: async () => null }, "./staff-policy": policy, "next/navigation": { redirect() {} }, "./runtime-access": { assertRuntimeAccess: async () => {} },
     });
     const admin = load("../fetch-admin/src/lib/admin-access.ts", { "./staff-access": access });
     assert.equal(Boolean(await admin.currentAdmin()), scenario.allowed ?? false);

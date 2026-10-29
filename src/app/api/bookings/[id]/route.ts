@@ -1,4 +1,5 @@
 import { bookingView, riderSelect } from "@/lib/db-data";
+import { deliveryPhotoUrl } from "@/lib/epod-photo";
 // /api/bookings/[id]
 // GET — fetch a single booking (with customer / rider / proofs / latest tracking).
 // NOTE: this is the CUSTOMER app. Riders claim and progress jobs from the
@@ -43,5 +44,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
+  const view = omitTicket(bookingView(booking));
+  // Only this authenticated owner's completed delivery exposes photo references.
+  // Never send private Blob paths or historical inline image data to the client.
+  const deliveryProofs = booking.type === "DELIVERY" && booking.status === "DELIVERED"
+    ? booking.deliveryProofs.map(proof => proof.proofType === "PHOTO"
+      ? { ...proof, photoUrl: proof.photoUrl ? deliveryPhotoUrl(booking.id, proof.id) : null }
+      : proof)
+    : view.deliveryProofs;
+  return NextResponse.json({ booking: { ...view, deliveryProofs } }, {
+    headers: { "Cache-Control": "private, no-store" },
+  });
 }
