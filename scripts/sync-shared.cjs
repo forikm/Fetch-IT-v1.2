@@ -11,7 +11,7 @@ commonFiles.push("src/lib/booking-receipt.ts", "src/lib/receipt-email.ts", "pris
 const riderFiles = ["src/lib/application-applicant-api.ts", "src/lib/application-upload.ts", "src/lib/delivery-challenge.ts", "src/lib/ticket.ts", "src/hooks/use-visible-poll.ts", "src/components/fetchit/shared/payment-card.tsx"];
 riderFiles.push('src/components/ui/password-input.tsx', 'src/lib/rider-profile.ts', 'src/components/fetchit/shared/rider-profile.tsx');
 commonFiles.push("src/lib/rider-application-policy.ts", "src/lib/rider-eligibility.ts");
-const onboardingFiles = ["src/lib/rider-application.ts", "src/lib/application-storage.ts", "src/lib/application-mail.ts", "src/lib/application-staff-api.ts"];
+const onboardingFiles = ["src/lib/rider-application.ts", "src/lib/application-storage.ts", "src/lib/application-mail.ts", "src/lib/application-staff-api.ts", "src/lib/application-queue.ts"];
 let failed = false;
 commonFiles.push("src/lib/staff-policy.ts", "src/lib/platform-policy.ts", "src/lib/platform-settings.ts", "src/lib/runtime-access.ts");
 commonFiles.push("src/lib/epod-photo.ts", "src/lib/epod-photo-response.ts");

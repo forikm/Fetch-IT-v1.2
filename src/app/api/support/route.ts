@@ -44,8 +44,7 @@ async function handlePOST(request: NextRequest) {
       const existing = await tx.supportTicket.findFirst({ where: { bookingId: input.bookingId, customerId: session.uid,
         status: { in: ["OPEN", "IN_PROGRESS"] }, category: input.category } });
       if (existing) throw new CustomerError("You already have an open request for this issue. Open it in your requests to add a reply.", 409);
-      return tx.supportTicket.create({ data: { customerId: session.uid, ...input,
-        priority: booking && !["DELIVERED", "CANCELLED"].includes(booking.status) ? "HIGH" : "NORMAL" } });
+      return tx.supportTicket.create({ data: { customerId: session.uid, ...input } });
     });
     return NextResponse.json({ ticket }, { status: 201 });
   } catch (error) {
