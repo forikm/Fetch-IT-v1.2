@@ -35,6 +35,7 @@ declare namespace google.maps {
     panTo(latLng: LatLngLiteral): void;
     setZoom(zoom: number): void;
     getCenter(): LatLng;
+    addListener(eventName: "idle", handler: () => void): MapsEventListener;
     getBounds(): LatLngBounds | undefined;
     fitBounds(bounds: LatLngBounds, padding?: number): void;
   }

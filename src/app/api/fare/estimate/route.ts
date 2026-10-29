@@ -16,6 +16,7 @@ import { VEHICLES, isBookingVehicle, PASSENGER_CAPACITY, type VehicleClass } fro
 import { withRequestLog, safeErrorCode } from "@/lib/request-guard";
 import { parsePickupSchedule } from "@/lib/pickup-schedule";
 import { platformSettings } from "@/lib/platform-settings";
+import { bookingServiceAreaError } from "@/lib/service-area";
 
 async function handlePOST(req: NextRequest) {
   try {
@@ -51,6 +52,8 @@ async function handlePOST(req: NextRequest) {
     if (!isBookingVehicle(vehicleClass)) {
       return NextResponse.json({ error: "Choose Motor, Tricycle or Car." }, { status: 400 });
     }
+    const coverageError = bookingServiceAreaError(pickup, dropoff);
+    if (coverageError) return NextResponse.json({ error: coverageError, code: "SERVICE_UNAVAILABLE" }, { status: 422 });
     const {settings}=await platformSettings();
     if((type==="RIDE"&&!settings.rideEnabled)||(type==="DELIVERY"&&!settings.deliveryEnabled)||!settings.vehicles.includes(vehicleClass)) return NextResponse.json({error:"This service or vehicle is temporarily unavailable for new bookings."},{status:409});
     let when: Date;

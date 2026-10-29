@@ -7,10 +7,11 @@ import { FetchItLoader } from "@/components/fetchit/shared/loading";
 // "Confirm this location" reverse-geocodes wherever the pin is pointing
 // and reports it back as a real address + coordinates.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 import { Button } from "@/components/ui/button";
 import { MapPin } from "lucide-react";
+import { useServiceArea } from "@/hooks/use-service-area";
 
 // Lingayen, Pangasinan, Philippines — used as the map's starting view
 // whenever no address has been picked yet.
@@ -24,6 +25,8 @@ export function LocationMap({
   mapClassName = "h-48",
   className,
   confirmLabel = "Use this location",
+  restrictToServiceArea = false,
+  onAvailabilityChange,
 }: {
   lat: number | null;
   lng: number | null;
@@ -32,6 +35,8 @@ export function LocationMap({
   mapClassName?: string;
   className?: string;
   confirmLabel?: string;
+  restrictToServiceArea?: boolean;
+  onAvailabilityChange?: (unavailable: boolean) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -39,6 +44,11 @@ export function LocationMap({
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
+  const { area } = useServiceArea(restrictToServiceArea);
+  // The booking form already explains an invalid selected address. Show a
+  // separate message here only when the person drags to an unavailable pin.
+  const selectedCoverageError = useMemo(() => area && lat != null && lng != null ? area.serviceAreaMessage(area.serviceAreaIssue({ lat, lng })) : null, [area, lat, lng]);
 
   // One-time map setup.
   useEffect(() => {
@@ -64,6 +74,20 @@ export function LocationMap({
     };
   }, []);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || !restrictToServiceArea || !area) return;
+    const checkCenter = () => {
+      const position = map.getCenter();
+      const message = area.serviceAreaMessage(area.serviceAreaIssue({ lat: position.lat(), lng: position.lng() }));
+      setCoverageError(message);
+      onAvailabilityChange?.(!!message);
+    };
+    const listener = map.addListener("idle", checkCenter);
+    checkCenter();
+    return () => listener.remove();
+  }, [ready, restrictToServiceArea, area, onAvailabilityChange]);
+
   // Re-center (e.g. after picking an address in the search box above) —
   // the pin visually stays put since it's fixed to the viewport; the map
   // itself pans underneath it.
@@ -79,6 +103,11 @@ export function LocationMap({
     if (!map) return;
     const center = map.getCenter();
     const pos = { lat: center.lat(), lng: center.lng() };
+    if (restrictToServiceArea && !area) return;
+    const unavailable = restrictToServiceArea && area ? area.serviceAreaMessage(area.serviceAreaIssue(pos)) : null;
+    setCoverageError(unavailable);
+    onAvailabilityChange?.(!!unavailable);
+    if (unavailable) return;
 
     if (!geocoder) {
       onConfirm({ ...pos, label: `Pinned location (${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)})` });
@@ -99,6 +128,7 @@ export function LocationMap({
 
   return (
     <div className={className ?? ""}>
+      {coverageError && coverageError !== selectedCoverageError && <p role="status" className="mb-2 text-sm text-destructive">{coverageError}</p>}
       <div className={`relative rounded-md overflow-hidden border ${mapClassName}`}>
         <div ref={containerRef} className="absolute inset-0" />
         {!ready && (
@@ -119,7 +149,7 @@ export function LocationMap({
           variant="outline"
           size="sm"
           onClick={handleConfirm}
-          disabled={confirming}
+          disabled={confirming || !!coverageError || (restrictToServiceArea && !area)}
           className="mt-2 w-full text-xs"
         >
           {confirming ? (

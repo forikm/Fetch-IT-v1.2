@@ -21,7 +21,7 @@ const compiled = ts.transpileModule(handler, { compilerOptions: { target: ts.Scr
 
 function fixture(fetch, pending = null) {
   const context = {
-    crypto, Error, navigator: { onLine: true }, offlineAccess: false,
+    crypto, Error, navigator: { onLine: true }, offlineAccess: false, coverageError: null,
     pendingSubmission: pending, submissionRunning: { current: false },
     bookingType: "DELIVERY", isRide: false, passengers: "1", pickupLat: "14.6", pickupLng: "120.98", pickupLabel: "Pickup",
     dropoffLat: "14.62", dropoffLng: "121.01", dropoffLabel: "Destination", vehicleClass: "MOTORCYCLE",
@@ -94,4 +94,13 @@ test("offline confirmation does not submit or clear the draft", async () => {
   assert.equal(app.pendingSubmission, null);
   assert.equal(app.cleared, false);
   assert.match(app.error, /Reconnect/);
+});
+
+test("unavailable locations never submit or discard the saved draft", async () => {
+  const app = fixture(() => { throw new Error("Must not send"); });
+  app.coverageError = "Service unavailable for pickup. Choose a location within Pangasinan.";
+  await app.handleConfirmBooking();
+  assert.equal(app.pendingSubmission, null);
+  assert.equal(app.cleared, false);
+  assert.match(app.error, /Service unavailable/);
 });

@@ -6,6 +6,7 @@ import { PaymentError } from "./payments";
 import { generateTicketId } from "./ticket";
 import { generateRefCode } from "./fare";
 import { isDemoPayment } from "./payment-policy";
+import { bookingServiceAreaError } from "./service-area";
 
 type Actor = { uid: string; name: string; role: string };
 type BookingInput = Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">;
@@ -55,6 +56,10 @@ export async function resolveOnlineCheckout(db: PrismaClient, checkoutId: string
     if (draft.expiresAt <= new Date()) throw new PaymentError("This fare has expired. Return to Fetch-It for a new checkout.", 409);
     const data = draft.bookingData as unknown as BookingInput;
     if (!isDemoPayment(String(data.paymentMethod)) || (data.type !== "RIDE" && data.type !== "DELIVERY")) throw new PaymentError("Checkout details are unavailable.", 409);
+    if (outcome === "SUCCEEDED") {
+      const coverageError = bookingServiceAreaError({ lat: data.pickupLat, lng: data.pickupLng }, { lat: data.dropoffLat, lng: data.dropoffLng });
+      if (coverageError) throw new PaymentError(coverageError, 422);
+    }
     const scheduledAt = data.scheduledAt ? new Date(data.scheduledAt) : null;
     if (scheduledAt && scheduledAt <= new Date()) throw new PaymentError("The pickup time has passed. Choose a new time before paying.", 409);
     const now = new Date();

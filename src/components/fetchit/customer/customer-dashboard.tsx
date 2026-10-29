@@ -20,13 +20,14 @@ import { useOnlineStatus } from "@/hooks/use-online-status";
 import { readCustomerBooking } from "@/lib/offline-bookings";
 import { readSnapshot, saveSnapshot } from "@/lib/offline-data";
 import { customerResponse } from "@/lib/customer-request";
+import { useServiceArea } from "@/hooks/use-service-area";
 import { FetchItLoader } from "@/components/fetchit/shared/loading";
 import { pickupScheduleIso, pickupScheduleInput, formatPickupSchedule } from "@/lib/pickup-schedule";
 
 // Customer dashboard — bookings list, booking form, live tracking modal.
 // All client-side; view state lives in this component.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Package,
   MapPin,
@@ -581,6 +582,13 @@ function BookingForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { area, failed: coverageFailed } = useServiceArea();
+  const [pickupPinUnavailable, setPickupPinUnavailable] = useState(false);
+  const [dropoffPinUnavailable, setDropoffPinUnavailable] = useState(false);
+  const pickupIssue = useMemo(() => pickupLat && pickupLng ? area?.serviceAreaIssue({ lat: Number(pickupLat), lng: Number(pickupLng) }) : null, [area, pickupLat, pickupLng]);
+  const dropoffIssue = useMemo(() => dropoffLat && dropoffLng ? area?.serviceAreaIssue({ lat: Number(dropoffLat), lng: Number(dropoffLng) }) : null, [area, dropoffLat, dropoffLng]);
+  const coverageError = area ? area.serviceAreaMessage(pickupIssue ?? null, "pickup") ?? area.serviceAreaMessage(dropoffIssue ?? null, "drop-off") : null;
+
   // Keep data entry separate from the final review and payment decision.
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
   const [reviewDraft, setReviewDraft] = useState<typeof draft | null>(null);
@@ -669,6 +677,9 @@ function BookingForm({
       dropoffLabel &&
       dropoffLat &&
       dropoffLng &&
+      area &&
+      !coverageError &&
+      !pickupPinUnavailable && !dropoffPinUnavailable &&
       detailsValid
     );
   }
@@ -696,8 +707,8 @@ function BookingForm({
       });
       const data = await customerResponse<NonNullable<typeof estimate>>(res, "We couldn’t load the fare. Please retry.");
       if (sequence === fareSequence.current) { setEstimate(data); setEstimatedKey(fareKey); }
-    } catch {
-      if (sequence === fareSequence.current) setEstimateError("We couldn’t load the fare. Please retry.");
+    } catch (error) {
+      if (sequence === fareSequence.current) setEstimateError(error instanceof Error ? error.message : "We couldn’t load the fare. Please retry.");
     } finally {
       if (sequence === fareSequence.current) setEstimating(false);
     }
@@ -708,12 +719,13 @@ function BookingForm({
     if (!online || offlineAccess || !canEstimate()) return;
     const t = setTimeout(() => void fetchEstimate(), 350);
     return () => { clearTimeout(t); fareSequence.current++; };
-  }, [online, offlineAccess, pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, cargoWeightKg, passengers, scheduledAt]);
+  }, [area, pickupPinUnavailable, dropoffPinUnavailable, online, offlineAccess, pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, cargoWeightKg, passengers, scheduledAt]);
 
   async function handleConfirmBooking() {
     setError(null);
     if (submissionRunning.current) return;
     if (!navigator.onLine || offlineAccess) { setError("Your draft is saved. Reconnect to get a current fare and confirm it."); return; }
+    if (coverageError) { setError(coverageError); return; }
     if (!canEstimate() || !estimate || estimatedKey !== fareKey) {
       setError("Review your route and details, then wait for a current fare before confirming.");
       return;
@@ -760,8 +772,8 @@ function BookingForm({
   }
 
   const v = VEHICLES[vehicleClass];
-  const pickupChosen = !!pickupLabel && (!connected || !!(pickupLat && pickupLng));
-  const dropoffChosen = !!dropoffLabel && (!connected || !!(dropoffLat && dropoffLng));
+  const pickupChosen = !!area && !pickupIssue && !pickupPinUnavailable && !!pickupLabel && (!connected || !!(pickupLat && pickupLng));
+  const dropoffChosen = !!area && !dropoffIssue && !dropoffPinUnavailable && !!dropoffLabel && (!connected || !!(dropoffLat && dropoffLng));
   const stepLabels = ["Pickup", "Drop-off", "Details", "Review booking"];
 
   return (
@@ -806,8 +818,11 @@ function BookingForm({
 
       <div ref={stepContent} role="region" aria-label={stepLabels[step]} tabIndex={-1} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 outline-none sm:px-6">
       {reviewDraft && <p role="status" className="text-sm font-medium">Editing {stepLabels[step].toLowerCase()}</p>}
-      {step === 0 && !reviewDraft && <p className="text-xs text-muted-foreground">Your draft is saved on this device.</p>}
+      {step === 0 && !reviewDraft && <p className="text-xs text-muted-foreground">Pangasinan land locations only. Your draft is saved on this device.</p>}
       {!connected && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">You can edit your saved draft offline. Reconnect to get a fare and confirm.</p>}
+      {coverageError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{coverageError}</p>}
+      {!area && <p role="status" className="text-sm text-muted-foreground">{coverageFailed ? "Service-area checks couldn’t load. Refresh this page before booking." : "Checking service area…"}</p>}
+      <p className="text-[10px] text-muted-foreground">Coverage: <a className="underline" href="https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/" target="_blank" rel="noreferrer">geoBoundaries / OCHA</a> · <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a className="underline" href="/service-area-data.json" target="_blank" rel="noreferrer">Data (ODbL)</a></p>
 
       {/* Step 0: Pickup */}
       {step === 0 && (
@@ -845,6 +860,8 @@ function BookingForm({
           </div>
           <SavedPlaces place={pickupLabel && pickupLat && pickupLng ? { label: pickupLabel, lat: Number(pickupLat), lng: Number(pickupLng) } : null} onSelect={(place) => { setPickupLabel(place.label); setPickupLat(String(place.lat)); setPickupLng(String(place.lng)); }} />
           {connected && <LocationMap
+            restrictToServiceArea
+            onAvailabilityChange={setPickupPinUnavailable}
             lat={pickupLat ? Number(pickupLat) : null}
             lng={pickupLng ? Number(pickupLng) : null}
             pinColor="#16a34a"
@@ -896,6 +913,8 @@ function BookingForm({
           </div>
           <SavedPlaces place={dropoffLabel && dropoffLat && dropoffLng ? { label: dropoffLabel, lat: Number(dropoffLat), lng: Number(dropoffLng) } : null} onSelect={(place) => { setDropoffLabel(place.label); setDropoffLat(String(place.lat)); setDropoffLng(String(place.lng)); }} />
           {connected && <LocationMap
+            restrictToServiceArea
+            onAvailabilityChange={setDropoffPinUnavailable}
             lat={dropoffLat ? Number(dropoffLat) : null}
             lng={dropoffLng ? Number(dropoffLng) : null}
             pinColor="#dc2626"
@@ -914,7 +933,7 @@ function BookingForm({
       {/* Step 2: Booking details */}
       {step === 2 && (
         <div className="space-y-4">
-          {connected && (!pickupChosen || !dropoffChosen) && <p className="rounded-lg border bg-muted/30 p-3 text-sm">Go back and select your typed addresses from search suggestions or saved places before requesting a fare.</p>}
+          {connected && !coverageError && (!pickupChosen || !dropoffChosen) && <p className="rounded-lg border bg-muted/30 p-3 text-sm">Go back and select your typed addresses from search suggestions or saved places before requesting a fare.</p>}
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div className="space-y-2">
               <Label htmlFor="vc">Vehicle</Label>

@@ -28,6 +28,7 @@ import { PAYMENT_METHOD_LABEL, isDemoPayment, type PaymentMethod } from "@/lib/p
 import { prepareOnlineCheckout } from "@/lib/online-checkout";
 import { parsePickupSchedule } from "@/lib/pickup-schedule";
 import { platformSettings } from "@/lib/platform-settings";
+import { bookingServiceAreaError } from "@/lib/service-area";
 
 async function handleGET(req: NextRequest) {
   try {
@@ -168,6 +169,8 @@ async function handlePOST(req: NextRequest) {
       return NextResponse.json({ error: "Choose valid pickup and drop-off locations." }, { status: 400 });
     }
     let scheduledDate: Date | null;
+    const coverageError = bookingServiceAreaError(pickup, dropoff);
+    if (coverageError) return NextResponse.json({ error: coverageError, code: "SERVICE_UNAVAILABLE" }, { status: 422 });
     try { scheduledDate = parsePickupSchedule(scheduledAt); }
     catch { throw new CustomerError("Choose a valid pickup date and time (Philippine time).", 400); }
     if (scheduledDate && (!Number.isFinite(scheduledDate.getTime()) || scheduledDate.getTime() <= Date.now())) {

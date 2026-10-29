@@ -68,7 +68,7 @@ async function main() {
     const customer = await db.user.create({ data: { name: "Booking test customer", email, role: "CUSTOMER",
       authIdentities: { create: { provider: "PASSWORD", providerUserId: email, passwordHash: `${salt}:${crypto.scryptSync(password, salt, 64).toString("hex")}` } } } });
     const token = cookie(customer);
-    const route = { pickup: { lat: 14.6, lng: 120.98, label: "Test pickup" }, dropoff: { lat: 14.62, lng: 121.01, label: "Test destination" } };
+    const route = { pickup: { lat: 16.0206, lng: 120.2321, label: "Lingayen test pickup" }, dropoff: { lat: 16.0433, lng: 120.3333, label: "Dagupan test destination" } };
     const capacities = { MOTORCYCLE: 1, TRICYCLE: 2, SEDAN: 4 };
     for (const type of ["RIDE", "DELIVERY"]) {
       for (const vehicleClass of Object.keys(capacities)) {
