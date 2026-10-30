@@ -578,9 +578,7 @@ function BookingForm({
   const estimate = estimatedKey === fareKey ? fareEstimate : null;
   const [estimateError, setEstimateError] = useState<string | null>(null);
 
-  const testPaymentsEnabled = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true";
-  const [storedPaymentMethod, setPaymentMethod] = useCustomerData(userId, isRide ? "ride-payment-method" : "delivery-payment-method", "CASH", true);
-  const paymentMethod = testPaymentsEnabled ? storedPaymentMethod : "CASH";
+  const [paymentMethod, setPaymentMethod] = useCustomerData(userId, isRide ? "ride-payment-method" : "delivery-payment-method", "CASH", true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1075,8 +1073,8 @@ function BookingForm({
 
           <div className="space-y-2">
             <Label htmlFor="payment-method">Payment method</Label>
-            <select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your {isRide ? "driver" : "rider"}</option>{testPaymentsEnabled && <><option value="DEMO_GCASH">GCash (test payment)</option><option value="DEMO_MAYA">Maya (test payment)</option><option value="DEMO_BANK">Bank account (test payment)</option></>}</select>
-            <p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? isRide ? "Pay your driver directly, then confirm payment in the booking." : "Pay at drop-off, then confirm the cash payment in this booking." : "Pay first to confirm. Test payment — no money charged."}</p>
+            <select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your {isRide ? "driver" : "rider"}</option><option value="DEMO_GCASH">GCash (simulated)</option><option value="DEMO_MAYA">Maya (simulated)</option><option value="DEMO_BANK">Bank account (simulated)</option></select>
+            <p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? isRide ? "Pay your driver directly, then confirm payment in the booking." : "Pay at drop-off, then confirm the cash payment in this booking." : "Complete the simulated payment to confirm your booking. No money is charged."}</p>
           </div>
 
           {error && (

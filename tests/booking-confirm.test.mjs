@@ -104,3 +104,21 @@ test("unavailable locations never submit or discard the saved draft", async () =
   assert.equal(app.cleared, false);
   assert.match(app.error, /Area unavailable/);
 });
+
+test("each simulated method opens checkout and retains its draft until payment completes", async () => {
+  for (const type of ["RIDE", "DELIVERY"]) {
+    for (const method of ["DEMO_GCASH", "DEMO_MAYA", "DEMO_BANK"]) {
+      let request, destination;
+      const app = fixture(async (_, options) => { request = JSON.parse(options.body); return Response.json({ checkoutUrl: "/checkout/simulated_123" }); });
+      app.paymentMethod = method; app.bookingType = type; app.isRide = type === "RIDE";
+      app.window = { location: { assign(url) { destination = url; } } };
+      await app.handleConfirmBooking();
+      assert.equal(request.paymentMethod, method);
+      assert.equal(request.type, type);
+      assert.equal(destination, "/checkout/simulated_123");
+      assert.equal(app.created.length, 0);
+      assert.equal(app.cleared, false);
+      assert(app.pendingSubmission?.key);
+    }
+  }
+});

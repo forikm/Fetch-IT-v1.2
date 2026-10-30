@@ -59,7 +59,7 @@ test("cash confirmation sends the entered amount once and waits for server confi
   assert.deepEqual(JSON.parse(h.requests.at(-1).body), { amount: "89.00" });
   finish(Response.json({ booking: { ...cash, customerPaidAt: new Date().toISOString(), customerPaidAmount: 89, paymentStatus: "PENDING" } }));
   await Promise.all([first, second]);
-  assert.match(text(h.render()), /Waiting for rider confirmation/);
+  assert.match(text(h.render()), /Waiting for your rider to confirm receipt/);
   assert.doesNotMatch(text(h.render()), /You confirmed.*Paid/);
   assert.equal(h.find("form"), undefined);
 });
@@ -73,7 +73,7 @@ test("a delayed pre-confirmation poll cannot overwrite a newer cash confirmation
   h.setPost(() => Response.json({ booking: { ...cash, customerPaidAt: new Date().toISOString(), customerPaidAmount: 89, paymentStatus: "PENDING" } }));
   await h.find("form").props.onSubmit({ preventDefault() {} });
   stale(Response.json({ booking: cash })); await poll;
-  assert.match(text(h.render()), /Waiting for rider confirmation/);
+  assert.match(text(h.render()), /Waiting for your rider to confirm receipt/);
 });
 
 test("ride payments use driver wording and cancelled unpaid bookings do not request payment", async () => {
@@ -92,4 +92,17 @@ test("delivery cash controls remain hidden before drop-off arrival", async () =>
     assert.equal(h.find("form"), undefined, status);
     assert.match(text(h.render()), /Pay at drop-off/);
   }
+});
+
+test("cash mismatches remain under review and matching confirmations show paid", async () => {
+  const mismatch = harness({ ...cash, paymentStatus: "PENDING", customerPaidAt: "2026-10-30T01:00:00Z", riderReceivedAt: "2026-10-30T01:01:00Z", customerPaidAmount: 80, riderReceivedAmount: 89 });
+  await mismatch.ready();
+  assert.match(text(mismatch.render()), /Needs review/);
+  assert.match(text(mismatch.render()), /do not match the fare/);
+  assert.equal(mismatch.find("button", "Confirm cash payment"), undefined);
+  const paid = harness({ ...cash, paymentStatus: "PAID", customerPaidAt: "2026-10-30T01:00:00Z", riderReceivedAt: "2026-10-30T01:01:00Z", customerPaidAmount: 89, riderReceivedAmount: 89, paidAt: "2026-10-30T01:01:00Z" });
+  await paid.ready();
+  assert.match(text(paid.render()), /Paid/);
+  assert.doesNotMatch(text(paid.render()), /Waiting for|Needs review/);
+  assert.equal(paid.find("button", "Confirm cash payment"), undefined);
 });
