@@ -1,4 +1,6 @@
 "use client";
+import { BookingWaitStatus } from "./booking-wait-status";
+import { isAwaitingAcceptance } from "@/lib/booking-wait";
 import { RiderProfile } from "../shared/rider-profile";
 
 import { Bike, Calculator, Car, CircleDot, Clock, MapPin, Navigation, Phone, ShieldCheck, Truck } from "lucide-react";
@@ -13,8 +15,8 @@ import { CancelBooking } from "../shared/cancel-booking";
 import { StatusBadge } from "../shared/status-badge";
 import type { Booking } from "./customer-dashboard";
 
-export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onRepeat }: {
-  booking: Booking; readOnly: boolean; onTrack: () => void; onRefresh: () => void; onRepeat: () => void;
+export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onRepeat, onUpdated, updatesPaused = false }: {
+  booking: Booking; readOnly: boolean; updatesPaused?: boolean; onUpdated: (update: Partial<Booking>) => void; onTrack: () => void; onRefresh: () => void; onRepeat: () => void;
 }) {
   const vehicle = VEHICLES[booking.vehicleClass];
   const vehicleIcon = getVehicleIcon(booking.vehicleClass);
@@ -62,11 +64,12 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
         {booking.rider.phone && <Button asChild size="icon" variant="outline" className="h-11 w-11 shrink-0"><a href={`tel:${booking.rider.phone}`} aria-label={`Call ${booking.rider.name}`}><Phone className="h-4 w-4" /></a></Button>}
       </div>}
 
-      <BookingTimeline status={booking.status} type={booking.type} scheduled={scheduled} />
+      <BookingWaitStatus key={booking.id} booking={booking} updatesPaused={updatesPaused || readOnly} readOnly={readOnly} onCancelled={onRefresh} onUpdated={onUpdated} />
+      <BookingTimeline status={booking.status} type={booking.type} scheduled={scheduled} hideStatus={isAwaitingAcceptance(booking.status)} />
       {openRide && <p className="text-xs text-muted-foreground">Tap this booking to view your driver, map and safety options.</p>}
       <div className="flex flex-wrap gap-2 pt-1">
-        {booking.status !== "CANCELLED" && !readOnly && !(delivered && !ride) && <Button size="sm" className="flex-1" onClick={onTrack}><Navigation className="h-3.5 w-3.5" />{delivered ? "View ride details" : ride ? "Track ride" : "Track delivery"}</Button>}
-        {canCancel && <CancelBooking bookingId={booking.id} readOnly={readOnly} onCancelled={onRefresh} />}
+        {booking.status !== "CANCELLED" && !readOnly && !(delivered && !ride) && <Button size="sm" className="flex-1" onClick={onTrack}><Navigation className="h-3.5 w-3.5" />{delivered ? "View ride details" : isAwaitingAcceptance(booking.status) ? "View booking" : ride ? "Track ride" : "Track delivery"}</Button>}
+        {canCancel && !isAwaitingAcceptance(booking.status) && <CancelBooking bookingId={booking.id} readOnly={readOnly} onCancelled={onRefresh} />}
         {finished && <Button size="sm" variant="outline" onClick={onRepeat}>Book again</Button>}
         {delivered && !ride && !readOnly && <Button size="sm" variant="outline" className="flex-1" onClick={onTrack}><ShieldCheck className="h-3.5 w-3.5" />View proof</Button>}
       </div>

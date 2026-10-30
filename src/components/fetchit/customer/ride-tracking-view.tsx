@@ -1,4 +1,6 @@
 "use client";
+import { BookingWaitStatus } from "./booking-wait-status";
+import { isAwaitingAcceptance } from "@/lib/booking-wait";
 import { CustomerPickupProgress } from "./pickup-progress";
 import { RiderProfile } from "../shared/rider-profile";
 
@@ -24,12 +26,14 @@ export function RideTrackingView({
   onUpdated,
   onCancelled,
   readOnly = false,
+  updatesPaused = false,
 }: {
   ride: Booking;
   onClose: () => void;
   onUpdated: (u: Partial<Booking>) => void;
   onCancelled?: () => void;
   readOnly?: boolean;
+  updatesPaused?: boolean;
 }) {
   const status = ride.status;
   const eta = ride.etaMinutes;
@@ -56,7 +60,8 @@ export function RideTrackingView({
         <DialogDescription>View your driver&apos;s profile, follow your trip and access safety options.</DialogDescription>
       </DialogHeader>
 
-      <BookingTimeline compact status={status} type="RIDE" scheduled={status === "PENDING" && !!ride.scheduledAt && new Date(ride.scheduledAt).getTime() > Date.now()} />
+      <BookingWaitStatus key={ride.id} booking={{ ...ride, status }} updatesPaused={readOnly || updatesPaused} onUpdated={onUpdated} />
+      <BookingTimeline compact status={status} type="RIDE" hideStatus={isAwaitingAcceptance(status)} scheduled={status === "PENDING" && !!ride.scheduledAt && new Date(ride.scheduledAt).getTime() > Date.now()} />
 
       {/* Driver card */}
       {ride.rider ? (

@@ -43,3 +43,15 @@ Desktop browser viewports of 390 x 844 and 360 x 800 were used with local fixtur
 The live Help recovery link incorrectly showed ordinary sign-in during client navigation. It now uses a document navigation so the recovery query initializes a fresh auth screen.
 
 These checks do not establish physical Android/iOS dialer behavior, soft-keyboard behavior, live GPS or map rendering, or live photo uploads. The credential-free local map displays its failure and retry state. Staffed recovery contact details are still awaiting the owner's supplied contact.
+
+## Waiting for acceptance
+
+Customer ride and delivery cards, summaries, and tracking views distinguish waiting, an offer awaiting acceptance, and future scheduled pickup. After three minutes without acceptance, the message becomes “No driver/rider has accepted yet.” This is a presentation threshold, not a timeout or a claim about the entire driver pool. Scheduled requests measure waiting only after pickup is due.
+
+Check for an update reads the authenticated status endpoint for the same booking. It never submits a replacement booking. Cancellation remains explicit and requires the existing confirmation and reason. Paused updates show the last known status. Older responses cannot replace newer acceptance or cancellation timestamps, and open summaries receive live status patches.
+
+Run the focused checks with:
+
+~~~powershell
+node --test tests/booking-wait.test.mjs tests/booking-wait-ui.test.cjs tests/customer-booking-ui.test.mjs
+~~~

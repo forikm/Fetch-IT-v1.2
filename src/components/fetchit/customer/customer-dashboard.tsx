@@ -3,6 +3,8 @@ import { RiderProfile } from "../shared/rider-profile";
 
 import { NotificationInbox } from "../shared/notification-inbox";
 import { BookingHistoryRow } from "../shared/booking-history-row";
+import { BookingWaitStatus } from "./booking-wait-status";
+import { isAwaitingAcceptance, mergeBookingUpdate } from "@/lib/booking-wait";
 import { BookingSummary } from "../shared/booking-summary";
 import { BookingTimeline } from "../shared/booking-timeline";
 import { CustomerBookingCard } from "./customer-booking-card";
@@ -196,10 +198,17 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   const [trackingBooking, setTrackingBooking] = useState<Booking | null>(null);
   const handleTrackingUpdate = useCallback((updated: Partial<Booking>) => {
     if (!trackingBooking) return;
-    const next = { ...trackingBooking, ...updated };
+    const next = mergeBookingUpdate(trackingBooking, updated);
     observeRatings([trackingBooking, next]);
-    setTrackingBooking(next);
+    setTrackingBooking(previous => previous?.id === trackingBooking.id ? mergeBookingUpdate(previous, updated) : previous);
   }, [trackingBooking, observeRatings]);
+
+  function applyBookingUpdate(id: string, update: Partial<Booking>) {
+    setBookings(previous => previous.map(booking => booking.id === id ? mergeBookingUpdate(booking, update) : booking).filter(booking => tab !== "active" || !["DELIVERED", "CANCELLED"].includes(booking.status)));
+    setTrackingBooking(previous => previous?.id === id ? mergeBookingUpdate(previous, update) : previous);
+    setSummaryBooking(previous => previous?.id === id ? mergeBookingUpdate(previous, update) : previous);
+    setSavedAt(null);
+  }
 
   // Start loading Google Maps as soon as the dashboard mounts, not when
   // the booking dialog opens — by the time someone taps "New booking" it's
@@ -283,11 +292,15 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
 
   const { lastChecked, offline } = useBookingUpdates<Booking>(user?.id ?? "", bookingType, (updated) => {
     observeRatings(updated);
-    if (tab === "active" && !loading) { setBookings(updated.filter((booking) => !["DELIVERED", "CANCELLED"].includes(booking.status))); setSavedAt(null); }
+    if (tab === "active" && !loading) { setBookings(previous => updated.map(latest => { const current = previous.find(booking => booking.id === latest.id); return current ? mergeBookingUpdate(current, latest) : latest; }).filter(booking => !["DELIVERED", "CANCELLED"].includes(booking.status))); setSavedAt(null); }
+    setSummaryBooking(previous => {
+      const latest = updated.find(booking => booking.id === previous?.id);
+      return previous && latest ? mergeBookingUpdate(previous, latest) : previous;
+    });
     setTrackingBooking((previous) => {
       const latest = updated.find((booking) => booking.id === previous?.id);
       // The dialog owns fresh GPS/proof data; list status patches must preserve it.
-      return previous && latest ? { ...previous, status: latest.status, etaMinutes: latest.etaMinutes, riderId: latest.riderId, rider: latest.rider } : previous;
+      return previous && latest ? mergeBookingUpdate(previous, { status: latest.status, etaMinutes: latest.etaMinutes, riderId: latest.riderId, rider: latest.rider, updatedAt: latest.updatedAt }) : previous;
     });
   });
   return (
@@ -401,6 +414,8 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
                 booking={b}
                 readOnly={!online || offlineAccess || !!savedAt}
                 onTrack={() => setTrackingBooking(b)}
+                onUpdated={update => applyBookingUpdate(b.id, update)}
+                updatesPaused={offline || !!loadError}
                 onRefresh={load}
                 onRepeat={() => { setRepeatBooking(b); setShowNew(true); }}
               />
@@ -449,7 +464,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
       <Dialog open={!!trackingBooking} onOpenChange={(o) => !o && setTrackingBooking(null)}>
         <DialogContent className="top-0 left-0 h-dvh w-screen max-w-none max-h-dvh translate-x-0 translate-y-0 rounded-none p-4 sm:top-1/2 sm:left-1/2 sm:h-auto sm:w-full sm:max-w-2xl sm:max-h-[92vh] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:p-6 overflow-y-auto">
           {trackingBooking && (trackingBooking.type === "RIDE" ? (
-            <RideTrackingView key={trackingBooking.id} ride={trackingBooking} readOnly={!online || offlineAccess || !!savedAt} onClose={() => setTrackingBooking(null)} onCancelled={load} onUpdated={handleTrackingUpdate} />
+            <RideTrackingView key={trackingBooking.id} ride={trackingBooking} updatesPaused={offline} readOnly={!online || offlineAccess || !!savedAt} onClose={() => setTrackingBooking(null)} onCancelled={load} onUpdated={handleTrackingUpdate} />
           ) : (
             <>
               <DialogHeader>
@@ -463,6 +478,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
               </DialogHeader>
               <TrackingView
                 booking={trackingBooking}
+                updatesPaused={offline || offlineAccess || !!savedAt}
                 onClose={() => setTrackingBooking(null)}
                 onUpdated={handleTrackingUpdate}
               />
@@ -471,7 +487,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!summaryBooking} onOpenChange={(open) => !open && setSummaryBooking(null)}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Booking details</DialogTitle><DialogDescription>{summaryBooking?.refCode}</DialogDescription></DialogHeader>{summaryBooking && <BookingSummary booking={summaryBooking} onRepeat={() => {
+      <Dialog open={!!summaryBooking} onOpenChange={(open) => !open && setSummaryBooking(null)}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Booking details</DialogTitle><DialogDescription>{summaryBooking?.refCode}</DialogDescription></DialogHeader>{summaryBooking && <BookingSummary booking={summaryBooking} updatesPaused={!online || offline || offlineAccess || !!savedAt} onUpdated={update => applyBookingUpdate(summaryBooking.id, update)} onCancelled={() => { setSummaryBooking(null); void load(); }} onRepeat={() => {
         setRepeatBooking(summaryBooking); setShowNew(true);
         setSummaryBooking(null);
       }} onDetails={() => { setTrackingBooking(summaryBooking); setSummaryBooking(null); }} />}</DialogContent></Dialog>
@@ -1129,16 +1145,18 @@ function FareLine({ label, value }: { label: string; value: string }) {
 
 // ------------------------------ Tracking view ------------------------------
 function TrackingView({
+  updatesPaused = false,
   booking,
   onClose,
   onUpdated,
 }: {
+  updatesPaused?: boolean;
   booking: Booking;
   onClose: () => void;
   onUpdated: (u: Partial<Booking>) => void;
 }) {
   // Live state for status / location
-  const [status, setStatus] = useState<BookingStatus>(booking.status);
+  const status = booking.status;
   const [riderLat, setRiderLat] = useState<number | null>(booking.trackingUpdates?.[0]?.lat ?? null);
   const [riderLng, setRiderLng] = useState<number | null>(booking.trackingUpdates?.[0]?.lng ?? null);
   const [lastGpsAt, setLastGpsAt] = useState<string | null>(booking.trackingUpdates?.[0]?.createdAt ?? null);
@@ -1163,7 +1181,6 @@ function TrackingView({
       socket.emit("subscribe", { bookingId: booking.id });
       const onStatus = (data: { bookingId: string; status: BookingStatus }) => {
         if (data.bookingId !== booking.id) return;
-        setStatus(data.status);
         updateCallback.current({ status: data.status });
       };
       socket.on("status:change", onStatus);
@@ -1178,7 +1195,6 @@ function TrackingView({
   }, [booking.id, booking.riderId]);
 
   useTrackingUpdates<Booking>(booking.id, (updated) => {
-    if (updated.status) setStatus(updated.status);
     if (updated.etaMinutes !== undefined) setEta(updated.etaMinutes);
     setRiderLat(updated.trackingUpdates?.[0]?.lat ?? null);
     setRiderLng(updated.trackingUpdates?.[0]?.lng ?? null);
@@ -1195,7 +1211,8 @@ function TrackingView({
 
   return (
     <div className="space-y-4">
-      <BookingTimeline status={status} type="DELIVERY" scheduled={status === "PENDING" && !!booking.scheduledAt && new Date(booking.scheduledAt).getTime() > Date.now()} />
+      <BookingWaitStatus key={booking.id} booking={{ ...booking, status }} updatesPaused={updatesPaused} onUpdated={onUpdated} />
+      <BookingTimeline hideStatus={isAwaitingAcceptance(status)} status={status} type="DELIVERY" scheduled={status === "PENDING" && !!booking.scheduledAt && new Date(booking.scheduledAt).getTime() > Date.now()} />
       {/* Map */}
       <div className="relative rounded-xl overflow-hidden border bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:from-amber-950/30 dark:via-orange-950/30 dark:to-amber-900/30 aspect-[16/10]">
         <LiveTrackingMap

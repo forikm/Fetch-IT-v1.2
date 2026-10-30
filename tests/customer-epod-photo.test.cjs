@@ -168,6 +168,7 @@ test("the Photo proof chip itself opens the image preview", () => {
   const { TrackingView } = load("src/components/fetchit/customer/customer-dashboard.tsx", new Proxy({
     react: h.react,
     "@/lib/customer-booking-ui": { customerStatusLabel: () => "Delivered", locationUpdateLabel: () => "", routeTimeLabel: () => "" },
+    "@/lib/booking-wait": load("src/lib/booking-wait.ts"),
     "@/lib/utils": { cn: (...values) => values.join(" ") },
   }, { get(target, key) {
     if (key in target) return target[key];

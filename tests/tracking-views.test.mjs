@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import * as bookingUi from "../src/lib/customer-booking-ui.ts";
+import * as bookingWait from "../src/lib/booking-wait.ts";
 
 const jsx = { jsx: (type, props, key) => ({ type, props, key }), jsxs: (type, props, key) => ({ type, props, key }) };
 function load(file, mocks) {
@@ -14,6 +15,7 @@ function load(file, mocks) {
   vm.runInNewContext(compiled, { exports, ...mocks.globals, require(name) {
     if (name === "react/jsx-runtime") return jsx;
     if (name === "@/lib/customer-booking-ui") return bookingUi;
+    if (name === "@/lib/booking-wait") return bookingWait;
     return mocks[name] ?? new Proxy({}, { get: (_, key) => key === "cn" ? (...args) => args.join(" ") : String(key) });
   } });
   return exports;

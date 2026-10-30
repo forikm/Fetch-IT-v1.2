@@ -2,7 +2,7 @@ import { Check, Circle } from "lucide-react";
 import type { BookingStatus, BookingType } from "@/lib/constants";
 import { customerProgress } from "@/lib/customer-booking-ui";
 
-export function BookingTimeline({ status, type, scheduled = false, compact = false }: { status: BookingStatus; type: BookingType; scheduled?: boolean; compact?: boolean }) {
+export function BookingTimeline({ status, type, scheduled = false, compact = false, hideStatus = false }: { status: BookingStatus; type: BookingType; scheduled?: boolean; compact?: boolean; hideStatus?: boolean }) {
   const progress = customerProgress(status, type, scheduled);
   const stages = <ol aria-label="Booking progress" className="grid grid-cols-1 gap-0 text-xs sm:grid-cols-4 sm:gap-3">
       {progress.stages.map((label, index) => {
@@ -19,10 +19,10 @@ export function BookingTimeline({ status, type, scheduled = false, compact = fal
       })}
     </ol>;
   return <section aria-label={`${type === "RIDE" ? "Ride" : "Delivery"} progress`} className="space-y-3">
-    <div role="status" aria-live="polite" aria-atomic="true" className="space-y-1">
+    {!hideStatus && <div role="status" aria-live="polite" aria-atomic="true" className="space-y-1">
       <p className={`text-sm font-medium ${status === "CANCELLED" ? "text-destructive" : "text-foreground"}`}>{progress.label}</p>
       <p className="text-sm leading-relaxed text-muted-foreground">{progress.message}</p>
-    </div>
+    </div>}
     {status !== "CANCELLED" && (compact ? <details><summary className="cursor-pointer py-2 text-sm font-medium">View booking progress</summary><div className="pt-2">{stages}</div></details> : stages)}
   </section>;
 }
