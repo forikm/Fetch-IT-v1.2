@@ -48,26 +48,36 @@ export function loadGoogleMaps(): Promise<void> {
   }
 
   const promise = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) {
+        document.getElementById(SCRIPT_ID)?.remove();
+        reject(error);
+      } else resolve();
+    };
+    const timer = setTimeout(() => finish(new Error("Map services took too long to load.")), 15000);
+    window[CALLBACK_NAME] = () => window.google?.maps?.places
+      ? finish() : finish(new Error("Address search is unavailable."));
     const existing = document.getElementById(SCRIPT_ID);
     if (existing) {
-      // Someone already injected the script (e.g. a fast remount) — just
-      // wait for the same callback to fire.
-      window[CALLBACK_NAME] = () => resolve();
-      existing.addEventListener("error", () => reject(new Error("Failed to load Google Maps script.")));
+      existing.addEventListener("error", () => finish(new Error("Map services couldn’t load.")), { once: true });
       return;
     }
-
-    window[CALLBACK_NAME] = () => resolve();
-
     const script = document.createElement("script");
     script.id = SCRIPT_ID;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${CALLBACK_NAME}`;
+    script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(apiKey) + "&libraries=places&callback=" + CALLBACK_NAME;
     script.async = true;
     script.defer = true;
-    script.onerror = () => reject(new Error("Failed to load Google Maps script."));
+    script.onerror = () => finish(new Error("Map services couldn’t load."));
     document.head.appendChild(script);
   });
-
-  window.__googleMapsLoaderPromise__ = promise;
-  return promise;
+  const shared = promise.catch(error => {
+    if (window.__googleMapsLoaderPromise__ === shared) window.__googleMapsLoaderPromise__ = undefined;
+    throw error;
+  });
+  window.__googleMapsLoaderPromise__ = shared;
+  return shared;
 }

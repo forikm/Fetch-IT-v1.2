@@ -21,7 +21,7 @@ class Storage {
 beforeEach(() => { globalThis.localStorage = new Storage(); globalThis.sessionStorage = new Storage(); });
 function app(fetch) {
   const exports = {};
-  vm.runInNewContext(compiled, { exports, navigator: { onLine: true }, fetch, require: name => {
+  vm.runInNewContext(compiled, { exports, sessionStorage: globalThis.sessionStorage, navigator: { onLine: true }, fetch, require: name => {
     if (name === "./offline-data") return offline;
     if (name === "./auth-progress") return progress;
     if (name === "./signup-onboarding") return onboarding;
@@ -142,4 +142,22 @@ test("completed sign-in and logout clear signup progress", async () => {
   await store.getState().logout();
   assert.equal(progress.readAuthProgress(), null);
   assert.equal(store.getState().view, "landing");
+});
+
+test("service choice survives sign-in and the signup setup refresh", async () => {
+  const store = app(async () => Response.json({ user }));
+  store.getState().beginService("ride", "login");
+  store.getState().setUser(user);
+  assert.equal(store.getState().view, "ride-dashboard");
+  assert.equal(sessionStorage.getItem("fetchit:pending-service"), null);
+  store.getState().beginService("delivery", "signup");
+  store.getState().setUser(user, true);
+  const reopened = app(async () => Response.json({ user }));
+  await reopened.getState().bootstrap();
+  assert.equal(reopened.getState().view, "onboarding");
+  assert.equal(reopened.getState().mode, "delivery");
+  onboarding.setOnboardingPending(user.id, false);
+  reopened.getState().chooseMode("delivery");
+  assert.equal(reopened.getState().view, "customer-dashboard");
+  assert.equal(sessionStorage.getItem("fetchit:pending-service"), null);
 });

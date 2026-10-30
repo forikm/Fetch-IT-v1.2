@@ -8,7 +8,7 @@ import Link from "next/link";
 import Image from "next/image";
 import styles from "./landing-hero.module.css";
 
-type Props = { onStart: (mode: AppMode) => void; onLogin: () => void; onSetupPlaces: () => void; signedIn: boolean; riderAppUrl: string };
+type Props = { onStart: (mode: AppMode) => void; onLogin: (mode: AppMode) => void; onSetupPlaces: () => void; signedIn: boolean; riderAppUrl: string };
 
 /** Landing illustration only; actual bookings and tracking use the existing authenticated views. */
 export function LandingHero({ onStart, onLogin, onSetupPlaces, signedIn, riderAppUrl }: Props) {
@@ -45,7 +45,7 @@ export function LandingHero({ onStart, onLogin, onSetupPlaces, signedIn, riderAp
     <a className={cn(styles["nav-link"], styles["secondary-nav-link"])} href="#contact-us">Contact us</a>
     <Link className={cn(styles["nav-link"], styles["secondary-nav-link"])} href="/help">Help &amp; support</Link>
     <a className={styles["nav-link"]} href={riderAppUrl}>Become a rider ↗</a>
-    <button type="button" className={cn(styles["nav-link"], styles["login-link"])} onClick={onLogin}>{signedIn ? "Dashboard" : "Sign in"}</button>
+    <button type="button" className={cn(styles["nav-link"], styles["login-link"])} onClick={() => onLogin(mode)}>{signedIn ? "Dashboard" : "Sign in"}</button>
   </nav>
   <button type="button" ref={menuButtonRef} className={styles["menu-button"]} aria-expanded={menuOpen} aria-controls="landing-navigation" aria-label="Toggle navigation" onClick={() => setMenuOpen((open) => !open)}><span /><span /></button>
 </header>
@@ -62,7 +62,7 @@ export function LandingHero({ onStart, onLogin, onSetupPlaces, signedIn, riderAp
         <h1 id="hero-title">Deliveries<br />and <span>rides.</span></h1>
         <p className={styles["intro"]}>Book and track your delivery or ride in one place.</p>
         <div className={styles["service-picker"]} role="group" aria-label="Select service"><button type="button" className={cn(styles.service, mode === "delivery" && styles.selected)} onClick={() => setMode("delivery")} aria-pressed={mode === "delivery"}><svg><use href="#fi-landing-box"/></svg>Delivery</button><button type="button" className={cn(styles.service, mode === "ride" && styles.selected)} onClick={() => setMode("ride")} aria-pressed={mode === "ride"}><svg><use href="#fi-landing-car"/></svg>Ride</button></div>
-        <div className={styles["hero-actions"]}><button type="button" className={styles["primary-button"]} onClick={() => signedIn ? onStart(mode) : onLogin()}><span>{signedIn ? mode === "ride" ? "Book a ride" : "Book a delivery" : "Sign in"}</span><svg><use href="#fi-landing-arrow"/></svg></button>{signedIn ? <a className={styles["how-button"]} href="#how-it-works">How it works</a> : <button type="button" className={styles["how-button"]} onClick={() => onStart(mode)}>Create account</button>}</div>
+        <div className={styles["hero-actions"]}><button type="button" className={styles["primary-button"]} onClick={() => signedIn ? onStart(mode) : onLogin(mode)}><span>{signedIn ? mode === "ride" ? "Book a ride" : "Book a delivery" : "Sign in"}</span><svg><use href="#fi-landing-arrow"/></svg></button>{signedIn ? <a className={styles["how-button"]} href="#how-it-works">How it works</a> : <button type="button" className={styles["how-button"]} onClick={() => onStart(mode)}>Create account</button>}</div>
       </div>
       <div className={styles["hero-art"]} aria-label="Illustrated delivery route preview">
         <div className={styles["mascot"]}>

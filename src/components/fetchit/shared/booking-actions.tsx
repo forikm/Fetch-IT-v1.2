@@ -23,25 +23,36 @@ export function BookingActions({ booking, readOnly = false, ratingPrompt = false
   const [comment, setComment] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [receiptFailed, setReceiptFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     if (!ratingPrompt || unavailable) return;
     const controller = new AbortController();
-    void (async () => {
+    let started = false;
+    const otherDialogOpen = () => typeof document !== "undefined" && !!document.querySelector('[role="dialog"][data-state="open"]');
+    const check = async () => {
+      if (started || controller.signal.aborted || otherDialogOpen()) return;
+      started = true;
       try {
         const response = await fetch("/api/bookings/" + encodeURIComponent(booking.id) + "/review", { cache: "no-store", signal: controller.signal });
         const data = await customerResponse<{ review: Review | null }>(response, "Couldn’t load your rating. Please retry.");
         if (controller.signal.aborted) return;
         if (data.review) { onRatingPromptClosed?.(); return; }
+        if (otherDialogOpen()) { started = false; return; }
         setLoaded(true); setDialog("review");
       } catch (error) {
         if (controller.signal.aborted) return;
+        if (otherDialogOpen()) { started = false; return; }
         setLoaded(false); setDialog("review");
         setError(error instanceof Error ? error.message : "Couldn’t load your rating.");
       }
-    })();
-    return () => controller.abort();
+    };
+    const observer = typeof MutationObserver !== "undefined" ? new MutationObserver(() => { void check(); }) : null;
+    if (typeof document !== "undefined") observer?.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-state"] });
+    void check();
+    return () => { controller.abort(); observer?.disconnect(); };
   }, [booking.id, ratingPrompt, unavailable, onRatingPromptClosed]);
   function closeDialog() {
     if (submitting.current) return;
@@ -63,15 +74,16 @@ export function BookingActions({ booking, readOnly = false, ratingPrompt = false
     {!ratingPrompt && <>
     <CustomerPaymentCard key={booking.id} bookingId={booking.id} type={booking.type} readOnly={unavailable} onPaymentStatus={setPaymentStatus} />
     <div className="flex flex-wrap gap-2 pt-2 border-t">
-      {paymentStatus === "PAID" && <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={async () => {
-        setError("");
+      {paymentStatus === "PAID" && <Button type="button" size="sm" variant="ghost" disabled={unavailable || downloading} onClick={async () => {
+        setDownloading(true); setReceiptFailed(false); setError("");
         try {
           const response = await fetch(`/api/bookings/${booking.id}/receipt`, { cache: "no-store" });
-          if (!response.ok) { await customerResponse(response, "Couldn’t download your receipt. Please retry."); return; }
+          if (!response.ok) { await customerResponse(response, "Your receipt couldn’t download. Try again."); return; }
           const url = URL.createObjectURL(await response.blob());
           const link = document.createElement("a"); link.href = url; link.download = `fetchit-${booking.refCode}.pdf`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch { setError("Couldn’t download your receipt. Please retry."); }
-      }}>Download PDF receipt</Button>}
+        } catch { setReceiptFailed(true); setError("Your receipt couldn’t download. Try again."); }
+        finally { setDownloading(false); }
+      }}>{downloading ? "Downloading receipt…" : receiptFailed ? "Retry receipt download" : "Download PDF receipt"}</Button>}
       {booking.status === "DELIVERED" && booking.riderId && <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => void open("review")}>Rate {booking.type === "RIDE" ? "driver" : "rider"}</Button>}
       <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => void open("help")}>Get help</Button>
     </div>
@@ -91,7 +103,7 @@ export function BookingActions({ booking, readOnly = false, ratingPrompt = false
           } catch (error) { setError(error instanceof Error ? error.message : "Couldn’t save your rating."); }
           finally { submitting.current = false; setBusy(false); }
         }}>
-          <fieldset disabled={busy || unavailable}><legend className="text-sm font-medium mb-2">Choose a rating</legend><div className="flex gap-2">{[1, 2, 3, 4, 5].map((star) => <button key={star} type="button" aria-label={`${star} star${star === 1 ? "" : "s"}`} aria-pressed={rating === star} onClick={() => setRating(star)} className={`text-3xl ${star <= rating ? "text-amber-500" : "text-muted-foreground"}`}>★</button>)}</div></fieldset>
+          <fieldset disabled={busy || unavailable}><legend className="text-sm font-medium mb-2">Choose a rating</legend><div className="flex gap-2">{[1, 2, 3, 4, 5].map((star) => <button key={star} type="button" aria-label={`${star} star${star === 1 ? "" : "s"}`} aria-pressed={rating === star} onClick={() => setRating(star)} className={`min-h-11 min-w-11 rounded-md text-3xl focus-visible:outline-2 focus-visible:outline-ring ${star <= rating ? "text-amber-500" : "text-muted-foreground"}`}>★</button>)}</div></fieldset>
           <div className="space-y-2"><Label htmlFor="review-comment">Comment (optional)</Label><Textarea id="review-comment" maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
           <Button disabled={busy || unavailable || rating === 0} type="submit">{busy ? "Submitting…" : "Submit rating"}</Button>
         </form>)}

@@ -14,7 +14,7 @@ export function customerProgress(status: BookingStatus, type: BookingType, sched
       ? `Your ${ride ? "ride" : "delivery"} is scheduled. We’ll find a ${ride ? "driver" : "rider"} when pickup is due.`
       : `Waiting for a ${ride ? "driver" : "rider"} to accept your booking.`,
     MATCHED: `A ${ride ? "driver" : "rider"} has been assigned. Waiting for acceptance.`,
-    ACCEPTED: ride ? "Your driver is on the way to your pickup." : "Your rider is on the way to collect your package.",
+    ACCEPTED: ride ? "Your driver accepted your booking. Check their location below." : "Your rider accepted your booking. Check their location below.",
     PICKED_UP: ride ? "You’re on board. Your trip has started." : "Your package has been picked up.",
     IN_TRANSIT: ride ? "You’re on the way to your drop-off." : "Your package is on the way to drop-off.",
     DELIVERED: ride ? "You’ve arrived at your drop-off." : "Your package has been delivered.",

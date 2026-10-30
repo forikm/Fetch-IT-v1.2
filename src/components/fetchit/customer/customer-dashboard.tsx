@@ -200,17 +200,13 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     observeRatings([trackingBooking, next]);
     setTrackingBooking(next);
   }, [trackingBooking, observeRatings]);
-  const [mapsReady, setMapsReady] = useState(false);
-  const [mapsFailed, setMapsFailed] = useState(false);
 
   // Start loading Google Maps as soon as the dashboard mounts, not when
   // the booking dialog opens — by the time someone taps "New booking" it's
   // usually already ready, so the loading screen rarely even shows.
   useEffect(() => {
     if (!online || offlineAccess) return;
-    loadGoogleMaps()
-      .then(() => setMapsReady(true))
-      .catch(() => setMapsFailed(true));
+    void loadGoogleMaps().catch(() => {});
   }, [online, offlineAccess]);
 
   function queryString(cursor?: string) {
@@ -318,7 +314,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
 
       <main className="flex-1 mx-auto w-full min-w-0 max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
         <Button variant="ghost" className="-ml-3 gap-2" onClick={() => setView("mode-select")} aria-label="Back to services">
-          <ArrowLeft className="h-4 w-4" /> Back
+          <ArrowLeft className="h-4 w-4" /> Back to services
         </Button>
         {/* Welcome */}
         <div className="dashboard-welcome flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -440,25 +436,18 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
               Choose a route and review your booking.
             </DialogDescription>
           </DialogHeader>
-          {online && !offlineAccess && !mapsReady && !mapsFailed ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-              <FetchItLoader className="h-6 w-6" />
-              <p className="text-sm">Preparing map services…</p>
-            </div>
-          ) : (
-            <BookingForm
-              bookingType={bookingType}
-              initialBooking={repeatBooking}
-              onCreate={onNewBookingCreated}
-              onCancel={() => setShowNew(false)}
-            />
-          )}
+          <BookingForm
+            bookingType={bookingType}
+            initialBooking={repeatBooking}
+            onCreate={onNewBookingCreated}
+            onCancel={() => setShowNew(false)}
+          />
         </DialogContent>
       </Dialog>
 
       {/* Tracking modal */}
       <Dialog open={!!trackingBooking} onOpenChange={(o) => !o && setTrackingBooking(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
+        <DialogContent className="top-0 left-0 h-dvh w-screen max-w-none max-h-dvh translate-x-0 translate-y-0 rounded-none p-4 sm:top-1/2 sm:left-1/2 sm:h-auto sm:w-full sm:max-w-2xl sm:max-h-[92vh] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:p-6 overflow-y-auto">
           {trackingBooking && (trackingBooking.type === "RIDE" ? (
             <RideTrackingView key={trackingBooking.id} ride={trackingBooking} readOnly={!online || offlineAccess || !!savedAt} onClose={() => setTrackingBooking(null)} onCancelled={load} onUpdated={handleTrackingUpdate} />
           ) : (
@@ -482,12 +471,12 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!summaryBooking} onOpenChange={(open) => !open && setSummaryBooking(null)}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Booking summary</DialogTitle><DialogDescription>{summaryBooking?.refCode}</DialogDescription></DialogHeader>{summaryBooking && <BookingSummary booking={summaryBooking} onRepeat={() => {
+      <Dialog open={!!summaryBooking} onOpenChange={(open) => !open && setSummaryBooking(null)}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Booking details</DialogTitle><DialogDescription>{summaryBooking?.refCode}</DialogDescription></DialogHeader>{summaryBooking && <BookingSummary booking={summaryBooking} onRepeat={() => {
         setRepeatBooking(summaryBooking); setShowNew(true);
         setSummaryBooking(null);
       }} onDetails={() => { setTrackingBooking(summaryBooking); setSummaryBooking(null); }} />}</DialogContent></Dialog>
       <Dialog open={!!summaryError} onOpenChange={(open) => !open && setSummaryError(null)}><DialogContent><DialogHeader><DialogTitle>Summary unavailable</DialogTitle><DialogDescription>{summaryError}</DialogDescription></DialogHeader></DialogContent></Dialog>
-      {ratingBooking && <BookingActions key={"rating:" + ratingBooking.id} booking={ratingBooking} ratingPrompt onRatingPromptClosed={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
+      {ratingBooking && !trackingBooking && !summaryBooking && !showNew && !profileOpen && !summaryError && <BookingActions key={"rating:" + ratingBooking.id} booking={ratingBooking} ratingPrompt onRatingPromptClosed={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
       <CustomerBottomNav selected={profileOpen ? "profile" : tab === "history" ? "bookings" : "home"} onHome={() => { setTab("active"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBookings={() => { setTab("history"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} onProfile={() => setProfileOpen(true)} />
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Your profile</DialogTitle><DialogDescription>Manage your contact details and booking alerts.</DialogDescription></DialogHeader><ProfileSettings /><NotificationSettings /></DialogContent></Dialog>
       <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">
@@ -589,7 +578,9 @@ function BookingForm({
   const estimate = estimatedKey === fareKey ? fareEstimate : null;
   const [estimateError, setEstimateError] = useState<string | null>(null);
 
-  const [paymentMethod, setPaymentMethod] = useCustomerData(userId, isRide ? "ride-payment-method" : "delivery-payment-method", "CASH", true);
+  const testPaymentsEnabled = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true";
+  const [storedPaymentMethod, setPaymentMethod] = useCustomerData(userId, isRide ? "ride-payment-method" : "delivery-payment-method", "CASH", true);
+  const paymentMethod = testPaymentsEnabled ? storedPaymentMethod : "CASH";
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -625,8 +616,8 @@ function BookingForm({
   function fillCurrentLocation(target: "pickup" | "dropoff") {
     const applyFallback = () => {
       toast({
-        title: "Geolocation unavailable",
-        description: "Search for an address or choose a point on the map.",
+        title: "We couldn’t get your location",
+        description: "Search for your address or choose a saved place. You can also confirm a pin when the map is available.",
       });
     };
 
@@ -833,7 +824,7 @@ function BookingForm({
       {!connected && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">You can edit your saved draft offline. Reconnect to get a fare and confirm.</p>}
       {coverageError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{coverageError}</p>}
       {!area && <p role="status" className="text-sm text-muted-foreground">{coverageFailed ? "Service-area checks couldn’t load. Refresh this page before booking." : "Checking service area…"}</p>}
-      <p className="text-[10px] text-muted-foreground">Coverage: <a className="underline" href="https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/" target="_blank" rel="noreferrer">geoBoundaries / OCHA</a> · <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a className="underline" href="/service-area-data.json" target="_blank" rel="noreferrer">Data (ODbL)</a></p>
+      <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Service-area map information</summary><p className="mt-2">Coverage: <a className="underline" href="https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/" target="_blank" rel="noreferrer">geoBoundaries / OCHA</a> · <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a className="underline" href="/service-area-data.json" target="_blank" rel="noreferrer">Data (ODbL)</a></p></details>
 
       {/* Step 0: Pickup */}
       {step === 0 && (
@@ -848,7 +839,7 @@ function BookingForm({
               variant="ghost"
               disabled={!connected}
               onClick={() => fillCurrentLocation("pickup")}
-              className="h-7 text-xs"
+              className="min-h-11 text-sm"
             >
               Use my location
             </Button>
@@ -1020,7 +1011,7 @@ function BookingForm({
             ] as const).map(place => <div key={place.label} className="flex items-start gap-2">
               <MapPin className={`mt-1 h-4 w-4 shrink-0 ${place.color}`} />
               <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">{place.label}</p><p className="break-words text-sm [overflow-wrap:anywhere]">{place.address}</p></div>
-              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label={`Edit ${place.label.toLowerCase()}`} onClick={() => editFromReview(place.editStep)} className="h-7 px-2 text-xs">Edit</Button>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label={`Edit ${place.label.toLowerCase()}`} onClick={() => editFromReview(place.editStep)} className="min-h-11 px-3 text-sm">Edit</Button>
             </div>)}
           </section>
           <section aria-label="Booking details summary" className="rounded-xl bg-muted/30 p-3">
@@ -1031,7 +1022,7 @@ function BookingForm({
                 {!scheduleValid && <p role="alert" className="text-destructive">Pickup time has passed. Edit the details to choose a new time.</p>}
                 {!isRide && cargoNotes && <p className="break-words text-muted-foreground [overflow-wrap:anywhere]">{cargoNotes}</p>}
               </div>
-              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label="Edit booking details" onClick={() => editFromReview(2)} className="h-7 px-2 text-xs">Edit</Button>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label="Edit booking details" onClick={() => editFromReview(2)} className="min-h-11 px-3 text-sm">Edit</Button>
             </div>
           </section>
 
@@ -1084,8 +1075,8 @@ function BookingForm({
 
           <div className="space-y-2">
             <Label htmlFor="payment-method">Payment method</Label>
-            <select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your rider</option><option value="DEMO_GCASH">GCash</option><option value="DEMO_MAYA">Maya</option><option value="DEMO_BANK">Bank account</option></select>
-            <p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? "Pay your rider directly, then confirm payment in the booking." : "Pay first to confirm. Test payment — no money charged."}</p>
+            <select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your {isRide ? "driver" : "rider"}</option>{testPaymentsEnabled && <><option value="DEMO_GCASH">GCash (test payment)</option><option value="DEMO_MAYA">Maya (test payment)</option><option value="DEMO_BANK">Bank account (test payment)</option></>}</select>
+            <p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? isRide ? "Pay your driver directly, then confirm payment in the booking." : "Pay at drop-off, then confirm the cash payment in this booking." : "Pay first to confirm. Test payment — no money charged."}</p>
           </div>
 
           {error && (
@@ -1302,7 +1293,7 @@ function TrackingView({
               <ProofChip
                 ok={!!photoProof}
                 onClick={photoProof ? () => setPhotoOpen(true) : undefined}
-                label="Photo"
+                label="View delivery photo"
                 icon={<Camera className="h-4 w-4" />}
               />
             </div>
@@ -1322,7 +1313,7 @@ function TrackingView({
       )}
 
       <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={onClose}>Close</Button>
+        <Button variant="outline" onClick={onClose}>Back to bookings</Button>
       </div>
     </div>
   );

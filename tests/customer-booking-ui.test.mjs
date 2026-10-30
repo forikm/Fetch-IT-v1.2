@@ -17,7 +17,7 @@ test("all backend states map to the four customer stages without inventing picku
 
 test("matching, accepting, pickup and transit retain truthful distinct messages", () => {
   assert.match(customerProgress("MATCHED", "RIDE").message, /Waiting for acceptance/);
-  assert.match(customerProgress("ACCEPTED", "RIDE").message, /on the way to your pickup/);
+  assert.match(customerProgress("ACCEPTED", "RIDE").message, /accepted your booking/);
   assert.doesNotMatch(customerProgress("ACCEPTED", "RIDE").message, /on board|arrived/i);
   assert.match(customerProgress("PICKED_UP", "RIDE").message, /on board/);
   assert.match(customerProgress("PICKED_UP", "DELIVERY").message, /package has been picked up/);

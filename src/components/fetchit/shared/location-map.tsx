@@ -43,6 +43,7 @@ export function LocationMap({
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [coverageError, setCoverageError] = useState<string | null>(null);
   const { area } = useServiceArea(restrictToServiceArea);
@@ -67,12 +68,12 @@ export function LocationMap({
         geocoderRef.current = new window.google.maps.Geocoder();
         setReady(true);
       })
-      .catch(() => setFailed(true));
+      .catch(() => { if (!cancelled) setFailed(true); });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -124,7 +125,7 @@ export function LocationMap({
     });
   }
 
-  if (failed) return null; // silently skip the map if Maps failed to load
+  if (failed) return <div role="alert" className="space-y-3 rounded-xl border bg-muted/30 p-4 text-sm"><p>The map couldn’t load. Your address is kept. Try again, or choose a saved place above.</p><Button type="button" variant="outline" className="min-h-11" onClick={() => { setFailed(false); setReady(false); setAttempt(value => value + 1); }}>Retry map</Button></div>;
 
   return (
     <div className={className ?? ""}>
@@ -143,6 +144,7 @@ export function LocationMap({
           </div>
         )}
       </div>
+      {ready && <p className="mt-2 text-xs text-muted-foreground">Move the map to position the pin, then confirm the location below.</p>}
       {ready && (
         <Button
           type="button"

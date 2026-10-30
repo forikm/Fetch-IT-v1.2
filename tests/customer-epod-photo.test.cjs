@@ -178,7 +178,7 @@ test("the Photo proof chip itself opens the image preview", () => {
     deliveryProofs: [{ id: "proof-a", proofType: "PHOTO", photoUrl: "/api/bookings/booking-a/proof/proof-a/photo" }] };
   const render = () => { h.reset(); return nodes(TrackingView({ booking, onClose() {}, onUpdated() {} })); };
   let tree = render();
-  const chip = tree.find(node => node.props?.label === "Photo");
+  const chip = tree.find(node => node.props?.label === "View delivery photo");
   assert.equal(chip.props.ok, true);
   chip.props.onClick();
   tree = render();

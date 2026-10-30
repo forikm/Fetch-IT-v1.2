@@ -121,3 +121,7 @@ use that schema for raw SQL and triggers. For browser review, additionally set
 `SUPPORT_PREVIEW=1`; run it in an interactive terminal. After checks pass the preview
 remains open with test-only logins until a newline is sent, stdin closes, or ten
 minutes elapse. Never use those accounts in production.
+
+## Account access help
+
+The signed-out Help page includes password-reset and original-account sign-in steps. Sign-in help explains the original-account path before changing the login method. Contact channels remain hidden until real staffed details are configured; the page does not refer customers to missing contacts.

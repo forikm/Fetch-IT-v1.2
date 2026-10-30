@@ -21,6 +21,7 @@ export function LandingView() {
   const demoEnabled = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true";
   const setView = useAppStore((s) => s.setView);
   const user = useAppStore((s) => s.user);
+  const beginService = useAppStore((s) => s.beginService);
   const chooseMode = useAppStore((s) => s.chooseMode);
   const start = () => user ? setView("mode-select") : pickRole("CUSTOMER", "login");
   useEffect(() => { const id = location.hash.slice(1); if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" })); }, []);
@@ -58,8 +59,8 @@ export function LandingView() {
         <LandingHero
           signedIn={!!user}
           riderAppUrl={riderAppUrl}
-          onStart={(mode) => user ? chooseMode(mode) : pickRole("CUSTOMER", "signup")}
-          onLogin={() => user ? setView("mode-select") : pickRole("CUSTOMER", "login")}
+          onStart={(mode) => user ? chooseMode(mode) : beginService(mode, "signup")}
+          onLogin={(mode) => user ? chooseMode(mode) : beginService(mode, "login")}
           onSetupPlaces={() => user ? setView("onboarding") : pickRole("CUSTOMER", "signup")}
         />
         <div className="border-y border-foreground/5 bg-white/50 dark:bg-card/50">
@@ -69,7 +70,7 @@ export function LandingView() {
         </div>
         <section id="services" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
           <h2 className="section-title mb-9">Our services</h2>
-          <div className="grid gap-5 md:grid-cols-2"><ServiceCard kind="delivery" onStart={() => user ? chooseMode("delivery") : pickRole("CUSTOMER", "login")} /><ServiceCard kind="ride" onStart={() => user ? chooseMode("ride") : pickRole("CUSTOMER", "login")} /></div>
+          <div className="grid gap-5 md:grid-cols-2"><ServiceCard kind="delivery" onStart={() => user ? chooseMode("delivery") : beginService("delivery", "login")} /><ServiceCard kind="ride" onStart={() => user ? chooseMode("ride") : beginService("ride", "login")} /></div>
           {demoEnabled && seeded && <div className="mt-6 text-center"><Button variant="ghost" size="sm" onClick={tryDemo}><Play className="h-3.5 w-3.5" />Try demo</Button></div>}
         </section>
         <section id="about-us" className="scroll-mt-24 bg-card">

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCustomerViewHistory } from "@/hooks/use-customer-view-history";
 import { useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { LandingView } from "@/components/fetchit/shared/landing";
@@ -13,6 +14,8 @@ import { setPushAccount } from "@/lib/customer-push";
 
 export default function Home() {
   const { view, user, bootstrapped, bootstrap, openBookingSummary } = useAppStore();
+
+  useCustomerViewHistory(bootstrapped);
 
   useEffect(() => {
     if (!bootstrapped) void bootstrap();

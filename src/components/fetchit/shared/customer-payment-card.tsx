@@ -60,10 +60,10 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
   const collectionAvailable = booking && cashConfirmationAvailable(booking.type ?? type, booking.status, booking.dropoffReachedAt);
   const canConfirm = booking && booking.paymentMethod === "CASH" && collectionAvailable && !booking.customerPaidAt && booking.paymentStatus !== "REFUNDED";
   const mismatch = booking && booking.customerPaidAmount !== null && booking.riderReceivedAmount !== null && (booking.customerPaidAmount !== booking.riderReceivedAmount || booking.customerPaidAmount !== booking.totalFare);
-  const paymentLabel = !booking ? "Loading…" : booking.paymentStatus === "PAID" ? "Paid" : booking.paymentStatus === "REFUNDED" ? "Refunded" : booking.paymentStatus === "FAILED" ? "Payment failed" : mismatch ? "Needs review" : booking.customerPaidAt ? `Waiting for ${person} confirmation` : booking.status === "CANCELLED" ? "Booking cancelled" : booking.paymentMethod === "CASH" && type === "DELIVERY" && !collectionAvailable ? "Pay at drop-off. Waiting for the rider to confirm arrival." : booking.paymentStatus === "PENDING" ? "Awaiting confirmation" : booking.paymentMethod === "CASH" ? `Pay your ${person} in cash` : "Payment needed";
+  const paymentLabel = !booking ? "Loading…" : booking.paymentStatus === "PAID" ? "Paid" : booking.paymentStatus === "REFUNDED" ? "Refunded" : booking.paymentStatus === "FAILED" ? "Payment failed" : mismatch ? "Needs review" : booking.customerPaidAt ? `You confirmed payment. Waiting for your ${person} to confirm receipt.` : booking.status === "CANCELLED" ? "Booking cancelled" : booking.paymentMethod === "CASH" && type === "DELIVERY" && !collectionAvailable ? "Pay at drop-off. Waiting for the rider to confirm arrival." : booking.paymentStatus === "PENDING" ? "Payment confirmation is pending" : booking.paymentMethod === "CASH" ? `Pay your ${person} in cash` : "Payment needed";
 
   return <section className="space-y-3 rounded-xl border p-4 text-sm" aria-label="Payment">
-    <div className="flex flex-wrap justify-between gap-2"><h3 className="font-semibold">{booking ? PAYMENT_METHOD_LABEL[booking.paymentMethod] : "Payment"}</h3>{booking && <strong>{formatPeso(Number(booking.totalFare))}</strong>}</div>
+    <div className="flex flex-wrap justify-between gap-2"><h3 className="font-semibold">{booking ? PAYMENT_METHOD_LABEL[booking.paymentMethod] + (demo ? " (test payment)" : "") : "Payment"}</h3>{booking && <strong>{formatPeso(Number(booking.totalFare))}</strong>}</div>
     <p className="text-muted-foreground" role="status">{paymentLabel}</p>
     {demo && <p className="text-xs text-muted-foreground">Test payment. No money is charged.</p>}
     {booking?.customerPaidAt && !demo && <p>You confirmed {formatPeso(Number(booking.customerPaidAmount))} in cash.</p>}
@@ -100,6 +100,6 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
       <div className="flex flex-wrap gap-2"><Button type="submit" size="sm" disabled={busy || !amount}>{busy ? "Confirming…" : "I paid this amount"}</Button><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmOpen(false)}>Not yet</Button></div>
     </form>}
     {notice && <p role="status">{notice}</p>}
-    {error && <div className="space-y-2"><p role="alert" className="text-destructive">{error}</p>{!booking && <Button type="button" size="sm" variant="outline" onClick={() => setRetry(previous => previous + 1)}>Retry payment details</Button>}</div>}
+    {error && <div className="space-y-2"><p role="alert" className="text-destructive">{error}</p><Button type="button" size="sm" variant="outline" onClick={() => setRetry(previous => previous + 1)}>Retry payment details</Button></div>}
   </section>;
 }

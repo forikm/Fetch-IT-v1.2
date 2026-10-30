@@ -42,6 +42,15 @@ export type AppView =
 /** Which product the customer is currently using. */
 export type AppMode = "delivery" | "ride";
 
+const SERVICE_KEY = "fetchit:pending-service";
+function readService(): AppMode | null {
+  try { const value = sessionStorage.getItem(SERVICE_KEY); return value === "ride" || value === "delivery" ? value : null; } catch { return null; }
+}
+function saveService(mode: AppMode | null) {
+  try { if (mode) sessionStorage.setItem(SERVICE_KEY, mode); else sessionStorage.removeItem(SERVICE_KEY); } catch { /* Navigation still works without storage. */ }
+}
+function serviceView(mode: AppMode | null): AppView { return mode === "ride" ? "ride-dashboard" : mode === "delivery" ? "customer-dashboard" : "mode-select"; }
+
 // Sessions of other roles (e.g. RIDER) must never see this app's UI.
 function isAllowedRole(role: AuthUser["role"] | undefined): boolean {
   return role === "CUSTOMER";
@@ -64,6 +73,8 @@ interface AppState {
   mode: AppMode | null;
   // Login form prefills role so the UI can show a tailored form.
   pendingRole: Role | null;
+  pendingMode: AppMode | null;
+  beginService: (mode: AppMode, view: "login" | "signup") => void;
   pendingBookingId: string | null;
   openBookingSummary: (id: string, mode: AppMode) => void;
   clearPendingBooking: () => void;
@@ -84,6 +95,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   view: "landing",
   mode: null,
   pendingRole: null,
+  pendingMode: readService(),
+  beginService: (mode, view) => { saveService(mode); set({ pendingMode: mode, pendingRole: "CUSTOMER", view }); },
   pendingBookingId: null,
   openBookingSummary: (id, mode) => set({ pendingBookingId: id, mode, view: mode === "ride" ? "ride-dashboard" : "customer-dashboard" }),
   clearPendingBooking: () => set({ pendingBookingId: null }),
@@ -94,18 +107,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     clearAuthProgress();
     if (u?.role === "CUSTOMER") { setPendingLogout(false); saveOfflineCustomer({ ...u, role: "CUSTOMER" }); }
     else clearOfflineAccount();
+    const selectedMode = get().pendingMode ?? readService();
+    if (u?.role === "CUSTOMER" && !beginOnboarding && !onboardingPending(u.id)) saveService(null);
     if (u?.role === "CUSTOMER" && beginOnboarding) setOnboardingPending(u.id, true);
     set({
       user: isAllowedRole(u?.role) ? u : null,
       offlineAccess: false,
-      view: u?.role === "CUSTOMER" ? beginOnboarding || onboardingPending(u.id) ? "onboarding" : "mode-select" : "landing",
+      view: u?.role === "CUSTOMER" ? beginOnboarding || onboardingPending(u.id) ? "onboarding" : serviceView(selectedMode) : "landing",
+      mode: u?.role === "CUSTOMER" ? selectedMode : null,
+      pendingMode: null,
     });
   },
-  chooseMode: (m) =>
+  chooseMode: (m) => {
+    saveService(null);
     set({
       mode: m,
-      view: m === "ride" ? "ride-dashboard" : "customer-dashboard",
-    }),
+      view: serviceView(m),
+    });
+  },
   bootstrap: async () => {
     const epoch = sessionEpoch;
     try {
@@ -130,18 +149,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       else clearOfflineAccount();
       set({
         user: allowed ? data.user : null,
-        view: allowed && data.user ? onboardingPending(data.user.id) ? "onboarding" : "mode-select" : guestView(get().view, true),
+        mode: allowed ? readService() : null,
+        view: allowed && data.user ? onboardingPending(data.user.id) ? "onboarding" : serviceView(readService()) : guestView(get().view, true),
         bootstrapped: true,
         offlineAccess: false,
       });
     } catch {
       if (epoch !== sessionEpoch) return;
       const saved = readOfflineCustomer();
-      set({ user: saved, view: saved ? onboardingPending(saved.id) ? "onboarding" : "mode-select" : guestView(get().view, true), offlineAccess: !!saved, bootstrapped: true });
+      set({ user: saved, mode: saved ? readService() : null, view: saved ? onboardingPending(saved.id) ? "onboarding" : serviceView(readService()) : guestView(get().view, true), offlineAccess: !!saved, bootstrapped: true });
     }
   },
   logout: async () => {
     if (typeof window !== "undefined" && !window.confirm("Are you sure you want to log out of Fetch-It?")) return;
+    saveService(null);
     const epoch = ++sessionEpoch;
     // Stop alerts locally even when the network logout has to wait for reconnect.
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
@@ -151,7 +172,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     clearAuthProgress();
     clearOfflineAccount(get().user?.id);
     setPendingLogout(true);
-    set({ user: null, offlineAccess: false, view: "landing", pendingRole: null, pendingBookingId: null, mode: null });
+    set({ user: null, offlineAccess: false, view: "landing", pendingRole: null, pendingBookingId: null, mode: null, pendingMode: null });
     try {
       const response = await fetch("/api/auth/logout", { method: "POST" });
       if (response.ok) setPendingLogout(false);

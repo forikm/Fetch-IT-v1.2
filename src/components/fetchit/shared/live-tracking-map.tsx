@@ -3,6 +3,7 @@
 import { FetchItLoader } from "@/components/fetchit/shared/loading";
 
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { MapPinOff } from "lucide-react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
@@ -27,6 +28,7 @@ export function LiveTrackingMap({
   const customerMarkerRef = useRef<google.maps.Marker | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +79,7 @@ export function LiveTrackingMap({
         map.fitBounds(bounds, 64);
         setReady(true);
       })
-      .catch(() => setFailed(true));
+      .catch(() => { if (!cancelled) setFailed(true); });
 
     return () => {
       cancelled = true;
@@ -91,7 +93,7 @@ export function LiveTrackingMap({
       mapRef.current = null;
     };
     // Pickup/drop-off belong to one booking and do not change while mounted.
-  }, [pickup.lat, pickup.lng, dropoff.lat, dropoff.lng]);
+  }, [pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, attempt]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -164,9 +166,7 @@ export function LiveTrackingMap({
   if (failed) {
     return (
       <div className={`${className} grid place-items-center bg-muted/40 text-muted-foreground`}>
-        <div className="flex items-center gap-2 text-sm">
-          <MapPinOff className="h-4 w-4" /> Google Maps could not be loaded
-        </div>
+        <div role="alert" className="space-y-3 p-4 text-center text-sm"><p className="flex items-center justify-center gap-2"><MapPinOff className="h-4 w-4" />The tracking map couldn’t load.</p><p>Your booking details and contact options are still available.</p><Button type="button" variant="outline" className="min-h-11" onClick={() => { setFailed(false); setReady(false); setAttempt(value => value + 1); }}>Retry tracking map</Button></div>
       </div>
     );
   }

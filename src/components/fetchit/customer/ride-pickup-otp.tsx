@@ -40,14 +40,14 @@ export function RidePickupOtp({ bookingId }: { bookingId: string }) {
   return (
     <Card className="border-primary/30 bg-primary/5 py-0">
       <CardContent className="space-y-3 p-4">
-        <p className="flex items-center gap-2 font-medium"><KeyRound className="h-4 w-4" /> Ride pickup OTP</p>
+        <p className="flex items-center gap-2 font-medium"><KeyRound className="h-4 w-4" /> Pickup verification code</p>
         <p className="text-sm text-muted-foreground">Check your driver's name and vehicle. Share this code only when you meet at pickup, before boarding.</p>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {otp ? <>
           <p aria-label="Your ride pickup code" className="rounded-lg border bg-card py-3 text-center font-mono text-3xl tracking-[0.25em]">{otp}</p>
           {expiresAt && <p className="text-xs text-muted-foreground">Valid until {new Date(expiresAt).toLocaleTimeString("en-PH", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit" })} Philippine time.</p>}
           <Button type="button" variant="ghost" size="sm" disabled={loading} onClick={reveal}>{loading ? "Checking code…" : "Refresh pickup code"}</Button>
-        </> : <Button variant="outline" disabled={loading} onClick={reveal}>{loading ? <FetchItLoader className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />} Reveal OTP</Button>}
+        </> : <Button variant="outline" className="min-h-11" disabled={loading} onClick={reveal}>{loading ? <FetchItLoader className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />} Show pickup code</Button>}
       </CardContent>
     </Card>
   );

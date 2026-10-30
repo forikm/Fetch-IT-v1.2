@@ -69,7 +69,9 @@ export function SignupPlaces() {
     }
     setStoredDraft(null);
     setOnboardingPending(userId, false);
-    setView("mode-select");
+    const selectedMode = useAppStore.getState().mode;
+    if (selectedMode) useAppStore.getState().chooseMode(selectedMode);
+    else setView("mode-select");
   }
 
   return <div className="min-h-svh flex flex-col bg-background">

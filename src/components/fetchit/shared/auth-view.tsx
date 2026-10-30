@@ -43,6 +43,7 @@ import { customerAuthMessage, startCustomerSignup } from "@/lib/customer-signup"
 import { validNewPassword, PASSWORD_REQUIREMENT, PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 import { clearAuthProgress, readAuthProgress, saveAuthProgress } from "@/lib/auth-progress";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
+import Link from "next/link";
 import { EmailCodeForm } from "./email-code-form";
 import { emailCodeRequest, type CodeChallenge } from "@/lib/email-code-client";
 
@@ -72,6 +73,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
   const [emailVerified, setEmailVerified] = useState(false);
   const [pendingName, setPendingName] = useState<{ uid: string; name: string } | null>(null);
   const [legacyLogin, setLegacyLogin] = useState(false);
+  const [loginHelp, setLoginHelp] = useState(false);
   const [resetActive, setResetActive] = useState(false);
   const [verificationChallenge, setVerificationChallenge] = useState<CodeChallenge | null>(null);
   const [codeBusy, setCodeBusy] = useState(false);
@@ -479,12 +481,15 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                   {(!legacyLogin || EMAIL_CODES_ENABLED) && <Button variant="link" className="w-full" onClick={resetPassword} disabled={loading}>Forgot password?</Button>}
                   <Button
                     variant="ghost"
-                    className="w-full text-xs"
-                    onClick={() => { setLegacyLogin(!legacyLogin); setError(null); setNotice(null); }}
+                    className="w-full min-h-11 text-sm"
+                    aria-expanded={loginHelp || legacyLogin}
+                    onClick={() => { if (legacyLogin) { setLegacyLogin(false); setLoginHelp(false); } else setLoginHelp(value => !value); setError(null); setNotice(null); }}
                     disabled={loading}
                   >
-                    {legacyLogin ? "Back to sign in" : "Use an older account"}
+                    {legacyLogin ? "Back to standard sign in" : "Having trouble signing in?"}
                   </Button>
+                  {legacyLogin && <p role="status" className="rounded-xl bg-muted p-3 text-sm">You’re using sign-in for an existing account created before email verification was introduced. Use that account’s email and password.</p>}
+                  {loginHelp && !legacyLogin && <section aria-label="Sign-in help" className="space-y-3 rounded-xl border p-4 text-sm"><p>Try resetting your password first. If you have an existing account created before email verification was introduced, try its original sign-in below.</p><Button type="button" variant="outline" className="min-h-11 w-full" disabled={loading} onClick={() => { setLegacyLogin(true); setLoginHelp(false); setError(null); }}>Try original account sign-in</Button><Link href="/help#account-access" className="inline-flex min-h-11 items-center underline">More account recovery help</Link></section>}
                   {(process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true") && <div className="border-t pt-3">
                     <Button
                       type="button"

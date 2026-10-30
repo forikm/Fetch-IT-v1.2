@@ -7,6 +7,7 @@ import { FetchItLoader } from "@/components/fetchit/shared/loading";
 // label AND the lat/lng behind the scenes — no manual coordinate entry.
 
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 import { MapPin } from "lucide-react";
@@ -37,6 +38,7 @@ export function PlaceAutocompleteInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const onChangeRef = useRef(onChange);
   const [ready, setReady] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
 
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
@@ -70,14 +72,15 @@ export function PlaceAutocompleteInput({
       cancelled = true;
       if (listener) listener.remove();
     };
-  }, []);
+  }, [attempt]);
 
   return (
-    <div className="relative sm:col-span-3">
+    <div className="sm:col-span-3">
+      <div className="relative">
       <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
       <Input
         id={id}
-        aria-describedby={describedBy}
+        aria-describedby={[describedBy, id ? id + "-guidance" : undefined].filter(Boolean).join(" ") || undefined}
         ref={inputRef}
         placeholder={failed ? "Type an address (autocomplete unavailable)" : placeholder}
         value={value}
@@ -89,9 +92,8 @@ export function PlaceAutocompleteInput({
       {!ready && !failed && (
         <FetchItLoader className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       )}
-      {failed && (
-        <p className="text-xs text-amber-700 mt-1">Address search is unavailable. Please try again later or choose a location on the map.</p>
-      )}
+      </div>
+      {failed ? <div id={id ? id + "-guidance" : undefined} role="alert" className="mt-2 space-y-2 text-sm"><p>Address search couldn’t load. Your text is kept. Retry search or choose a saved place. The map can also be used when available.</p><Button type="button" variant="outline" className="min-h-11" onClick={() => { setFailed(null); setReady(false); setAttempt(value => value + 1); }}>Retry address search</Button></div> : <p id={id ? id + "-guidance" : undefined} className="mt-2 text-xs text-muted-foreground">Select a search suggestion to confirm the address, or confirm a pin on the map.</p>}
     </div>
   );
 }

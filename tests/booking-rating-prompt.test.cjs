@@ -83,7 +83,7 @@ function actions(request, options = {}) {
     "@/lib/customer-request": customerRequest,
     "@/components/ui/button": components, "@/components/ui/label": components, "@/components/ui/textarea": components,
     "@/components/ui/dialog": components, "./support-center": components, "./customer-payment-card": components,
-  }, { fetch: async (url, init) => { requests.push({ url, init }); return request(url, init); } });
+  }, { ...options.globals, fetch: async (url, init) => { requests.push({ url, init }); return request(url, init); } });
   return {
     props, requests, h,
     render() { h.reset(); return nodes(BookingActions(props)); },
@@ -195,4 +195,22 @@ test("the review API rejects invalid stars, other owners, unfinished trips and d
     assert.equal(app.creates.length, 0);
     assert.equal(app.updates.length, 0);
   }
+});
+
+test("automatic rating waits until another dialog closes and cleans up its observer", async () => {
+  let dialogOpen = true, changed, disconnected = false;
+  const app = actions(noReview, { globals: {
+    document: { body: {}, querySelector: () => dialogOpen ? {} : null },
+    MutationObserver: class { constructor(callback) { changed = callback; } observe() {} disconnect() { disconnected = true; } },
+  } });
+  const tree = app.render();
+  const cleanups = app.h.effects();
+  await flush();
+  assert.equal(app.requests.length, 0);
+  assert.equal(tree.find(node => node.type === "Dialog").props.open, false);
+  dialogOpen = false; changed(); await flush();
+  assert.equal(app.requests.length, 1);
+  assert.equal(app.render().find(node => node.type === "Dialog").props.open, true);
+  cleanups.forEach(cleanup => cleanup?.());
+  assert.equal(disconnected, true);
 });

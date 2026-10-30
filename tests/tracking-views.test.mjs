@@ -96,7 +96,7 @@ test("ride details show the rider profile, local position, and an emergency dial
   }
 });
 
-test("cancellation submits Driver asked for cancellation as the saved reason", async () => {
+test("cancellation submits My driver asked me to cancel as the saved reason", async () => {
   const states = [], pending = { current: false };
   let index = 0, submitted, cancelled = 0;
   const { CancelBooking } = load("../src/components/fetchit/shared/cancel-booking.tsx", {
@@ -107,12 +107,12 @@ test("cancellation submits Driver asked for cancellation as the saved reason", a
   });
   const render = () => { index = 0; return nodes(CancelBooking({ bookingId: ride.id, onCancelled: () => cancelled++ })); };
   let tree = render();
-  assert(tree.some(node => node.type === "option" && node.props.children === "Driver asked for cancellation"));
-  tree.find(node => node.type === "select").props.onChange({ target: { value: "Driver asked for cancellation" } });
+  assert(tree.some(node => node.type === "option" && node.props.children === "My driver asked me to cancel"));
+  tree.find(node => node.type === "select").props.onChange({ target: { value: "My driver asked me to cancel" } });
   tree = render();
   await tree.find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
   assert.equal(submitted.url, `/api/bookings/${ride.id}/cancel`);
-  assert.equal(submitted.body.reason, "Driver asked for cancellation");
+  assert.equal(submitted.body.reason, "My driver asked me to cancel");
   assert.equal(cancelled, 1);
 });
 
