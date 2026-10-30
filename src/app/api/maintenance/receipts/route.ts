@@ -1,3 +1,4 @@
+import { expireRiderOffers } from "@/lib/dispatch";
 import { timingSafeEqual } from "node:crypto";
 import nodemailer from "nodemailer";
 import { NextRequest, NextResponse } from "next/server";
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
   if (!secret || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (request.nextUrl.searchParams.get("verifyOnly") !== "1") await expireRiderOffers(db);
   const sender = process.env.GMAIL_SENDER?.trim();
   const password = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, "");
   if (!sender || !password) return NextResponse.json({ configured: false, authenticated: false }, { status: 503 });

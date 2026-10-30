@@ -64,7 +64,7 @@ export function BookingWaitStatus({ booking, updatesPaused = false, onUpdated, o
       <p className="leading-relaxed text-muted-foreground">{paused ? "Last known status: " + feedback.title + ". Check for an update when connected to see whether your booking has been accepted." : feedback.message}</p>
     </div>
     {!paused && feedback.wait && <p className="text-xs font-medium text-muted-foreground">{feedback.wait}</p>}
-    {feedback.kind !== "scheduled" && <p className="text-xs leading-relaxed text-muted-foreground">{paused ? "Reconnect to check this booking. " : "You can keep waiting. "}Cancel this booking before making another request.</p>}
+    {feedback.kind !== "scheduled" && <p className="text-xs leading-relaxed text-muted-foreground">{paused ? "Reconnect to check this booking. " : "You can wait until the acceptance window ends. "}Cancel this booking before making another request.</p>}
     <div className="grid gap-2 sm:flex sm:flex-wrap [&>button]:min-h-11"><Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={disconnected || busy} onClick={() => void check()}>{busy ? "Checking booking…" : error ? "Retry status check" : "Check for an update"}</Button>
       {onCancelled && <CancelBooking bookingId={booking.id} readOnly={readOnly || offlineAccess} onCancelled={onCancelled} />}
     </div>

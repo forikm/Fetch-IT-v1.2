@@ -393,7 +393,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
           </TabsList>
         </Tabs>
 
-<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{!online || offline || savedAt ? "Live updates paused. Saved statuses may be out of date." : lastChecked ? "Updated " + lastChecked.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading || !online} onClick={() => void load()}>Refresh bookings</Button></div>
+<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{!online || offline || savedAt ? (!online ? "You’re offline. Saved statuses may be out of date." : "Reconnecting… Your saved booking and entered details are kept.") : lastChecked ? "Updated " + lastChecked.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading || !online} onClick={() => void load()}>Refresh bookings</Button></div>
         {tab === "history" && <HistoryFilters bookingType={bookingType} value={filters} onChange={setFilters} />}
                 {/* List */}
         {loading ? (

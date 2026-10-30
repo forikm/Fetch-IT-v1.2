@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bookingWaitFeedback, mergeBookingUpdate, LONG_BOOKING_WAIT_MS } from "../src/lib/booking-wait.ts";
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+const ts = createRequire(import.meta.url)('typescript');
+const compile = file => ts.transpileModule(fs.readFileSync(new URL('../src/lib/' + file, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+const expiry = {}; new Function('exports', compile('job-expiry.ts'))(expiry);
+const logic = {}; new Function('exports', 'require', compile('booking-wait.ts'))(logic, () => expiry);
+const { bookingWaitFeedback, mergeBookingUpdate, LONG_BOOKING_WAIT_MS } = logic;
 const now = Date.parse("2026-10-30T10:00:00Z");
 const booking = { id: "booking", type: "RIDE", status: "PENDING", createdAt: new Date(now - 30_000).toISOString() };
 

@@ -1,3 +1,4 @@
+import { requestExpiresAt } from "./job-expiry";
 import type { BookingStatus, BookingType } from "./constants";
 
 export const LONG_BOOKING_WAIT_MS = 3 * 60_000;
@@ -19,17 +20,19 @@ export function bookingWaitFeedback(booking: WaitingBooking, now: number) {
   const start = Math.max(Number.isFinite(created) ? created : now, Number.isFinite(scheduled) ? scheduled : 0);
   const elapsed = Math.max(0, now - start);
   const minutes = Math.floor(elapsed / 60_000);
+  const remaining = Math.max(0, Math.ceil((requestExpiresAt(booking).getTime() - now) / 60_000));
+  const deadline = remaining ? " Acceptance closes in " + remaining + (remaining === 1 ? " minute." : " minutes.") : " Checking whether this request has expired…";
   const wait = minutes < 1 ? "Waiting less than a minute" : "Waiting " + minutes + (minutes === 1 ? " minute" : " minutes");
   if (booking.status === "MATCHED") return {
     kind: "offered", title: "Waiting for " + person + " confirmation",
-    message: "An offer has been sent. Your " + person + " has not accepted yet. If there’s no reply before the offer expires, another " + person + " can accept.", wait,
+    message: "An offer has been sent. Your " + person + " has not accepted yet. If there’s no reply before the offer expires, another " + person + " can accept." + deadline, wait,
   };
   return elapsed >= LONG_BOOKING_WAIT_MS ? {
     kind: "long", title: "No " + person + " has accepted yet",
-    message: "You’ve been waiting a few minutes. Your request remains open for a " + person + " to accept.", wait,
+    message: "You’ve been waiting a few minutes. Your request remains open for a " + person + " to accept." + deadline, wait,
   } : {
     kind: "waiting", title: "Waiting for a " + person,
-    message: "Your request is open. We’ll update this booking when a " + person + " accepts.", wait,
+    message: "Your request is open. We’ll update this booking when a " + person + " accepts." + deadline, wait,
   };
 }
 

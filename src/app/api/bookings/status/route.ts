@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       take: 100,
       select: {
         id: true, refCode: true, type: true, status: true, updatedAt: true,
-        createdAt: true, dropoffLabel: true, etaMinutes: true, riderId: true,
+        createdAt: true, cancellationReason: true, scheduledAt: true, dropoffLabel: true, etaMinutes: true, riderId: true,
         rider: { select: riderSelect },
         // Coordinates are needed only while the tracking dialog is open.
         ...(onlyTracked ? { liveLocation: { select: { lat: true, lng: true, createdAt: true } } } : {}),

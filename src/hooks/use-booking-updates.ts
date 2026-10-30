@@ -27,7 +27,7 @@ export function useBookingUpdates<T extends Update>(userId: string, type: string
     baseline.current = null;
     startedAt.current = new Date().toISOString();
   }, [userId, type]);
-  useVisiblePoll(userId ? `${userId}:${type}` : "", async (signal) => {
+  const connection = useVisiblePoll(userId ? `${userId}:${type}` : "", async (signal) => {
       try {
         let bookings: T[];
         if (cache.current === null) {
@@ -63,5 +63,5 @@ export function useBookingUpdates<T extends Update>(userId: string, type: string
         return bookings.some(booking => isActiveBooking(booking.status)) ? undefined : 30000;
       } catch (error) { if (!signal.aborted) setOffline(true); throw error; }
   });
-  return { lastChecked, offline };
+  return { lastChecked, offline: offline || connection.status === "reconnecting" || connection.status === "offline" };
 }

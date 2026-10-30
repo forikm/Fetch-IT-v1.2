@@ -2,7 +2,8 @@
 const test = require("node:test"), assert = require("node:assert/strict"), fs = require("node:fs"), path = require("node:path"), ts = require("typescript");
 const root = path.resolve(__dirname, "..");
 function compile(file) { return ts.transpileModule(fs.readFileSync(path.join(root, file), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText; }
-const logic = {}; new Function("exports", compile("src/lib/booking-wait.ts"))(logic);
+const expiry = {}; new Function("exports", compile("src/lib/job-expiry.ts"))(expiry);
+const logic = {}; new Function("exports", "require", compile("src/lib/booking-wait.ts"))(logic, name => { if (name === "./job-expiry") return expiry; throw Error(name); });
 const compiled = compile("src/components/fetchit/customer/booking-wait-status.tsx");
 const jsx = { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
 const nodes = node => !node || typeof node !== "object" ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
