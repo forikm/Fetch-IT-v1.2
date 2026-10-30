@@ -189,3 +189,32 @@ test("password-reset codes replace Firebase reset links and return to login even
   assert(app.nodes().some(node => node.props?.role === "status" && /Sign in with your new password/.test(node.props.children)));
   assert.equal(progress.readAuthProgress(), null);
 });
+
+test("a signed-out customer can open recovery with an empty email and safely change the code destination", async () => {
+  const app = harness(null, { codes: true, initialMode: "login" });
+  await app.nodes().find(node => node.type === "Button" && node.props.children === "Forgot password?").props.onClick();
+  app.render();
+  assert(app.nodes().find(node => node.props?.id === "recovery-email"));
+  assert.equal(app.nodes().some(node => node.type === "EmailCodeForm"), false);
+  app.nodes().find(node => node.props?.id === "recovery-email").props.onChange({ target: { value: saved.email } });
+  app.render();
+  const form = app.nodes().find(node => node.type === "EmailCodeForm");
+  assert.equal(form.props.email, saved.email);
+  form.props.onBusyChange(true); app.render();
+  assert.equal(app.nodes().find(node => node.props?.id === "recovery-email").props.disabled, true);
+  form.props.onBusyChange(false); app.render();
+  app.nodes().find(node => node.props?.id === "recovery-email").props.onChange({ target: { value: "different@example.invalid" } }); app.render();
+  assert.equal(app.nodes().find(node => node.type === "EmailCodeForm").key, "different@example.invalid");
+  assert.equal(app.state.user, null); assert.deepEqual(app.requests, []);
+});
+test("reset-link recovery works without a signed-in session when email codes are disabled", async () => {
+  const app = harness(null, { codes: false, initialMode: "login" });
+  await app.nodes().find(node => node.type === "Button" && node.props.children === "Forgot password?").props.onClick(); app.render();
+  assert.equal(app.nodes().find(node => node.props?.children === "Send password reset link").props.disabled, true);
+  app.nodes().find(node => node.props?.id === "recovery-email").props.onChange({ target: { value: saved.email } }); app.render();
+  await app.nodes().find(node => node.props?.children === "Send password reset link").props.onClick(); app.render();
+  await new Promise(resolve => setImmediate(resolve)); app.render();
+  assert.deepEqual(app.requests, ["firebase-reset-email"]);
+  assert(app.nodes().some(node => node.props?.role === "status" && /If this email has an account/.test(node.props.children)));
+  assert.equal(app.state.user, null);
+});

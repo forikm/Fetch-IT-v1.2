@@ -1310,6 +1310,7 @@ function TrackingView({
         </Card>
       )}
 
+      <BookingActions booking={{ ...booking, status }} />
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Back to bookings</Button>
       </div>

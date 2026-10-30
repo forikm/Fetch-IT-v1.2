@@ -125,3 +125,5 @@ minutes elapse. Never use those accounts in production.
 ## Account access help
 
 The signed-out Help page includes password-reset and original-account sign-in steps. Sign-in help explains the original-account path before changing the login method. Contact channels remain hidden until real staffed details are configured; the page does not refer customers to missing contacts.
+
+Customers can open /?recover=1 directly, including from **Recover account access** on Help. Recovery accepts the account email without a session, uses email codes when enabled and reset links otherwise, and clears the active code form when its email changes. A code request in progress locks that email until it finishes. Real staffed contact details are still required for escalation beyond self-service.

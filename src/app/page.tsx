@@ -26,6 +26,10 @@ export default function Home() {
   }, [bootstrapped, user?.id, user?.role]);
 
   useEffect(() => {
+    if (bootstrapped && !user && new URLSearchParams(window.location.search).get("recover") === "1") useAppStore.getState().setView("login");
+  }, [bootstrapped, user]);
+
+  useEffect(() => {
     if (!bootstrapped || user?.role !== "CUSTOMER") return;
     const query = new URLSearchParams(window.location.search);
     const id = query.get("booking") ?? query.get("paymentBooking") ?? query.get("demoBooking");

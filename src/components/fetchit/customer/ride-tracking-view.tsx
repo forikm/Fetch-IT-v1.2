@@ -1,4 +1,5 @@
 "use client";
+import { CustomerPickupProgress } from "./pickup-progress";
 import { RiderProfile } from "../shared/rider-profile";
 
 import { Navigation, Phone, Calculator, ShieldCheck } from "lucide-react";
@@ -89,7 +90,7 @@ export function RideTrackingView({
         </Card>
       ) : null}
 
-      {status === "ACCEPTED" && <p role="status" className="rounded-xl border bg-muted/30 p-3 text-sm">Pickup arrival estimate is unavailable. The estimated trip duration below is the travel time from pickup to drop-off.</p>}
+      {status === "ACCEPTED" && <CustomerPickupProgress key={ride.id} bookingId={ride.id} />}
       {status === "ACCEPTED" && ride.rider && <RidePickupOtp key={`${ride.id}:${ride.riderId}`} bookingId={ride.id} />}
       {["PICKED_UP", "IN_TRANSIT", "DELIVERED"].includes(status) && <p className="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="h-4 w-4" /> Passenger pickup completed</p>}
 

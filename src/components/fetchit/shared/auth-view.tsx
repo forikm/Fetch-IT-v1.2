@@ -74,7 +74,13 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
   const [pendingName, setPendingName] = useState<{ uid: string; name: string } | null>(null);
   const [legacyLogin, setLegacyLogin] = useState(false);
   const [loginHelp, setLoginHelp] = useState(false);
-  const [resetActive, setResetActive] = useState(false);
+  const [resetActive, setResetActive] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("recover") === "1");
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("recover") === "1") {
+      const url = new URL(window.location.href); url.searchParams.delete("recover");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    }
+  }, []);
   const [verificationChallenge, setVerificationChallenge] = useState<CodeChallenge | null>(null);
   const [codeBusy, setCodeBusy] = useState(false);
   const codePending = useRef(false);
@@ -303,13 +309,17 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     }
   }
 
-  async function resetPassword() {
+  function resetPassword() {
+    if (requestPending.current) return;
+    setResetActive(true); setError(null); setNotice(null);
+  }
+
+  async function sendResetLink() {
     if (requestPending.current) return;
     if (!email.trim()) {
       setError("Enter your email first, then select Forgot password.");
       return;
     }
-    if (EMAIL_CODES_ENABLED) { setResetActive(true); setError(null); setNotice(null); return; }
     if (!beginRequest()) return;
     try {
       await sendPasswordResetEmail(getCustomerAuth(), email.trim());
@@ -400,7 +410,9 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
             </CardHeader>
             <CardContent className="min-w-0 px-4 sm:px-6">
               {resetActive ? <div className="space-y-3">
-                <EmailCodeForm purpose="reset" email={email.trim()} onBusyChange={busy => { codePending.current = busy; setCodeBusy(busy); }} onSend={() => emailCodeRequest("/api/auth/password-reset/send", { email: email.trim() })}
+                <p className="text-sm text-muted-foreground">Enter your account email to recover access. You don’t need to sign in first.</p>
+                <div className="space-y-2"><Label htmlFor="recovery-email">Account email</Label><Input id="recovery-email" type="email" autoComplete="email" value={email} disabled={loading || codeBusy} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></div>
+                {EMAIL_CODES_ENABLED && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && <EmailCodeForm key={email.trim()} purpose="reset" email={email.trim()} onBusyChange={busy => { codePending.current = busy; setCodeBusy(busy); }} onSend={() => emailCodeRequest("/api/auth/password-reset/send", { email: email.trim() })}
                   onConfirm={async (challengeId, code, password) => {
                     await emailCodeRequest("/api/auth/password-reset/confirm", { challengeId, code, password });
                     try { if (getCustomerAuth().currentUser) await signOut(getCustomerAuth()); }
@@ -408,8 +420,12 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                     setPassword(""); setResetActive(false); setPendingVerification(false); setVerificationChallenge(null);
                     setFirebaseUid(null); setEmailVerified(false); setVerificationSent(false); setPendingName(null); clearAuthProgress();
                     setMode("login"); setNotice("Password updated. Sign in with your new password."); setError(null);
-                  }} />
-                <Button variant="ghost" className="w-full" disabled={codeBusy} onClick={() => { if (!codePending.current) setResetActive(false); }}>Back to sign in</Button>
+                  }} />}
+                {!EMAIL_CODES_ENABLED && <Button type="button" className="w-full" disabled={loading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())} onClick={() => void sendResetLink()}>{loading ? "Sending reset link…" : "Send password reset link"}</Button>}
+                {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+                {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
+                <p className="text-xs text-muted-foreground">Check your inbox and spam folder. Recovery instructions are sent only if the email has an account.</p>
+                <Button variant="ghost" className="w-full" disabled={codeBusy || loading} onClick={() => { if (!codePending.current) setResetActive(false); }}>Back to sign in</Button>
               </div> : pendingVerification ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">{emailVerified ? "Your email is verified. Continue below if signup has not finished automatically." : EMAIL_CODES_ENABLED ? "Your signup is saved. Verify your email with the code below." : verificationSent ? "Open the email link, then return here. We’ll check verification when you return; your progress is saved." : "Your signup is saved. Send a verification email below, then open its link and return here."}</p>
