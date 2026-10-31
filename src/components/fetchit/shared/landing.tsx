@@ -63,30 +63,30 @@ export function LandingView() {
           onLogin={(mode) => user ? chooseMode(mode) : beginService(mode, "login")}
           onSetupPlaces={() => user ? setView("onboarding") : pickRole("CUSTOMER", "signup")}
         />
-        <div className="hidden border-y border-foreground/5 bg-white/50 dark:bg-card/50 sm:block">
+        <div className="border-y border-foreground/5 bg-white/50 dark:bg-card/50">
           <div className="mx-auto grid max-w-7xl grid-cols-2 gap-5 px-4 py-6 text-xs font-medium text-muted-foreground sm:grid-cols-4 sm:px-6 sm:text-sm lg:px-8">
             {[{ icon: Package, text: "Deliveries" }, { icon: Car, text: "Rides" }, { icon: Navigation, text: "Tracking" }, { icon: ShieldCheck, text: "Delivery confirmation" }].map(({ icon: Icon, text: label }) => <div key={label} className="flex items-center justify-center gap-2"><Icon className="h-4 w-4 shrink-0 text-foreground/60" />{label}</div>)}
           </div>
         </div>
-        <section id="services" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-10 sm:px-6 sm:py-24 lg:px-8">
-          <h2 className="section-title mb-5 sm:mb-9">Our services</h2>
+        <section id="services" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+          <h2 className="section-title mb-9">Our services</h2>
           <div className="grid gap-5 md:grid-cols-2"><ServiceCard kind="delivery" onStart={() => user ? chooseMode("delivery") : beginService("delivery", "login")} /><ServiceCard kind="ride" onStart={() => user ? chooseMode("ride") : beginService("ride", "login")} /></div>
           {demoEnabled && seeded && <div className="mt-6 text-center"><Button variant="ghost" size="sm" onClick={tryDemo}><Play className="h-3.5 w-3.5" />Try demo</Button></div>}
         </section>
         <section id="about-us" className="scroll-mt-24 bg-card">
-          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-24 lg:px-8">
-            <h2 className="section-title mb-6 sm:mb-12">Booking features</h2>
-            <div className="grid gap-5 md:grid-cols-3 md:gap-12">{FEATURES.map(({ icon: Icon, title, desc }, i) => <div key={title} className="border-t border-border pt-6"><div className="mb-3 flex items-center justify-between"><Icon className="h-6 w-6 text-primary" /><span className="font-mono text-xs text-muted-foreground">0{i + 1}</span></div><h3 className="text-xl font-semibold tracking-tight">{title}</h3><p className="mt-3 text-base leading-7 text-muted-foreground">{desc}</p></div>)}</div>
+          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+            <h2 className="section-title mb-12">Booking features</h2>
+            <div className="grid gap-8 md:grid-cols-3 md:gap-12">{FEATURES.map(({ icon: Icon, title, desc }, i) => <div key={title} className="border-t border-border pt-6"><div className="mb-6 flex items-center justify-between"><Icon className="h-6 w-6 text-primary" /><span className="font-mono text-xs text-muted-foreground">0{i + 1}</span></div><h3 className="text-xl font-semibold tracking-tight">{title}</h3><p className="mt-3 text-sm leading-7 text-muted-foreground">{desc}</p></div>)}</div>
           </div>
         </section>
-        <section id="how-it-works" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-10 sm:px-6 sm:py-24 lg:px-8">
+        <section id="how-it-works" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
           <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
             <h2 className="section-title">How it works</h2>
-            <div>{[{ title: "Sign in", text: "Choose Delivery or Ride." }, { title: "Set your route", text: "Choose pickup, drop-off and vehicle. Review your fare." }, { title: "Confirm your booking", text: "Track progress after a rider accepts." }].map((step, i) => <div key={step.title} className="flex gap-5 border-b border-border py-6 first:pt-0 last:border-0"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-foreground text-sm text-background">0{i + 1}</span><div><h3 className="text-lg font-semibold tracking-tight">{step.title}</h3><p className="mt-2 text-base leading-relaxed text-muted-foreground">{step.text}</p></div></div>)}</div>
+            <div>{[{ title: "Sign in", text: "Choose Delivery or Ride." }, { title: "Set your route", text: "Choose pickup, drop-off and vehicle. Review your fare." }, { title: "Confirm your booking", text: "Track progress after a rider accepts." }].map((step, i) => <div key={step.title} className="flex gap-5 border-b border-border py-6 first:pt-0 last:border-0"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-foreground text-sm text-background">0{i + 1}</span><div><h3 className="text-lg font-semibold tracking-tight">{step.title}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.text}</p></div></div>)}</div>
           </div>
         </section>
         <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
-          <div className="relative hidden overflow-hidden rounded-[2rem] bg-[#163c34] px-6 py-12 text-white sm:block sm:px-12 sm:py-16"><div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-96 w-96 rounded-full border-[50px] border-white/5" /><div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-center"><h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Ready to book?</h2><Button size="lg" onClick={start} className="self-start md:self-auto">{user ? "Dashboard" : "Sign in"} <ArrowRight /></Button></div></div>
+          <div className="relative overflow-hidden rounded-[2rem] bg-[#163c34] px-6 py-12 text-white sm:px-12 sm:py-16"><div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-96 w-96 rounded-full border-[50px] border-white/5" /><div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-center"><h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Ready to book?</h2><Button size="lg" onClick={start} className="self-start md:self-auto">{user ? "Dashboard" : "Sign in"} <ArrowRight /></Button></div></div>
         </section>
         <section id="contact-us" aria-label="Contact Us" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-16 sm:px-6 lg:px-8"><div className="rounded-2xl border bg-card p-6 sm:p-8"><h2 className="mb-5 text-2xl font-semibold">Help and support</h2><Button asChild className="mb-5"><Link href="/help">Get help <ArrowRight /></Link></Button><SupportContact /></div></section>
       </main>
@@ -99,12 +99,12 @@ function ServiceCard({ kind, onStart }: { kind: "delivery" | "ride"; onStart: ()
   const delivery = kind === "delivery";
   const Icon = delivery ? Package : Car;
   return (
-    <div className={cn("group relative overflow-hidden rounded-[1.75rem] p-4 sm:p-9", delivery ? "bg-[#f5e8d9] text-[#48341f] dark:bg-[#38271f] dark:text-[#ffcfad]" : "bg-[#e0ebe3] text-[#163c34] dark:bg-[#1c3d2d] dark:text-[#e6f1e9]")}>
+    <div className={cn("group relative overflow-hidden rounded-[1.75rem] p-6 sm:p-9", delivery ? "bg-[#f5e8d9] text-[#48341f]" : "bg-[#e0ebe3] text-[#163c34]")}>
       <div className="flex items-start justify-between gap-4"><span className="rounded-full border border-current/15 px-3 py-1 text-xs font-medium">{delivery ? "Delivery" : "Ride"}</span><Icon className="h-10 w-10 stroke-[1.3] sm:h-14 sm:w-14" /></div>
-      <h3 className="mt-4 text-2xl font-semibold tracking-tight sm:mt-10 sm:text-3xl">{delivery ? "Send a package" : "Book a ride"}</h3>
-      <p className="mt-2 max-w-sm text-base leading-relaxed opacity-85 sm:mt-4">{delivery ? "Choose a vehicle and pickup time." : "Choose a vehicle and review your fare."}</p>
-      <div className="mt-4 flex flex-wrap gap-2 text-xs sm:mt-6">{["Motorcycle", "Tricycle", "Car"].map((item) => <span key={item} className="rounded-full bg-white/40 px-3 py-1.5 dark:bg-black/20">{item}</span>)}</div>
-      <button type="button" onClick={onStart} className="mt-4 inline-flex min-h-12 w-full items-center justify-between gap-3 rounded-xl text-base font-semibold sm:mt-9 sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{delivery ? "Book a delivery" : "Book a ride"}<span className="grid h-9 w-9 place-items-center rounded-full bg-white/60 transition group-hover:translate-x-1"><ArrowRight className="h-4 w-4" /></span></button>
+      <h3 className="mt-10 text-3xl font-semibold tracking-tight">{delivery ? "Send a package" : "Book a ride"}</h3>
+      <p className="mt-4 max-w-sm text-sm leading-7 opacity-75">{delivery ? "Choose a vehicle and pickup time." : "Choose a vehicle and review your fare."}</p>
+      <div className="mt-6 flex flex-wrap gap-2 text-xs">{["Motorcycle", "Tricycle", "Car"].map((item) => <span key={item} className="rounded-full bg-white/40 px-3 py-1.5">{item}</span>)}</div>
+      <button type="button" onClick={onStart} className="mt-9 inline-flex items-center gap-3 rounded-md text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{delivery ? "Book a delivery" : "Book a ride"}<span className="grid h-9 w-9 place-items-center rounded-full bg-white/60 transition group-hover:translate-x-1"><ArrowRight className="h-4 w-4" /></span></button>
     </div>
   );
 }
