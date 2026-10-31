@@ -497,6 +497,8 @@ function BookingForm({
       currency: string;
     };
     etaMinutes: number;
+    routeQuote?: string;
+    routingSource?: "openrouteservice" | "estimate";
   } | null>(null);
   const [estimating, setEstimating] = useState(false);
   const fareSequence = useRef(0);
@@ -661,6 +663,7 @@ function BookingForm({
     setSubmitting(true);
     try {
       const body = JSON.stringify({
+          routeQuote: estimate.routeQuote,
           paymentMethod,
           type: bookingType,
           passengers: isRide ? Number(passengers) : undefined,
@@ -673,7 +676,8 @@ function BookingForm({
       });
       // Reuse the key after a lost response, including after reopening this
       // saved draft. Changed details start a separate explicit request.
-      const submission = pendingSubmission?.body === body ? pendingSubmission : { key: crypto.randomUUID(), body };
+      const sameDetails = (value: string) => { const parsed = JSON.parse(value); delete parsed.routeQuote; return JSON.stringify(parsed); };
+      const submission = { key: pendingSubmission && sameDetails(pendingSubmission.body) === sameDetails(body) ? pendingSubmission.key : crypto.randomUUID(), body };
       setPendingSubmission(submission);
       const res = await fetch("/api/bookings", {
         method: "POST",
@@ -970,7 +974,7 @@ function BookingForm({
                   </div>
                 ) : estimate ? (
                   <div className="space-y-3">
-                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span>{estimate.distanceKm} km</span><span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {routeTimeLabel(bookingType)}: about {estimate.etaMinutes} min</span></p>
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span>{estimate.distanceKm} km · {estimate.routingSource === "openrouteservice" ? "Road route" : "Estimated distance"}</span><span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {routeTimeLabel(bookingType)}: about {estimate.etaMinutes} min</span></p>
                     <details>
                       <summary className="cursor-pointer text-sm font-medium">View fare breakdown</summary>
                       <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
@@ -1025,6 +1029,7 @@ function BookingForm({
 
       {/* Navigation */}
       <div className="shrink-0 space-y-3 border-t bg-background px-4 py-3 sm:px-6">
+      {error && /fare.*refresh|refresh.*fare/i.test(error) && <Button type="button" variant="outline" disabled={estimating || submitting} onClick={()=>void fetchEstimate()}>Refresh fare</Button>}
       {step === 3 && <div aria-live="polite" className="flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">Total fare</span><strong className="text-2xl">{estimate ? formatPeso(estimate.fare.totalFare) : estimating ? "Calculating…" : "—"}</strong></div>}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">
         <Button
@@ -1137,6 +1142,7 @@ function TrackingView({
       {/* Map */}
       <div className="relative rounded-xl overflow-hidden border bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:from-amber-950/30 dark:via-orange-950/30 dark:to-amber-900/30 aspect-[16/10]">
         <LiveTrackingMap
+          vehicleClass={booking.vehicleClass}
           pickup={pickup}
           dropoff={dropoff}
           rider={

@@ -3,12 +3,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const root = path.resolve(__dirname, "..");
-const commonFiles = ["prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/booking-events.ts", "src/lib/customer-notifications.ts", "src/lib/push-delivery.ts", "src/lib/push-input.ts", "src/lib/session-secret.ts", "src/lib/request-guard.ts", "src/lib/password-policy.ts", "src/lib/payment-policy.ts", "src/lib/payments.ts", "src/lib/demo-payments.ts", "src/lib/dispatch.ts", "src/lib/job-expiry.ts", "src/lib/rider-push-tasks.ts", "prisma/migrations/202610300001_rider_push_tasks/migration.sql"];
+const commonFiles = ["prisma/migrations/202610310001_road_routing/migration.sql", "prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/booking-events.ts", "src/lib/customer-notifications.ts", "src/lib/push-delivery.ts", "src/lib/push-input.ts", "src/lib/session-secret.ts", "src/lib/request-guard.ts", "src/lib/password-policy.ts", "src/lib/payment-policy.ts", "src/lib/payments.ts", "src/lib/demo-payments.ts", "src/lib/dispatch.ts", "src/lib/job-expiry.ts", "src/lib/rider-push-tasks.ts", "prisma/migrations/202610300001_rider_push_tasks/migration.sql"];
 commonFiles.push('src/lib/local-demo-runtime.ts', 'src/lib/local-demo-files.ts', 'src/lib/application-demo-mode.ts', 'src/hooks/use-local-demo.ts', 'src/hooks/use-visible-poll.ts');
 commonFiles.push('prisma/migrations/202610280001_rider_application_demo/migration.sql');
 commonFiles.push('prisma/migrations/202610280002_application_document_names/migration.sql');
 commonFiles.push("src/lib/booking-receipt.ts", "src/lib/receipt-email.ts", "prisma/migrations/202610290001_browser_gps_receipts/migration.sql");
-const riderFiles = ["src/lib/application-applicant-api.ts", "src/lib/application-upload.ts", "src/lib/delivery-challenge.ts", "src/lib/ticket.ts", "src/hooks/use-visible-poll.ts", "src/components/fetchit/shared/payment-card.tsx"];
+const riderFiles = ["src/lib/service-area.ts", "public/service-area-data.json", "src/lib/road-routing.ts", "src/lib/road-routing-service.ts", "src/lib/application-applicant-api.ts", "src/lib/application-upload.ts", "src/lib/delivery-challenge.ts", "src/lib/ticket.ts", "src/hooks/use-visible-poll.ts", "src/components/fetchit/shared/payment-card.tsx"];
 riderFiles.push('src/components/ui/password-input.tsx', 'src/lib/rider-profile.ts', 'src/components/fetchit/shared/rider-profile.tsx');
 commonFiles.push("src/lib/rider-application-policy.ts", "src/lib/rider-eligibility.ts");
 const onboardingFiles = ["src/lib/rider-application.ts", "src/lib/application-storage.ts", "src/lib/application-mail.ts", "src/lib/application-staff-api.ts", "src/lib/application-queue.ts"];

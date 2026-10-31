@@ -2,7 +2,8 @@
 //
 // Pricing model (all amounts in PHP):
 //
-//   roadKm        = haversine(pickup, dropoff) * ROAD_DISTANCE_FACTOR
+//   roadKm        = validated ORS road distance when supplied; otherwise a
+//                   clearly labelled haversine estimate * ROAD_DISTANCE_FACTOR
 //   distanceFare  = km beyond the vehicle's includedKm, charged at perKm,
 //                   stepping down to longHaulPerKm past LONG_HAUL_THRESHOLD_KM
 //   weightFare    = kg above the vehicle's freeWeightKg, charged at perKgOverFree
@@ -157,10 +158,11 @@ export function quoteFare(params: {
   cargoWeightKg: number;
   when?: Date;
   settings?: PlatformSettings;
+  route?: { distanceKm: number; durationSeconds: number };
 }): Quote {
   const vehicle = { ...VEHICLES[params.vehicleClass], ...params.settings?.fares[params.vehicleClass] };
   const straightLineKm = round2(haversineKm(params.pickup, params.dropoff));
-  const distanceKm = roadDistanceKm(params.pickup, params.dropoff);
+  const distanceKm = params.route ? round2(params.route.distanceKm) : roadDistanceKm(params.pickup, params.dropoff);
   const surgeMultiplier = params.settings ? configuredSurge(params.settings, params.when) : computeSurgeMultiplier(params.when ?? new Date());
 
   const fare = computeFare({
@@ -175,7 +177,7 @@ export function quoteFare(params: {
     straightLineKm,
     surgeMultiplier,
     fare,
-    etaMinutes: etaMinutes(distanceKm, vehicle.speedKph, vehicle.handlingMinutes),
+    etaMinutes: params.route ? Math.max(1, Math.round(params.route.durationSeconds / 60 + vehicle.handlingMinutes)) : etaMinutes(distanceKm, vehicle.speedKph, vehicle.handlingMinutes),
     vehicle,
   };
 }
@@ -200,10 +202,11 @@ export function quoteRideFare(params: {
   vehicleClass: VehicleClass;
   when?: Date;
   settings?: PlatformSettings;
+  route?: { distanceKm: number; durationSeconds: number };
 }): RideQuote {
   const vehicle = { ...VEHICLES[params.vehicleClass], ...params.settings?.fares[params.vehicleClass] };
   const straightLineKm = round2(haversineKm(params.pickup, params.dropoff));
-  const distanceKm = roadDistanceKm(params.pickup, params.dropoff);
+  const distanceKm = params.route ? round2(params.route.distanceKm) : roadDistanceKm(params.pickup, params.dropoff);
   const surgeMultiplier = params.settings ? configuredSurge(params.settings, params.when) : computeSurgeMultiplier(params.when ?? new Date());
 
   const fare = computeFare({
@@ -219,7 +222,7 @@ export function quoteRideFare(params: {
     surgeMultiplier,
     fare,
     // No loading/paperwork overhead for rides — pickup is just boarding.
-    etaMinutes: etaMinutes(distanceKm, vehicle.speedKph, 0),
+    etaMinutes: params.route ? Math.max(1, Math.round(params.route.durationSeconds / 60)) : etaMinutes(distanceKm, vehicle.speedKph, 0),
     vehicle,
   };
 }

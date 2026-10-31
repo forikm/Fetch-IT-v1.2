@@ -21,7 +21,8 @@ import {
   PASSENGER_CAPACITY,
   type VehicleClass,
 } from "@/lib/constants";
-import { quoteFare, quoteRideFare } from "@/lib/fare";
+import { confirmedRoadQuote } from "@/lib/road-quote";
+import { RoutingError } from "@/lib/road-routing";
 import { omitTicket } from "@/lib/ticket";
 import { bookingAttemptId, findBookingAttempt, createBookingWithRetry } from "@/lib/booking-create";
 import { PAYMENT_METHOD_LABEL, isDemoPayment, type PaymentMethod } from "@/lib/payment-policy";
@@ -193,7 +194,8 @@ async function handlePOST(req: NextRequest) {
         );
       }
 
-      const quote = quoteRideFare({
+      const quote = await confirmedRoadQuote(body.routeQuote, session.uid, {
+        type: "RIDE", passengers: pax, scheduledAt: scheduledDate,
         settings,
         pickup,
         dropoff,
@@ -242,7 +244,8 @@ async function handlePOST(req: NextRequest) {
       );
     }
 
-    const quote = quoteFare({
+    const quote = await confirmedRoadQuote(body.routeQuote, session.uid, {
+      type: "DELIVERY", scheduledAt: scheduledDate,
       settings,
       pickup,
       dropoff,
@@ -278,6 +281,7 @@ async function handlePOST(req: NextRequest) {
       etaMinutes: eta,
     });
   } catch (err) {
+    if (err instanceof RoutingError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
     if (err instanceof RateLimitError) throw err;
     if (err instanceof CustomerError) return customerErrorResponse(err);
     console.error("[bookings POST] error", { code: safeErrorCode(err) });

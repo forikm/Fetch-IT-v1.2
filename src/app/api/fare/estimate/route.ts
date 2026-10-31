@@ -11,7 +11,10 @@
 // Returns the FareBreakdown + distanceKm + etaMinutes.
 
 import { NextRequest, NextResponse } from "next/server";
-import { quoteFare, quoteRideFare } from "@/lib/fare";
+import { newRoadQuote } from "@/lib/road-quote";
+import { RoutingError } from "@/lib/road-routing";
+import { requireCustomer } from "@/lib/customer-access";
+import { limitRequests, RateLimitError } from "@/lib/request-guard";
 import { VEHICLES, isBookingVehicle, PASSENGER_CAPACITY, type VehicleClass } from "@/lib/constants";
 import { withRequestLog, safeErrorCode } from "@/lib/request-guard";
 import { parsePickupSchedule } from "@/lib/pickup-schedule";
@@ -20,6 +23,8 @@ import { bookingServiceAreaError } from "@/lib/service-area";
 
 async function handlePOST(req: NextRequest) {
   try {
+    const session = await requireCustomer();
+    await limitRequests("customer:fare", session.uid, 30, 60000);
     const body = await req.json();
     const {
       type = "DELIVERY",
@@ -69,8 +74,9 @@ async function handlePOST(req: NextRequest) {
       if (!Number.isInteger(pax) || pax < 1 || pax > capacity) {
         return NextResponse.json({ error: `Choose 1${capacity > 1 ? `–${capacity}` : ""} passenger${capacity > 1 ? "s" : ""} for ${VEHICLES[vehicleClass].label}.` }, { status: 400 });
       }
-      const quote = quoteRideFare({ pickup, dropoff, vehicleClass, when, settings });
+      const quote = await newRoadQuote(session.uid, { type: "RIDE", pickup, dropoff, vehicleClass, passengers: pax, when, scheduledAt: scheduledAt ? when : null, settings });
       return NextResponse.json({
+        routeQuote: quote.routeQuote, routingSource: quote.routingSource,
         distanceKm: quote.distanceKm,
         straightLineKm: quote.straightLineKm,
         surgeMultiplier: quote.surgeMultiplier,
@@ -102,7 +108,8 @@ async function handlePOST(req: NextRequest) {
       );
     }
 
-    const quote = quoteFare({
+    const quote = await newRoadQuote(session.uid, {
+      type: "DELIVERY", scheduledAt: scheduledAt ? when : null,
       settings,
       pickup,
       dropoff,
@@ -112,6 +119,7 @@ async function handlePOST(req: NextRequest) {
     });
 
     return NextResponse.json({
+      routeQuote: quote.routeQuote, routingSource: quote.routingSource,
       distanceKm: quote.distanceKm,
       straightLineKm: quote.straightLineKm,
       surgeMultiplier: quote.surgeMultiplier,
@@ -126,6 +134,9 @@ async function handlePOST(req: NextRequest) {
       },
     });
   } catch (err) {
+    if (err instanceof RateLimitError) throw err;
+    if (err instanceof RoutingError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
+    if (err && typeof err === "object" && "status" in err && typeof err.status === "number") return NextResponse.json({error: err instanceof Error ? err.message : "Fare unavailable."}, {status: err.status});
     console.error("[fare/estimate] error", { code: safeErrorCode(err) });
     return NextResponse.json(
       { error: "Failed to compute fare." },

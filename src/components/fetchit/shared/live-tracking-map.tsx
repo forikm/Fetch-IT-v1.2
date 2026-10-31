@@ -18,6 +18,7 @@ export function LiveTrackingMap({
   rider,
   customer = null,
   preview = false,
+  vehicleClass = 'SEDAN',
   className = "h-full w-full",
 }: {
   pickup: Point;
@@ -25,6 +26,7 @@ export function LiveTrackingMap({
   rider: Point | null;
   customer?: Point | null;
   preview?: boolean;
+  vehicleClass?: string;
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -93,7 +95,7 @@ export function LiveTrackingMap({
     // Pickup/drop-off belong to one booking and do not change while mounted.
   }, [pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, attempt, preview]);
 
-  const road = useRoadRoute(mapRef, ready, pickup, dropoff, [rider, customer], mapVersion);
+  const road = useRoadRoute(mapRef, ready, pickup, dropoff, [rider, customer], mapVersion, vehicleClass);
 
   useEffect(() => {
     const map = mapRef.current;

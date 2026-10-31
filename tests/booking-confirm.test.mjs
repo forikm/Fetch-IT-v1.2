@@ -122,3 +122,9 @@ test("each simulated method opens checkout and retains its draft until payment c
     }
   }
 });
+
+test('refreshing a signed route quote keeps the original logical booking retry key',async()=>{
+ const calls=[];const first=fixture(async(_,options)=>{calls.push(options);throw Error('Failed to fetch');});first.estimate={routeQuote:'first-quote'};await first.handleConfirmBooking();
+ const retry=fixture(async(_,options)=>{calls.push(options);return success();},first.pendingSubmission);retry.estimate={routeQuote:'refreshed-quote'};await retry.handleConfirmBooking();
+ assert.equal(calls[0].headers['Idempotency-Key'],calls[1].headers['Idempotency-Key']);assert.equal(JSON.parse(calls[1].body).routeQuote,'refreshed-quote');
+});

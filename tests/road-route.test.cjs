@@ -1,41 +1,14 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),ts=require("typescript");
-const compile=file=>ts.transpileModule(fs.readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-const helperSource=compile("src/lib/road-route.ts"),hookSource=compile("src/hooks/use-road-route.ts");
-const pickup={lat:16.0206,lng:120.2321},dropoff={lat:16.0277,lng:120.2299};
-const bend={lat:16.023,lng:120.2303},path=[pickup,bend,dropoff];
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+const compile=file=>ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const helperSource=compile('src/lib/road-route.ts'),hookSource=compile('src/hooks/use-road-route.ts');
+const pickup={lat:16.0206,lng:120.2321},dropoff={lat:16.0277,lng:120.2299},bend={lat:16.023,lng:120.2303},path=[pickup,bend,dropoff];
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-function service(compute){
- const exports={},calls=[],timers=new Map();let next=0;
- new Function("exports","window","setTimeout","clearTimeout",helperSource)(exports,{google:{maps:{importLibrary:async name=>{assert.equal(name,"routes");return{Route:{computeRoutes:async request=>{calls.push(request);return compute(request);}}};}}}},
- callback=>{timers.set(++next,callback);return next;},id=>timers.delete(id));
- return{...exports,calls,timers};
-}
-test("requests a driving road path and shares simultaneous preview/tracking calls",async()=>{
- let release;const app=service(()=>new Promise(resolve=>{release=resolve;}));
- const first=app.requestRoadRoute(pickup,dropoff),second=app.requestRoadRoute({...pickup},{...dropoff});
- assert.equal(first,second);await flush();assert.equal(app.calls.length,1);
- assert.deepEqual(app.calls[0],{origin:pickup,destination:dropoff,travelMode:"DRIVING",fields:["path","warnings"]});
- release({routes:[{path,warnings:["Check local road restrictions."]}]});
- assert.deepEqual(await first,{path,warnings:["Check local road restrictions."]});assert.equal(app.timers.size,0);
-});
-test("routing failure can retry and never fabricates a straight-line route",async()=>{
- let fails=true;const app=service(()=>fails?{routes:[]}:{routes:[{path}]});
- await assert.rejects(app.requestRoadRoute(pickup,dropoff),/No road route/);
- fails=false;assert.deepEqual((await app.requestRoadRoute(pickup,dropoff)).path,path);assert.equal(app.calls.length,2);
-});
-test("invalid points and malformed returned geometry do not render a route",async()=>{
- const app=service(()=>({routes:[{path:[pickup,{lat:NaN,lng:0}]}]}));
- await assert.rejects(app.requestRoadRoute({lat:91,lng:0},dropoff),/Invalid/);assert.equal(app.calls.length,0);
- await assert.rejects(app.requestRoadRoute(pickup,dropoff),/No road route/);
-});
-test("a timed-out request is cleared and its late response cannot replace a retry",async()=>{
- let release,first=true;const app=service(()=>first?(first=false,new Promise(resolve=>{release=resolve;})):{routes:[{path}]});
- const slow=app.requestRoadRoute(pickup,dropoff);await flush();
- const rejected=assert.rejects(slow,/timed out/);[...app.timers.values()][0]();await rejected;
- assert.deepEqual((await app.requestRoadRoute(pickup,dropoff)).path,path);
- release({routes:[{path:[pickup,dropoff]}]});await flush();assert.equal(app.timers.size,0);
-});
+function service(handler){const exports={},calls=[];new Function('exports','fetch','AbortController','setTimeout','clearTimeout',helperSource)(exports,async(url,options)=>{calls.push({url,options});return handler(url,options);},AbortController,setTimeout,clearTimeout);return{...exports,calls};}
+const success=()=>Response.json({route:{coordinates:path.map(p=>[p.lng,p.lat])}});
+test('uses the server ORS endpoint, forwards vehicle and shares concurrent calls',async()=>{let release;const app=service(()=>new Promise(r=>release=r));const a=app.requestRoadRoute(pickup,dropoff,'TRICYCLE'),b=app.requestRoadRoute(pickup,dropoff,'TRICYCLE');assert.equal(a,b);await flush();assert.equal(app.calls.length,1);assert.equal(app.calls[0].url,'/api/road-route');assert.equal(JSON.parse(app.calls[0].options.body).vehicleClass,'TRICYCLE');release(success());assert.deepEqual((await a).path,path);});
+test('routing errors are retryable and never draw an invented straight-line path',async()=>{let fail=true;const app=service(()=>fail?Response.json({error:'Free routing limit reached.'},{status:429}):success());await assert.rejects(app.requestRoadRoute(pickup,dropoff),/limit reached/);fail=false;assert.deepEqual((await app.requestRoadRoute(pickup,dropoff)).path,path);assert.equal(app.calls.length,2);});
+test('invalid points and malformed response geometry fail closed',async()=>{const app=service(()=>Response.json({route:{coordinates:[[NaN,0],[1,2]]}}));await assert.rejects(app.requestRoadRoute({lat:91,lng:0},dropoff),/Invalid/);assert.equal(app.calls.length,0);await assert.rejects(app.requestRoadRoute(pickup,dropoff),/No road route/);});
 function hook(request){
  let index=0,queue=[],tree,props={pickup,dropoff,extraPoints:[],ready:true,mapVersion:1};
  const slots=[],effects=new Map(),lines=[],fits=[];let requests=0;

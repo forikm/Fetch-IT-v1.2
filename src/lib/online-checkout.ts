@@ -17,7 +17,8 @@ function fingerprint(body: unknown): string {
   // Reordered JSON fields must not invalidate a retry with identical details.
   const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object"
     ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)])) : value;
-  return createHash("sha256").update(JSON.stringify(canonical(body))).digest("hex");
+  const stable = body && typeof body === "object" ? Object.fromEntries(Object.entries(body).filter(([key])=>key !== "routeQuote")) : body;
+  return createHash("sha256").update(JSON.stringify(canonical(stable))).digest("hex");
 }
 
 export async function prepareOnlineCheckout(db: PrismaClient, data: BookingInput, body: unknown) {
@@ -34,6 +35,8 @@ export async function prepareOnlineCheckout(db: PrismaClient, data: BookingInput
     const draft = await tx.checkoutDraft.findUniqueOrThrow({ where: { id } });
     if (draft.customerId !== data.customerId || draft.requestHash !== requestHash) throw new CustomerError("This checkout request was already used for different details. Start a new request.", 409);
     if (draft.bookingId) return { bookingId: draft.bookingId };
+    const previousFare = (draft.bookingData as { totalFare?: unknown }).totalFare;
+    if (Number(previousFare) !== Number(data.totalFare)) throw new CustomerError("The fare changed. Review the new fare and confirm again.", 409);
     if (draft.expiresAt <= new Date()) throw new CustomerError("This fare has expired. Review your details and start a new checkout.", 409);
     const pending = await tx.demoCheckout.findFirst({ where: { draftId: id, status: "PENDING" } });
     const checkout = pending ?? await tx.demoCheckout.create({ data: { draftId: id } });
