@@ -1,3 +1,4 @@
+import { queueRiderPushTask } from "./rider-push-tasks";
 import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { generateTicketId, type TicketType } from "./ticket";
@@ -50,7 +51,9 @@ export async function createBookingWithRetry(
       const booking = await db.$transaction(async tx => {
         const ticketId = await generateTicketId(tx, type);
         // Do not load related users while holding the shared counter row lock.
-        return tx.booking.create({ data: { ...data, ticketId, refCode: generateRefCode(type === "RIDE" ? "RIDE" : "FIT") } });
+        const booking = await tx.booking.create({ data: { ...data, ticketId, refCode: generateRefCode(type === "RIDE" ? "RIDE" : "FIT") } });
+        await queueRiderPushTask(tx, booking.id, "NEW_REQUEST", booking.id);
+        return booking;
       }, { maxWait: 10000, timeout: 15000 });
       // The create committed. A failed detail read can be recovered with the
       // same request key on the next explicit confirmation.

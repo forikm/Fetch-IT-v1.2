@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const root = path.resolve(__dirname, "..");
-const commonFiles = ["prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/booking-events.ts", "src/lib/customer-notifications.ts", "src/lib/push-delivery.ts", "src/lib/push-input.ts", "src/lib/session-secret.ts", "src/lib/request-guard.ts", "src/lib/password-policy.ts", "src/lib/payment-policy.ts", "src/lib/payments.ts", "src/lib/demo-payments.ts", "src/lib/dispatch.ts", "src/lib/job-expiry.ts"];
+const commonFiles = ["prisma/schema.prisma", "src/lib/db-data.ts", "src/lib/booking-events.ts", "src/lib/customer-notifications.ts", "src/lib/push-delivery.ts", "src/lib/push-input.ts", "src/lib/session-secret.ts", "src/lib/request-guard.ts", "src/lib/password-policy.ts", "src/lib/payment-policy.ts", "src/lib/payments.ts", "src/lib/demo-payments.ts", "src/lib/dispatch.ts", "src/lib/job-expiry.ts", "src/lib/rider-push-tasks.ts", "prisma/migrations/202610300001_rider_push_tasks/migration.sql"];
 commonFiles.push('src/lib/local-demo-runtime.ts', 'src/lib/local-demo-files.ts', 'src/lib/application-demo-mode.ts', 'src/hooks/use-local-demo.ts', 'src/hooks/use-visible-poll.ts');
 commonFiles.push('prisma/migrations/202610280001_rider_application_demo/migration.sql');
 commonFiles.push('prisma/migrations/202610280002_application_document_names/migration.sql');

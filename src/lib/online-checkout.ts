@@ -1,3 +1,5 @@
+import { queueRiderPushTask } from "./rider-push-tasks";
+import { schedulePushDelivery } from "./push-delivery";
 import { scheduleReceiptDelivery } from "./receipt-email";
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
@@ -74,10 +76,11 @@ export async function resolveOnlineCheckout(db: PrismaClient, checkoutId: string
       paymentReference: `TEST-${checkout.id}`,
       paymentEvents: { create: { actorId: actor.uid, actorName: actor.name, actorRole: "CUSTOMER", action: "DEMO_CHECKOUT_SUCCEEDED", fromStatus: "UNPAID", toStatus: "PAID", amount: data.totalFare, reference: `TEST-${checkout.id}`, reason: "Test settlement; no money charged. Booking created after payment success." } },
     } });
+    await queueRiderPushTask(tx, booking.id, "NEW_REQUEST", booking.id);
     await tx.checkoutDraft.update({ where: { id: draft.id }, data: { bookingId: booking.id } });
     return booking;
   }, { maxWait: 10000, timeout: 20000 }).then(booking => {
-    if (booking?.paymentStatus === "PAID") scheduleReceiptDelivery(db);
+    if (booking?.paymentStatus === "PAID") { scheduleReceiptDelivery(db); schedulePushDelivery(); }
     return booking;
   });
 }

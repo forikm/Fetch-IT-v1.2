@@ -29,6 +29,7 @@ import { prepareOnlineCheckout } from "@/lib/online-checkout";
 import { parsePickupSchedule } from "@/lib/pickup-schedule";
 import { platformSettings } from "@/lib/platform-settings";
 import { bookingServiceAreaError } from "@/lib/service-area";
+import { schedulePushDelivery } from "@/lib/push-delivery";
 
 async function handleGET(req: NextRequest) {
   try {
@@ -111,7 +112,7 @@ async function handlePOST(req: NextRequest) {
     const paymentData = { paymentMethod: paymentMethod as PaymentMethod, ...(isDemoPayment(paymentMethod) ? { demoCommissionBps: Math.round(settings.commissionPercent*100) } : {}) };
     const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
     const previous = await findBookingAttempt(db, attemptId, body);
-    if (previous) return NextResponse.json({ booking: omitTicket(bookingView(previous)) });
+    if (previous) { schedulePushDelivery(); return NextResponse.json({ booking: omitTicket(bookingView(previous)) }); }
     async function submit(type: "RIDE" | "DELIVERY", data: Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">) {
       if (isDemoPayment(paymentMethod)) {
         const checkout = await prepareOnlineCheckout(db, data, body);
@@ -123,6 +124,7 @@ async function handlePOST(req: NextRequest) {
         return NextResponse.json(checkout);
       }
       const booking = await createBookingWithRetry(db, type, data, body);
+      schedulePushDelivery();
       return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
     }
     const {
