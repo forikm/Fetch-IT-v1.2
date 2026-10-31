@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { LandingView } from "@/components/fetchit/shared/landing";
 import { AuthView } from "@/components/fetchit/shared/auth-view";
+import { CustomerProfile } from "@/components/fetchit/customer/customer-profile";
 import { ModeSelect } from "@/components/fetchit/customer/mode-select";
 import { CustomerDashboard } from "@/components/fetchit/customer/customer-dashboard";
 import { RideDashboard } from "@/components/fetchit/customer/ride-dashboard";
@@ -42,6 +43,19 @@ export default function Home() {
     window.history.replaceState(window.history.state, "", "/");
   }, [bootstrapped, user?.role, openBookingSummary]);
 
+  useEffect(() => {
+    if (!bootstrapped || user?.role !== "CUSTOMER" || view === "onboarding") return;
+    const query = new URLSearchParams(window.location.search);
+    const source = query.get("source");
+    const action = query.get("action") ?? (source === "pwa-shortcut-track" ? "track" : source === "pwa-shortcut-book" ? "book" : null);
+    if (action !== "book" && action !== "track") return;
+    const state = useAppStore.getState();
+    const mode = query.get("service") === "ride" ? "ride" : query.get("service") === "delivery" ? "delivery" : state.mode ?? "delivery";
+    if (action === "book") state.startBooking(mode); else { state.setBookingsTab("active"); state.chooseMode(mode); }
+    query.delete("action"); query.delete("service"); if (source?.startsWith("pwa-shortcut-")) query.delete("source");
+    window.history.replaceState(window.history.state, "", "/" + (query.size ? "?" + query.toString() : ""));
+  }, [bootstrapped, user?.role, view]);
+
   if (!bootstrapped) {
     return <FetchItLoadingScreen />;
   }
@@ -50,6 +64,7 @@ export default function Home() {
   if (view === "login") return <AuthView initialMode="login" />;
   if (view === "signup") return <AuthView initialMode="signup" />;
   if (view === "onboarding" && user?.role === "CUSTOMER") return <SignupPlaces key={user.id} />;
+  if (view === "customer-profile" && user?.role === "CUSTOMER") return <CustomerProfile />;
   if (view === "mode-select") return <ModeSelect />;
   if (view === "customer-dashboard") return <CustomerDashboard />;
   if (view === "ride-dashboard") return <RideDashboard />;

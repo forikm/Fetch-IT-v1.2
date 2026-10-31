@@ -1,5 +1,6 @@
 "use client";
 
+import { useCustomerOverlayHistory } from "@/hooks/use-customer-overlay-history";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -7,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 export function DeliveryPhotoPreview({ src, bookingRef, open, onOpenChange }: {
   src: string; bookingRef: string; open: boolean; onOpenChange: (open: boolean) => void;
 }) {
+  useCustomerOverlayHistory(open, () => onOpenChange(false));
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const retry = () => { setFailed(false); setAttempt(value => value + 1); };

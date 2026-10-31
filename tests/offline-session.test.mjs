@@ -161,3 +161,21 @@ test("service choice survives sign-in and the signup setup refresh", async () =>
   assert.equal(reopened.getState().view, "customer-dashboard");
   assert.equal(sessionStorage.getItem("fetchit:pending-service"), null);
 });
+
+test("starting a booking requests its form once and keeps Bookings distinct from Home/Profile", () => {
+  const store = app(async () => new Response("{}"));
+  store.getState().setUser(user); store.getState().setBookingsTab("history");
+  store.getState().setView("customer-profile"); store.getState().chooseMode("ride");
+  assert.equal(store.getState().view, "ride-dashboard"); assert.equal(store.getState().bookingsTab, "history");
+  store.getState().startBooking("delivery");
+  assert.equal(store.getState().view, "customer-dashboard"); assert.equal(store.getState().newBookingRequested, true); assert.equal(store.getState().bookingsTab, "active");
+  store.getState().clearNewBookingRequest(); assert.equal(store.getState().newBookingRequested, false);
+});
+
+test("opening an active booking preserves its requested tracking presentation", () => {
+  const store = app(async () => new Response("{}")); store.getState().setUser(user);
+  store.getState().openBookingSummary("ride-1", "ride", "tracking");
+  assert.equal(store.getState().view, "ride-dashboard"); assert.equal(store.getState().pendingBookingId, "ride-1"); assert.equal(store.getState().pendingBookingPresentation, "tracking");
+  store.getState().clearPendingBooking(); assert.equal(store.getState().pendingBookingId, null);
+  store.getState().openBookingSummary("delivery-1", "delivery"); assert.equal(store.getState().pendingBookingPresentation, "summary");
+});

@@ -10,6 +10,7 @@ import { FetchItLoader } from "@/components/fetchit/shared/loading";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 import { Button } from "@/components/ui/button";
+import { MapZoomControls } from "./map-zoom-controls";
 import { MapPin } from "lucide-react";
 import { useServiceArea } from "@/hooks/use-service-area";
 
@@ -62,7 +63,7 @@ export function LocationMap({
           center,
           zoom: lat != null ? 16 : 13,
           disableDefaultUI: true,
-          zoomControl: true,
+          zoomControl: false,
           gestureHandling: "greedy",
         });
         geocoderRef.current = new window.google.maps.Geocoder();
@@ -125,7 +126,7 @@ export function LocationMap({
     });
   }
 
-  if (failed) return <div role="alert" className="space-y-3 rounded-xl border bg-muted/30 p-4 text-sm"><p>The map couldn’t load. Your address is kept. Try again, or choose a saved place above.</p><Button type="button" variant="outline" className="min-h-11" onClick={() => { setFailed(false); setReady(false); setAttempt(value => value + 1); }}>Retry map</Button></div>;
+  if (failed) return <div role="alert" className="space-y-3 rounded-xl border bg-muted/30 p-4 text-sm"><p>The map couldn’t load. Your address is kept. Try again, or choose a saved place above.</p><Button type="button" variant="outline" className="min-h-12" onClick={() => { setFailed(false); setReady(false); setAttempt(value => value + 1); }}>Retry map</Button></div>;
 
   return (
     <div className={className ?? ""}>
@@ -137,6 +138,7 @@ export function LocationMap({
             <FetchItLoader className="h-4 w-4 text-muted-foreground" />
           </div>
         )}
+        {ready && <MapZoomControls onZoomIn={() => { const map = mapRef.current; if (map) map.setZoom(Math.min(21, (map.getZoom() ?? 13) + 1)); }} onZoomOut={() => { const map = mapRef.current; if (map) map.setZoom(Math.max(3, (map.getZoom() ?? 13) - 1)); }} />}
         {/* Pin fixed to the center of the viewport — the map pans underneath it. */}
         {ready && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">

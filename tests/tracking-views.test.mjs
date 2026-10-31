@@ -14,6 +14,7 @@ function load(file, mocks) {
   }).outputText;
   vm.runInNewContext(compiled, { exports, ...mocks.globals, require(name) {
     if (name === "react/jsx-runtime") return jsx;
+    if (name === "@/hooks/use-customer-overlay-history") return { useCustomerOverlayHistory() {} };
     if (name === "@/lib/customer-booking-ui") return bookingUi;
     if (name === "@/lib/booking-wait") return bookingWait;
     return mocks[name] ?? new Proxy({}, { get: (_, key) => key === "cn" ? (...args) => args.join(" ") : String(key) });

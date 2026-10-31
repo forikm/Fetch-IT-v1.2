@@ -93,7 +93,7 @@ export function PlaceAutocompleteInput({
         <FetchItLoader className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       )}
       </div>
-      {failed ? <div id={id ? id + "-guidance" : undefined} role="alert" className="mt-2 space-y-2 text-sm"><p>Address search couldn’t load. Your text is kept. Retry search or choose a saved place. The map can also be used when available.</p><Button type="button" variant="outline" className="min-h-11" onClick={() => { setFailed(null); setReady(false); setAttempt(value => value + 1); }}>Retry address search</Button></div> : <p id={id ? id + "-guidance" : undefined} className="mt-2 text-xs text-muted-foreground">Select a search suggestion to confirm the address, or confirm a pin on the map.</p>}
+      {failed ? <div id={id ? id + "-guidance" : undefined} role="alert" className="mt-2 space-y-2 text-sm"><p>Address search couldn’t load. Your text is kept. Retry search or choose a saved place. The map can also be used when available.</p><Button type="button" variant="outline" className="min-h-12" onClick={() => { setFailed(null); setReady(false); setAttempt(value => value + 1); }}>Retry address search</Button></div> : <p id={id ? id + "-guidance" : undefined} className="mt-2 text-xs text-muted-foreground">Select a search suggestion to confirm the address, or confirm a pin on the map.</p>}
     </div>
   );
 }

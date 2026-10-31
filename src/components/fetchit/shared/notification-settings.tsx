@@ -12,7 +12,7 @@ export function NotificationSettings() {
   const [busy, setBusy] = useState(false);
   return <section className="space-y-3 border-t pt-4">
     <h3 className="text-sm font-semibold">Notification preferences</h3>
-    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"><input className="h-5 w-5 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="checkbox" checked={preferences.inApp} onChange={(e) => save({ ...preferences, inApp: e.target.checked })} /> Show updates in the app</label>
+    <label className="flex min-h-12 cursor-pointer items-center gap-3 text-sm"><input className="h-5 w-5 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="checkbox" checked={preferences.inApp} onChange={(e) => save({ ...preferences, inApp: e.target.checked })} /> Show updates in the app</label>
     <Button size="sm" type="button" variant="outline" disabled={busy || id === "anonymous"} onClick={async () => {
       setBusy(true); setMessage("");
       try {

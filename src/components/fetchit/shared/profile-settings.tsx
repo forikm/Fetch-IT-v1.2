@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { normalizePhilippinePhone } from "@/lib/phone";
 import { Bookmark } from "lucide-react";
 
-export function ProfileSettings() {
+export function ProfileSettings({ showSavedPlaces = true }: { showSavedPlaces?: boolean }) {
   const online = useOnlineStatus();
   const offlineAccess = useAppStore(state => state.offlineAccess);
   const user = useAppStore((s) => s.user);
@@ -37,6 +37,6 @@ export function ProfileSettings() {
     <p className="text-sm text-muted-foreground">Email: {user?.email}</p>
     {message && <p role="status" className={failed ? "text-sm text-destructive" : "text-sm text-emerald-700"}>{message}</p>}
     <Button type="submit" disabled={busy || !online || offlineAccess}>{busy ? "Saving…" : "Save profile"}</Button>
-    <div className="border-t pt-4"><Button type="button" variant="outline" className="w-full" onClick={() => useAppStore.getState().setView("onboarding")}><Bookmark aria-hidden="true" />Saved places</Button><p className="mt-2 text-xs text-muted-foreground">Add or update your home and usual destination.</p></div>
+    {showSavedPlaces && <div className="border-t pt-4"><Button type="button" variant="outline" className="w-full" onClick={() => useAppStore.getState().setView("onboarding")}><Bookmark aria-hidden="true" />Saved places</Button><p className="mt-2 text-xs text-muted-foreground">Add or update your home and usual destination.</p></div>}
   </form>;
 }

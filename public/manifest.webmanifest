@@ -1,5 +1,5 @@
 {
-  "name": "Fetch-It \u2014 Book & Track Deliveries",
+  "name": "Fetch-It — Book & Track Deliveries",
   "short_name": "Fetch-It",
   "description": "Book deliveries and rides, track them live on the map, and manage your bookings.",
   "id": "/?source=pwa",
@@ -41,14 +41,19 @@
   ],
   "shortcuts": [
     {
-      "name": "New booking",
-      "short_name": "Book",
-      "url": "/?source=pwa-shortcut-book"
+      "name": "Book a ride",
+      "short_name": "Ride",
+      "url": "/?action=book&service=ride"
     },
     {
-      "name": "Track a delivery",
+      "name": "Send a delivery",
+      "short_name": "Delivery",
+      "url": "/?action=book&service=delivery"
+    },
+    {
+      "name": "Track a booking",
       "short_name": "Track",
-      "url": "/?source=pwa-shortcut-track"
+      "url": "/?action=track"
     }
   ]
 }

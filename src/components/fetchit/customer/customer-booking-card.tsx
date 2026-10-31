@@ -28,7 +28,7 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
   const openRide = ride && !!booking.rider && ["ACCEPTED", "PICKED_UP", "IN_TRANSIT"].includes(booking.status);
 
   return <Card className={`min-w-0 border hover:shadow-md transition flex flex-col ${openRide ? "cursor-pointer" : ""}`} onClick={openRide ? event => {
-    if ((event.target as HTMLElement).closest("button, a, input, select, textarea, [role='dialog']")) return;
+    if ((event.target as HTMLElement).closest("button, a, input, select, textarea, summary, details, [role='dialog']")) return;
     onTrack();
   } : undefined}>
     <CardHeader className="min-w-0 grid-cols-[minmax(0,1fr)] pb-3">
@@ -38,7 +38,7 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
             <span className="font-mono text-sm text-muted-foreground">{booking.refCode}</span>
             <StatusBadge status={booking.status} type={booking.type} />
           </div>
-          <CardTitle className="text-base mt-1.5 [overflow-wrap:anywhere]">{openRide ? <button type="button" onClick={onTrack} aria-label={`View rider profile and map for ${booking.refCode}`} className="rounded text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">{booking.dropoffLabel}</button> : booking.dropoffLabel}</CardTitle>
+          <CardTitle className="text-base mt-1.5 [overflow-wrap:anywhere]">{openRide ? <button type="button" onClick={onTrack} aria-label={`View rider profile and map for ${booking.refCode}`} className="min-h-12 min-w-12 rounded text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">{booking.dropoffLabel}</button> : booking.dropoffLabel}</CardTitle>
           <CardDescription className="flex w-full min-w-0 items-start gap-1 mt-0.5">
             <MapPin className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 [overflow-wrap:anywhere]">from {booking.pickupLabel}</span>
           </CardDescription>
@@ -61,19 +61,18 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
           <RiderProfile bookingId={booking.id} {...booking.rider} type={booking.type} />
           <p className="text-xs text-muted-foreground truncate">{booking.rider.vehiclePlate || "Plate not set"}</p>
         </div>
-        {booking.rider.phone && <Button asChild size="icon" variant="outline" className="h-11 w-11 shrink-0"><a href={`tel:${booking.rider.phone}`} aria-label={`Call ${booking.rider.name}`}><Phone className="h-4 w-4" /></a></Button>}
+        {booking.rider.phone && <Button asChild size="icon" variant="outline" className="h-12 w-12 shrink-0"><a href={`tel:${booking.rider.phone}`} aria-label={`Call ${booking.rider.name}`}><Phone className="h-4 w-4" /></a></Button>}
       </div>}
 
       <BookingWaitStatus key={booking.id} booking={booking} updatesPaused={updatesPaused || readOnly} readOnly={readOnly} onCancelled={onRefresh} onUpdated={onUpdated} />
-      <BookingTimeline status={booking.status} type={booking.type} scheduled={scheduled} hideStatus={isAwaitingAcceptance(booking.status)} />
-      {openRide && <p className="text-xs text-muted-foreground">Tap this booking to view your driver, map and safety options.</p>}
+      <BookingTimeline compact status={booking.status} type={booking.type} scheduled={scheduled} hideStatus={isAwaitingAcceptance(booking.status)} />
       <div className="flex flex-wrap gap-2 pt-1">
         {booking.status !== "CANCELLED" && !readOnly && !(delivered && !ride) && <Button size="sm" className="flex-1" onClick={onTrack}><Navigation className="h-3.5 w-3.5" />{delivered ? "View ride details" : isAwaitingAcceptance(booking.status) ? "View booking" : ride ? "Track ride" : "Track delivery"}</Button>}
         {canCancel && !isAwaitingAcceptance(booking.status) && <CancelBooking bookingId={booking.id} readOnly={readOnly} onCancelled={onRefresh} />}
         {finished && <Button size="sm" variant="outline" onClick={onRepeat}>Book again</Button>}
         {delivered && !ride && !readOnly && <Button size="sm" variant="outline" className="flex-1" onClick={onTrack}><ShieldCheck className="h-3.5 w-3.5" />View proof</Button>}
       </div>
-      <BookingActions booking={booking} readOnly={readOnly} />
+      <details className="border-t pt-2"><summary className="min-h-12 cursor-pointer py-3 text-sm font-medium">Payment &amp; booking help</summary><BookingActions booking={booking} readOnly={readOnly} /></details>
     </CardContent>
   </Card>;
 }

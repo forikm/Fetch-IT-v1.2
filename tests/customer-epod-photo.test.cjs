@@ -13,6 +13,7 @@ function load(file, mocks = {}, extra = "") {
   }).outputText;
   new Function("exports", "require", compiled + extra)(exports, name => {
     if (name === "react/jsx-runtime") return jsx;
+    if (name === "@/hooks/use-customer-overlay-history") return { useCustomerOverlayHistory() {} };
     if (Object.hasOwn(mocks, name)) return mocks[name];
     return require(name);
   });
@@ -168,7 +169,7 @@ test("the Photo proof chip itself opens the image preview", () => {
   const { TrackingView } = load("src/components/fetchit/customer/customer-dashboard.tsx", new Proxy({
     react: h.react,
     "@/lib/customer-booking-ui": { customerStatusLabel: () => "Delivered", locationUpdateLabel: () => "", routeTimeLabel: () => "" },
-    "@/lib/booking-wait": load("src/lib/booking-wait.ts"),
+    "@/lib/booking-wait": load("src/lib/booking-wait.ts", { "./job-expiry": load("src/lib/job-expiry.ts") }),
     "@/lib/utils": { cn: (...values) => values.join(" ") },
   }, { get(target, key) {
     if (key in target) return target[key];

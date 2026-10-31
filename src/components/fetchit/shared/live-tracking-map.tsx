@@ -5,6 +5,7 @@ import { FetchItLoader } from "@/components/fetchit/shared/loading";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRoadRoute } from "@/hooks/use-road-route";
+import { MapZoomControls } from "./map-zoom-controls";
 import { RoadRouteStatus } from "./road-route-status";
 import { MapPinOff } from "lucide-react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
@@ -48,8 +49,8 @@ export function LiveTrackingMap({
           center: pickup,
           zoom: preview ? 13 : 14,
           disableDefaultUI: true,
-          zoomControl: !preview,
-          fullscreenControl: !preview,
+          zoomControl: false,
+          fullscreenControl: false,
           gestureHandling: "cooperative",
           mapTypeControl: false,
           streetViewControl: false,
@@ -166,7 +167,7 @@ export function LiveTrackingMap({
   if (failed) {
     return (
       <div className={`${className} grid place-items-center bg-muted/40 text-muted-foreground`}>
-        <div role="alert" className="space-y-3 p-4 text-center text-sm"><p className="flex items-center justify-center gap-2"><MapPinOff className="h-4 w-4" />The tracking map couldn’t load.</p><p>Your booking details and contact options are still available.</p><Button type="button" variant="outline" className="min-h-11" onClick={() => { setFailed(false); setReady(false); setAttempt(value => value + 1); }}>Retry tracking map</Button></div>
+        <div role="alert" className="space-y-3 p-4 text-center text-sm"><p className="flex items-center justify-center gap-2"><MapPinOff className="h-4 w-4" />The tracking map couldn’t load.</p><p>Your booking details and contact options are still available.</p><Button type="button" variant="outline" className="min-h-12" onClick={() => { setFailed(false); setReady(false); setAttempt(value => value + 1); }}>Retry tracking map</Button></div>
       </div>
     );
   }
@@ -179,9 +180,10 @@ export function LiveTrackingMap({
           <FetchItLoader className="h-6 w-6 text-primary" />
         </div>
       )}
+      {ready && !preview && <MapZoomControls onZoomIn={() => { const map = mapRef.current; if (map) map.setZoom(Math.min(21, (map.getZoom() ?? 14) + 1)); }} onZoomOut={() => { const map = mapRef.current; if (map) map.setZoom(Math.max(3, (map.getZoom() ?? 14) - 1)); }} />}
       {ready && <RoadRouteStatus loading={road.loading} error={road.error} warnings={road.warnings} onRetry={road.retry} />}
       {ready && !preview && !rider && (
-        <div className="pointer-events-none absolute bottom-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full border bg-card/95 px-3 py-1.5 text-center text-xs font-medium shadow-sm [overflow-wrap:anywhere]">
+        <div className="pointer-events-none absolute bottom-3 left-3 right-20 w-auto rounded-full border bg-card/95 px-3 py-1.5 text-center text-xs font-medium shadow-sm [overflow-wrap:anywhere]">
           Waiting for your booking partner to share their location…
         </div>
       )}

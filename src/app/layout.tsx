@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegister } from "@/components/fetchit/shared/sw-register";
+import { CustomerAppearance } from "@/components/fetchit/shared/customer-appearance";
 import { OfflineStatus } from "@/components/fetchit/shared/offline-status";
 
 const geistSans = Geist({
@@ -55,8 +56,6 @@ export const viewport: Viewport = {
   themeColor: "#f97316",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -81,6 +80,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
+        <CustomerAppearance />
         <OfflineStatus />
         {children}
         <Toaster />

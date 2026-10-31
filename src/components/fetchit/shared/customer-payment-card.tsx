@@ -96,7 +96,7 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
       } catch (failure) { setError(failure instanceof Error ? failure.message : "Couldn’t confirm payment."); }
       finally { pending.current = false; setBusy(false); }
     }}>
-      <label className="block">Amount you paid (₱)<input required inputMode="decimal" type="number" min="0.01" step="0.01" max="9999999999.99" value={amount} disabled={busy} onChange={event => setAmount(event.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-input bg-background p-2 text-base md:text-sm focus-visible:outline-2 focus-visible:outline-ring" /></label>
+      <label className="block">Amount you paid (₱)<input required inputMode="decimal" type="number" min="0.01" step="0.01" max="9999999999.99" value={amount} disabled={busy} onChange={event => setAmount(event.target.value)} className="mt-2 min-h-12 w-full rounded-md border border-input bg-background p-2 text-base md:text-sm focus-visible:outline-2 focus-visible:outline-ring" /></label>
       <p className="text-xs text-muted-foreground">Confirm after handing the cash to your {person}. They’ll confirm receipt too.</p>
       <div className="flex flex-wrap gap-2"><Button type="submit" size="sm" disabled={busy || !amount}>{busy ? "Confirming…" : "I paid this amount"}</Button><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmOpen(false)}>Not yet</Button></div>
     </form>}

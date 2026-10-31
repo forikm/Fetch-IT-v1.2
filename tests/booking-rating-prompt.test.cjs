@@ -11,6 +11,7 @@ function load(file, mocks = {}, globals = {}) {
   }).outputText;
   new Function("exports", "require", ...Object.keys(globals), source)(exports, name => {
     if (name === "react/jsx-runtime") return jsx;
+    if (name === "@/hooks/use-customer-overlay-history") return { useCustomerOverlayHistory() {} };
     if (Object.hasOwn(mocks, name)) return mocks[name];
     return require(name);
   }, ...Object.values(globals));

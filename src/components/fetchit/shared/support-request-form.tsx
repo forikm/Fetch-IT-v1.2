@@ -92,7 +92,7 @@ export function NewSupportRequest({ booking, onCreated }: { booking?: SupportBoo
       {topic && <fieldset disabled={busy} className="space-y-2">
         <legend className="mb-2 text-sm font-semibold">2. What happened?</legend>
         <p className="pb-1 text-xs text-muted-foreground">Choose the option that best matches your concern.</p>
-        {topic.issues.map(option => <label key={option.id} className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm hover:bg-muted/50 ${issue?.id === option.id ? "border-primary bg-primary/5" : "border-border"}`}>
+        {topic.issues.map(option => <label key={option.id} className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm hover:bg-muted/50 ${issue?.id === option.id ? "border-primary bg-primary/5" : "border-border"}`}>
           <input type="radio" name={`${formId}-issue`} value={option.id} checked={issue?.id === option.id} required onChange={() => { save({ ...draft, issue: option.id }); setError(""); }} className="h-4 w-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />
           {option.label}
         </label>)}
@@ -102,7 +102,7 @@ export function NewSupportRequest({ booking, onCreated }: { booking?: SupportBoo
         {needsBooking && <div className="space-y-2">
           <Label htmlFor={booking ? undefined : `${formId}-booking`}>{booking ? "Linked booking" : `Which ${topic.bookingType === "RIDE" ? "ride" : "delivery"} is this about?`}</Label>
           {booking ? <p className="rounded-xl bg-muted/50 p-3 text-sm font-medium">{booking.refCode} · {topic.bookingType === "RIDE" ? "Ride" : "Delivery"}</p> : <>
-            <select id={`${formId}-booking`} required disabled={busy || bookingBusy} aria-describedby={`${formId}-booking-hint`} className="min-h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base md:text-sm focus-visible:outline-2 focus-visible:outline-ring" value={matchingBookings.some(b => b.id === draft.bookingId) ? draft.bookingId : ""} onChange={e => { save({ ...draft, bookingId: e.target.value }); setError(""); }}>
+            <select id={`${formId}-booking`} required disabled={busy || bookingBusy} aria-describedby={`${formId}-booking-hint`} className="min-h-12 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base md:text-sm focus-visible:outline-2 focus-visible:outline-ring" value={matchingBookings.some(b => b.id === draft.bookingId) ? draft.bookingId : ""} onChange={e => { save({ ...draft, bookingId: e.target.value }); setError(""); }}>
               <option value="">{bookingBusy && !bookingsLoaded ? "Loading your bookings…" : `Select a ${topic.bookingType === "RIDE" ? "ride" : "delivery"}`}</option>
               {matchingBookings.map(b => <option key={b.id} value={b.id}>{b.refCode}{b.createdAt ? ` · ${new Date(b.createdAt).toLocaleDateString()}` : ""}{b.pickupLabel && b.dropoffLabel ? ` · ${b.pickupLabel} → ${b.dropoffLabel}` : ""}</option>)}
             </select>
@@ -124,6 +124,6 @@ export function NewSupportRequest({ booking, onCreated }: { booking?: SupportBoo
       </>}
     </div>
     {error && <p ref={errorRef} tabIndex={-1} role="alert" className="text-sm text-destructive">{error}</p>}
-    <div className="space-y-2"><Button type="submit" className="min-h-11 w-full sm:w-auto" disabled={busy || !canSend}>{busy ? "Sending request…" : "Send support request"}</Button>{!canSend && <p className="text-xs text-muted-foreground">{!topic ? "Choose an issue to get started." : !issue ? "Choose what happened to continue." : !validBooking ? "Select the booking you need help with." : "Add a description within the character limit to send your request."}</p>}</div>
+    <div className="space-y-2"><Button type="submit" className="min-h-12 w-full sm:w-auto" disabled={busy || !canSend}>{busy ? "Sending request…" : "Send support request"}</Button>{!canSend && <p className="text-xs text-muted-foreground">{!topic ? "Choose an issue to get started." : !issue ? "Choose what happened to continue." : !validBooking ? "Select the booking you need help with." : "Add a description within the character limit to send your request."}</p>}</div>
   </form>;
 }

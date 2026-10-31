@@ -127,7 +127,7 @@ function SupportConversation({ id, onBack, justCreated = false }: { id: string; 
         <Label htmlFor={`${formId}-reply`}>Your reply</Label><Textarea id={`${formId}-reply`} rows={3} minLength={1} maxLength={2000} required disabled={busy} aria-describedby={`${formId}-reply-hint`} placeholder="Add an update or ask a follow-up question…" value={reply} onChange={e => saveReply(e.target.value)} />
         <p id={`${formId}-reply-hint`} className="text-xs text-muted-foreground">{reply.length.toLocaleString()} / 2,000 characters · Keep verification codes and payment details private.</p>
         {notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
-        <Button type="submit" className="min-h-11" disabled={busy || !reply.trim()}>{busy ? "Sending…" : data.ticket.status === "RESOLVED" ? "Send reply & reopen request" : "Send reply"}</Button>
+        <Button type="submit" className="min-h-12" disabled={busy || !reply.trim()}>{busy ? "Sending…" : data.ticket.status === "RESOLVED" ? "Send reply & reopen request" : "Send reply"}</Button>
       </form>
     </>}
   </section>;

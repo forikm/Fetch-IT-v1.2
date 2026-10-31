@@ -1,4 +1,5 @@
 "use client";
+import { useCustomerOverlayHistory } from "@/hooks/use-customer-overlay-history";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,6 +23,7 @@ export function RiderProfile({ bookingId, id, name, rating, ratingCount, type = 
   bookingId: string; id?: string; name: string; rating: number; ratingCount?: number; type?: "RIDE" | "DELIVERY";
 }) {
   const [open, setOpen] = useState(false);
+  useCustomerOverlayHistory(open, () => setOpen(false));
   const [profile, setProfile] = useState<RiderProfileData | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -40,7 +42,7 @@ export function RiderProfile({ bookingId, id, name, rating, ratingCount, type = 
     return () => controller.abort();
   }, [bookingId, id, name, open, retry]);
   return <>
-    <button type="button" onClick={() => setOpen(true)} className="min-h-11 min-w-11 text-left rounded-md focus-visible:outline-2 focus-visible:outline-ring" aria-label={`View ${name}'s ${type === "RIDE" ? "driver" : "rider"} profile`}><span className="block font-semibold break-words">{name}</span><span className="block text-xs text-muted-foreground">{ratingCount ? `★ ${rating.toFixed(1)} · ${ratingCount} ${ratingCount === 1 ? "rating" : "ratings"}` : `New ${type === "RIDE" ? "driver" : "rider"} · No ratings yet`} · View profile</span></button>
+    <button type="button" onClick={() => setOpen(true)} className="min-h-12 min-w-12 text-left rounded-md focus-visible:outline-2 focus-visible:outline-ring" aria-label={`View ${name}'s ${type === "RIDE" ? "driver" : "rider"} profile`}><span className="block font-semibold break-words">{name}</span><span className="block text-xs text-muted-foreground">{ratingCount ? `★ ${rating.toFixed(1)} · ${ratingCount} ${ratingCount === 1 ? "rating" : "ratings"}` : `New ${type === "RIDE" ? "driver" : "rider"} · No ratings yet`} · View profile</span></button>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{type === "RIDE" ? "Driver profile" : "Rider profile"}</DialogTitle><DialogDescription>Your Fetch-It booking partner.</DialogDescription></DialogHeader>{profile ? <RiderProfileDetails profile={profile} roleLabel={type === "RIDE" ? "driver" : "rider"} /> : error ? <div role="alert"><p className="text-sm text-destructive">{error}</p><Button variant="outline" className="mt-3" onClick={() => setRetry(value => value + 1)}>Retry</Button></div> : <p role="status" className="text-sm text-muted-foreground">Loading profile…</p>}</DialogContent></Dialog>
   </>;
 }

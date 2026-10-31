@@ -381,7 +381,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
           <button
             onClick={() => { progressEnabled.current = false; clearAuthProgress(); setView("landing"); }}
             disabled={loading || codeBusy}
-            className="inline-flex min-h-11 min-w-11 items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring transition"
+            className="inline-flex min-h-12 min-w-12 items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring transition"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
@@ -392,7 +392,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       <main className="flex-1 mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-2 lg:gap-20">
         <aside className="relative hidden min-h-[560px] flex-col justify-between overflow-hidden rounded-[2rem] bg-[#dde9df] p-10 text-[#183b33] lg:flex">
           <div><p className="text-xs font-semibold tracking-[0.16em] text-[#627069]">YOUR EVERYDAY, ON THE MOVE</p><h1 className="mt-8 text-5xl font-semibold leading-[1.08] tracking-[-0.05em]">A little easier.<br />A little closer.</h1><p className="mt-6 max-w-xs text-base leading-7 text-[#627069]">One account for your deliveries, daily rides and everything in between.</p></div>
-          <div className="relative mt-12"><ArrowUpRight className="absolute -right-3 -top-16 h-40 w-40 stroke-[0.7] text-[#183b33]/15" aria-hidden /><div className="relative space-y-3"><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#f5e8d9] text-primary"><Package className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Send something good.</p><p className="mt-1 text-xs text-[#627069]">Parcels, cargo and more</p></div></div><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#dce9de]"><Car className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Go somewhere new.</p><p className="mt-1 text-xs text-[#627069]">A ride for every kind of day</p></div></div></div></div>
+          <div className="relative mt-12"><ArrowUpRight className="absolute -right-3 -top-16 h-40 w-40 stroke-[0.7] text-[#183b33]/15" aria-hidden /><div className="relative space-y-3"><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-[#f5e8d9] text-primary"><Package className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Send something good.</p><p className="mt-1 text-xs text-[#627069]">Parcels, cargo and more</p></div></div><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-[#dce9de]"><Car className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Go somewhere new.</p><p className="mt-1 text-xs text-[#627069]">A ride for every kind of day</p></div></div></div></div>
         </aside>
         <div className="mx-auto w-full min-w-0 max-w-md">
           <p className="eyebrow mb-4 px-4 sm:px-6">LET&apos;S GET YOU MOVING</p>
@@ -497,7 +497,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                   {(!legacyLogin || EMAIL_CODES_ENABLED) && <Button variant="link" className="w-full" onClick={resetPassword} disabled={loading}>Forgot password?</Button>}
                   <Button
                     variant="ghost"
-                    className="w-full min-h-11 text-sm"
+                    className="w-full min-h-12 text-sm"
                     aria-expanded={loginHelp || legacyLogin}
                     onClick={() => { if (legacyLogin) { setLegacyLogin(false); setLoginHelp(false); } else setLoginHelp(value => !value); setError(null); setNotice(null); }}
                     disabled={loading}
@@ -505,7 +505,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                     {legacyLogin ? "Back to standard sign in" : "Having trouble signing in?"}
                   </Button>
                   {legacyLogin && <p role="status" className="rounded-xl bg-muted p-3 text-sm">You’re using sign-in for an existing account created before email verification was introduced. Use that account’s email and password.</p>}
-                  {loginHelp && !legacyLogin && <section aria-label="Sign-in help" className="space-y-3 rounded-xl border p-4 text-sm"><p>Try resetting your password first. If you have an existing account created before email verification was introduced, try its original sign-in below.</p><Button type="button" variant="outline" className="min-h-11 w-full" disabled={loading} onClick={() => { setLegacyLogin(true); setLoginHelp(false); setError(null); }}>Try original account sign-in</Button><Link href="/help#account-access" className="inline-flex min-h-11 items-center underline">More account recovery help</Link></section>}
+                  {loginHelp && !legacyLogin && <section aria-label="Sign-in help" className="space-y-3 rounded-xl border p-4 text-sm"><p>Try resetting your password first. If you have an existing account created before email verification was introduced, try its original sign-in below.</p><Button type="button" variant="outline" className="min-h-12 w-full" disabled={loading} onClick={() => { setLegacyLogin(true); setLoginHelp(false); setError(null); }}>Try original account sign-in</Button><Link href="/help#account-access" className="inline-flex min-h-12 items-center underline">More account recovery help</Link></section>}
                   {(process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_DEMO_SEED === "true") && <div className="border-t pt-3">
                     <Button
                       type="button"

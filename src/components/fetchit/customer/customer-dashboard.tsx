@@ -1,7 +1,9 @@
 "use client";
+import { useCustomerOverlayHistory } from "@/hooks/use-customer-overlay-history";
+import { CustomerAppShell } from "../shared/customer-app-shell";
+import { loadGoogleMaps } from "@/lib/google-maps-loader";
 import { RiderProfile } from "../shared/rider-profile";
 
-import { NotificationInbox } from "../shared/notification-inbox";
 import { BookingHistoryRow } from "../shared/booking-history-row";
 import { BookingWaitStatus } from "./booking-wait-status";
 import { isAwaitingAcceptance, mergeBookingUpdate } from "@/lib/booking-wait";
@@ -9,9 +11,6 @@ import { BookingSummary } from "../shared/booking-summary";
 import { BookingTimeline } from "../shared/booking-timeline";
 import { CustomerBookingCard } from "./customer-booking-card";
 import { customerStatusLabel, formatPeso, locationUpdateLabel, routeTimeLabel } from "@/lib/customer-booking-ui";
-import { CustomerBottomNav } from "../shared/customer-bottom-nav";
-import { ProfileSettings } from "../shared/profile-settings";
-import { NotificationSettings } from "../shared/notification-settings";
 import { HistoryFilters, emptyHistoryFilter } from "../shared/history-filters";
 import { useTrackingUpdates } from "@/hooks/use-tracking-updates";
 import { useCompletedBookingRatings } from "@/hooks/use-completed-booking-ratings";
@@ -92,16 +91,12 @@ import {
   type BookingStatus,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { BrandNavigation } from "../shared/brand-navigation";
 import { PlaceAutocompleteInput } from "../shared/place-autocomplete-input";
 import { LocationMap } from "../shared/location-map";
-import { ProfileMenu } from "../shared/profile-menu";
 import { StatusBadge } from "../shared/status-badge";
-import { BookingRouteMap } from "../shared/booking-route-map";
 import { LiveTrackingMap } from "../shared/live-tracking-map";
 import { RideTrackingView } from "./ride-tracking-view";
 import { DeliveryPhotoPreview } from "./delivery-photo-preview";
-import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
 export interface Booking {
   id: string;
@@ -159,15 +154,15 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   const isRide = bookingType === "RIDE";
   const ServiceIcon = isRide ? Car : Package;
   const user = useAppStore((s) => s.user) as AuthUser | null;
-  const logout = useAppStore((s) => s.logout);
-  const setView = useAppStore((s) => s.setView);
   const { toast } = useToast();
   const { ratingBooking, observeRatings, dismissRating } = useCompletedBookingRatings();
 
-  const [tab, setTab] = useState<"active" | "history">("active");
+  const tab = useAppStore(s => s.bookingsTab);
+  const setTab = useAppStore(s => s.setBookingsTab);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [summaryBooking, setSummaryBooking] = useState<Booking | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [trackingBooking, setTrackingBooking] = useState<Booking | null>(null);
   const pendingBookingId = useAppStore((state) => state.pendingBookingId);
   useEffect(() => {
     if (!pendingBookingId) return;
@@ -176,14 +171,13 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     async function open() {
       try {
         const { data } = await readCustomerBooking<{ booking: Booking }>(user?.id ?? "", `/api/bookings/${encodeURIComponent(bookingId)}`);
-        if (!cancelled) { setSummaryBooking(data.booking); setSummaryError(null); }
+        if (!cancelled) { if (useAppStore.getState().pendingBookingPresentation === "tracking") setTrackingBooking(data.booking); else setSummaryBooking(data.booking); setSummaryError(null); }
       } catch { if (!cancelled) setSummaryError("Couldn’t load the booking summary. Please try again from the notification inbox."); }
       finally { if (!cancelled) useAppStore.getState().clearPendingBooking(); }
     }
     void open();
     return () => { cancelled = true; };
   }, [pendingBookingId, user?.id]);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [filters, setFilters] = useState(emptyHistoryFilter);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -193,9 +187,13 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadSequence = useRef(0);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useState(() => useAppStore.getState().newBookingRequested);
+  const newBookingRequested = useAppStore(s => s.newBookingRequested);
+  useEffect(() => { if (!newBookingRequested) return; let cancelled = false; queueMicrotask(() => { if (cancelled) return; setShowNew(true); useAppStore.getState().clearNewBookingRequest(); }); return () => { cancelled = true; }; }, [newBookingRequested]);
+  const loadedQuery = useRef<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [repeatBooking, setRepeatBooking] = useState<Booking | null>(null);
-  const [trackingBooking, setTrackingBooking] = useState<Booking | null>(null);
+  useCustomerOverlayHistory(showNew || !!trackingBooking || !!summaryBooking || !!summaryError, () => { setShowNew(false); setTrackingBooking(null); setSummaryBooking(null); setSummaryError(null); });
   const handleTrackingUpdate = useCallback((updated: Partial<Booking>) => {
     if (!trackingBooking) return;
     const next = mergeBookingUpdate(trackingBooking, updated);
@@ -209,14 +207,6 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     setSummaryBooking(previous => previous?.id === id ? mergeBookingUpdate(previous, update) : previous);
     setSavedAt(null);
   }
-
-  // Start loading Google Maps as soon as the dashboard mounts, not when
-  // the booking dialog opens — by the time someone taps "New booking" it's
-  // usually already ready, so the loading screen rarely even shows.
-  useEffect(() => {
-    if (!online || offlineAccess) return;
-    void loadGoogleMaps().catch(() => {});
-  }, [online, offlineAccess]);
 
   function queryString(cursor?: string) {
     const query = new URLSearchParams({ filter: tab, type: bookingType });
@@ -245,18 +235,20 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   }
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
-    setLoading(true);
+    const query = queryString();
+    const initial = loadedQuery.current !== query;
+    setLoading(initial); setRefreshing(!initial); if (initial) setBookings([]);
     setLoadError(null);
     try {
-      const result = await readCustomerBooking<{ bookings: Booking[]; nextCursor: string | null }>(user?.id ?? "", "/api/bookings?" + queryString());
+      const result = await readCustomerBooking<{ bookings: Booking[]; nextCursor: string | null }>(user?.id ?? "", "/api/bookings?" + query);
       const data = result.data;
       if (sequence === loadSequence.current) setSavedAt(result.cached ? result.savedAt : null);
       if (!Array.isArray(data.bookings)) throw new Error("We couldn’t load your bookings. Please try again.");
-      if (sequence === loadSequence.current) { if (!result.cached) observeRatings(data.bookings); setBookings(data.bookings ?? []); setNextCursor(data.nextCursor ?? null); setMoreError(null); }
+      if (sequence === loadSequence.current) { loadedQuery.current = query; if (!result.cached) observeRatings(data.bookings); setBookings(data.bookings ?? []); setNextCursor(data.nextCursor ?? null); setMoreError(null); }
     } catch (e) {
       if (sequence === loadSequence.current) setLoadError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
     } finally {
-      if (sequence === loadSequence.current) setLoading(false);
+      if (sequence === loadSequence.current) { setLoading(false); setRefreshing(false); }
     }
   }, [tab, filters, bookingType, user?.id, observeRatings]);
 
@@ -266,10 +258,6 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     window.addEventListener("online", load);
     return () => { cancelled = true; window.removeEventListener("online", load); };
   }, [load]);
-
-  async function handleLogout() {
-    await logout();
-  }
 
   function onNewBookingCreated(b: Booking) {
     observeRatings([b]);
@@ -304,88 +292,15 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     });
   });
   return (
-    <div data-booking-service={isRide ? "ride" : "delivery"} className="min-h-screen w-full min-w-0 overflow-x-clip flex flex-col bg-background pb-20 sm:pb-0">
-      {/* Header */}
-      <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">
-        <div className="mx-auto w-full max-w-7xl min-w-0 px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
-          <BrandNavigation />
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <div className="hidden sm:flex flex-col items-end text-sm leading-tight">
-              <span className="font-medium">{user?.name}</span>
-              <span className="text-xs text-muted-foreground">{user?.email}</span>
-            </div>
-            <NotificationInbox onBooking={(id, type) => useAppStore.getState().openBookingSummary(id, type === "RIDE" ? "ride" : "delivery")} />
-            <ProfileMenu
-              name={user?.name}
-              email={user?.email}
-              roleLabel={`Customer · ${isRide ? "Ride" : "Delivery"}`}
-              onLogout={handleLogout}
-            />
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 mx-auto w-full min-w-0 max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-        <Button variant="ghost" className="-ml-3 gap-2" onClick={() => setView("mode-select")} aria-label="Back to services">
-          <ArrowLeft className="h-4 w-4" /> Back to services
-        </Button>
-        {/* Welcome */}
-        <div className="dashboard-welcome flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <p className="eyebrow mb-3">{isRide ? "YOUR RIDE DESK" : "YOUR DELIVERY DESK"}</p>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-              Good to see you, {user?.name?.split(" ")[0] ?? "there"}.
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              {isRide ? "Book a ride or follow your current trip." : "Book a delivery or follow your package."}
-            </p>
-          </div>
-          <Button size="lg" onClick={() => { setRepeatBooking(null); setShowNew(true); }} className="gap-2">
-            <Plus className="h-4 w-4" /> {isRide ? "Book a ride" : "Book a delivery"}
-          </Button>
-        </div>
-
-        {savedAt && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Saved bookings · last updated {new Date(savedAt).toLocaleString()}. Statuses and rider locations may have changed.</p>}
-        {/* Recent booking map preview */}
-        {tab === "active" && !loading && !loadError && bookings.length > 0 && (
-          <Card className="min-w-0">
-            <CardContent className="min-w-0 py-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium">
-                  <MapPin className="h-4 w-4 shrink-0 text-primary" /> Most recent booking
-                  <span className="min-w-0 text-muted-foreground font-normal [overflow-wrap:anywhere]">· {bookings[0].refCode}</span>
-                </div>
-                <StatusBadge status={bookings[0].status} type={bookings[0].type} />
-              </div>
-              {online && !offlineAccess ? <BookingRouteMap
-                pickup={{ lat: bookings[0].pickupLat, lng: bookings[0].pickupLng }}
-                dropoff={{ lat: bookings[0].dropoffLat, lng: bookings[0].dropoffLng }}
-                className="h-48"
-              /> : <p className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">Route map available when you reconnect. Your saved pickup and drop-off are below.</p>}
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-1 text-xs text-muted-foreground">
-                <span className="flex min-w-0 items-start gap-1.5">
-                  <span className="h-4 w-4 shrink-0 rounded-full bg-emerald-600 text-white text-[9px] font-bold grid place-items-center">A</span>
-                  <span className="min-w-0 [overflow-wrap:anywhere]">{bookings[0].pickupLabel}</span>
-                </span>
-                <span className="flex min-w-0 items-start gap-1.5">
-                  <span className="h-4 w-4 shrink-0 rounded-full bg-rose-600 text-white text-[9px] font-bold grid place-items-center">B</span>
-                  <span className="min-w-0 [overflow-wrap:anywhere]">{bookings[0].dropoffLabel}</span>
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        <div ref={listRef} />
+    <CustomerAppShell selected="bookings" title="Bookings">
+    <div data-booking-service={isRide ? "ride" : "delivery"} className="min-w-0 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div role="group" aria-label="Booking service" className="flex gap-2"><Button type="button" variant={isRide ? "default" : "outline"} aria-pressed={isRide} onClick={() => useAppStore.getState().chooseMode("ride")}><Car />Rides</Button><Button type="button" variant={!isRide ? "default" : "outline"} aria-pressed={!isRide} onClick={() => useAppStore.getState().chooseMode("delivery")}><Package />Deliveries</Button></div><Button size="lg" onClick={() => { setRepeatBooking(null); setShowNew(true); }}><Plus />{isRide ? "Book a ride" : "Book a delivery"}</Button></div>
+      {savedAt && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">Saved · updated {new Date(savedAt).toLocaleString()}. Statuses and locations may have changed.</p>}
         {/* Tabs */}
         <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "history")}>
           <TabsList>
             <TabsTrigger value="active" className="gap-1.5">
               <ServiceIcon className="h-4 w-4" /> Active
-              {bookings.length > 0 && (
-                <span className="ml-1 rounded-full bg-primary/15 text-primary text-xs px-1.5">
-                  {bookings.filter((b) => !["DELIVERED", "CANCELLED"].includes(b.status)).length}
-                </span>
-              )}
             </TabsTrigger>
             <TabsTrigger value="history" className="gap-1.5">
               <History className="h-4 w-4" /> History
@@ -393,15 +308,16 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
           </TabsList>
         </Tabs>
 
-<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{!online || offline || savedAt ? (!online ? "You’re offline. Saved statuses may be out of date." : "Reconnecting… Your saved booking and entered details are kept.") : lastChecked ? "Updated " + lastChecked.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading || !online} onClick={() => void load()}>Refresh bookings</Button></div>
+<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{!online || offline || savedAt ? (!online ? "You’re offline. Saved statuses may be out of date." : "Reconnecting… Your saved booking and entered details are kept.") : lastChecked ? "Updated " + lastChecked.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading || refreshing || !online} onClick={() => void load()}>{refreshing ? "Updating…" : "Refresh bookings"}</Button></div>
         {tab === "history" && <HistoryFilters bookingType={bookingType} value={filters} onChange={setFilters} />}
                 {/* List */}
+        {loadError && bookings.length > 0 && !loading && <RequestError message={loadError} onRetry={() => void load()} />}
         {loading ? (
           <div role="status" className="flex flex-col items-center gap-3 py-16 text-sm text-muted-foreground">
             <FetchItLoader className="h-14 w-14" />
             <p>Loading {isRide ? "rides" : "deliveries"}…</p>
           </div>
-        ) : loadError ? (
+        ) : loadError && bookings.length === 0 ? (
           <RequestError message={loadError} onRetry={() => void load()} />
         ) : bookings.length === 0 ? (
           tab === "history" ? <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">No bookings match these filters.</p> : <EmptyState bookingType={bookingType} onNew={() => { setRepeatBooking(null); setShowNew(true); }} />
@@ -425,12 +341,11 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
         )}
         {tab === "history" && nextCursor && !loading && <Button variant="outline" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Loading…" : "Load older bookings"}</Button>}
         {moreError && <RequestError message={moreError} onRetry={() => void loadMore()} />}
-      </main>
 
       {/* New booking modal */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent
-          className="flex flex-col overflow-hidden p-0 sm:max-w-2xl sm:p-0"
+          className="mobile-fullscreen-dialog top-0 left-0 translate-x-0 translate-y-0 sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 flex flex-col overflow-hidden p-0 sm:max-w-2xl sm:p-0"
           onPointerDownOutside={(e) => {
             // Google's address-suggestion dropdown (.pac-container) is
             // rendered directly on <body>, outside this dialog's own DOM
@@ -462,7 +377,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
 
       {/* Tracking modal */}
       <Dialog open={!!trackingBooking} onOpenChange={(o) => !o && setTrackingBooking(null)}>
-        <DialogContent className="top-0 left-0 h-dvh w-screen max-w-none max-h-dvh translate-x-0 translate-y-0 rounded-none p-4 sm:top-1/2 sm:left-1/2 sm:h-auto sm:w-full sm:max-w-2xl sm:max-h-[92vh] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:p-6 overflow-y-auto">
+        <DialogContent className="mobile-fullscreen-dialog top-0 left-0 h-dvh w-screen max-w-none max-h-dvh translate-x-0 translate-y-0 rounded-none p-4 sm:top-1/2 sm:left-1/2 sm:h-auto sm:w-full sm:max-w-2xl sm:max-h-[92vh] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:p-6 overflow-y-auto">
           {trackingBooking && (trackingBooking.type === "RIDE" ? (
             <RideTrackingView key={trackingBooking.id} ride={trackingBooking} updatesPaused={offline} readOnly={!online || offlineAccess || !!savedAt} onClose={() => setTrackingBooking(null)} onCancelled={load} onUpdated={handleTrackingUpdate} />
           ) : (
@@ -492,13 +407,9 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
         setSummaryBooking(null);
       }} onDetails={() => { setTrackingBooking(summaryBooking); setSummaryBooking(null); }} />}</DialogContent></Dialog>
       <Dialog open={!!summaryError} onOpenChange={(open) => !open && setSummaryError(null)}><DialogContent><DialogHeader><DialogTitle>Summary unavailable</DialogTitle><DialogDescription>{summaryError}</DialogDescription></DialogHeader></DialogContent></Dialog>
-      {ratingBooking && !trackingBooking && !summaryBooking && !showNew && !profileOpen && !summaryError && <BookingActions key={"rating:" + ratingBooking.id} booking={ratingBooking} ratingPrompt onRatingPromptClosed={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
-      <CustomerBottomNav selected={profileOpen ? "profile" : tab === "history" ? "bookings" : "home"} onHome={() => { setTab("active"); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBookings={() => { setTab("history"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} onProfile={() => setProfileOpen(true)} />
-      <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Your profile</DialogTitle><DialogDescription>Manage your contact details and booking alerts.</DialogDescription></DialogHeader><ProfileSettings /><NotificationSettings /></DialogContent></Dialog>
-      <footer className="mt-auto border-t py-4 text-center text-xs text-muted-foreground">
-        Fetch-It · Deliveries &amp; Rides
-      </footer>
+      {ratingBooking && !trackingBooking && !summaryBooking && !showNew && !summaryError && <BookingActions key={"rating:" + ratingBooking.id} booking={ratingBooking} ratingPrompt onRatingPromptClosed={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
     </div>
+    </CustomerAppShell>
   );
 }
 
@@ -790,6 +701,7 @@ function BookingForm({
   const v = VEHICLES[vehicleClass];
   const pickupChosen = !!area && !pickupIssue && !pickupPinUnavailable && !!pickupLabel && (!connected || !!(pickupLat && pickupLng));
   const dropoffChosen = !!area && !dropoffIssue && !dropoffPinUnavailable && !!dropoffLabel && (!connected || !!(dropoffLat && dropoffLng));
+  const [pinPicker, setPinPicker] = useState<"pickup" | "dropoff" | null>(null);
   const stepLabels = ["Pickup", "Drop-off", "Details", "Review booking"];
 
   return (
@@ -806,7 +718,7 @@ function BookingForm({
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
       {/* Step indicator */}
-      <div aria-label="Booking progress" className="grid shrink-0 grid-cols-4 gap-1 border-b px-4 pb-4 text-[11px] font-medium text-muted-foreground sm:px-6 sm:text-xs">
+      <div aria-label="Booking progress" className="grid shrink-0 grid-cols-4 gap-1 border-b px-4 pb-3 text-xs font-medium text-muted-foreground sm:px-6">
         {stepLabels.map((label, i) => {
           const complete = i < step || (reviewDraft !== null && i < 3 && i !== step);
           return (
@@ -834,11 +746,11 @@ function BookingForm({
 
       <div ref={stepContent} role="region" aria-label={stepLabels[step]} tabIndex={-1} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 outline-none sm:px-6">
       {reviewDraft && <p role="status" className="text-sm font-medium">Editing {stepLabels[step].toLowerCase()}</p>}
-      {step === 0 && !reviewDraft && <p className="text-xs text-muted-foreground">Pangasinan land locations only. Your draft is saved on this device.</p>}
+      {step === 0 && !reviewDraft && <p className="text-xs text-muted-foreground">Pangasinan only · Draft saved on this device.</p>}
       {!connected && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">You can edit your saved draft offline. Reconnect to get a fare and confirm.</p>}
       {coverageError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{coverageError}</p>}
       {!area && <p role="status" className="text-sm text-muted-foreground">{coverageFailed ? "Service-area checks couldn’t load. Refresh this page before booking." : "Checking service area…"}</p>}
-      <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Service-area map information</summary><p className="mt-2">Coverage: <a className="underline" href="https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/" target="_blank" rel="noreferrer">geoBoundaries / OCHA</a> · <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a className="underline" href="/service-area-data.json" target="_blank" rel="noreferrer">Data (ODbL)</a></p></details>
+
 
       {/* Step 0: Pickup */}
       {step === 0 && (
@@ -853,7 +765,7 @@ function BookingForm({
               variant="ghost"
               disabled={!connected}
               onClick={() => fillCurrentLocation("pickup")}
-              className="min-h-11 text-sm"
+              className="min-h-12 text-base"
             >
               Use my location
             </Button>
@@ -875,7 +787,8 @@ function BookingForm({
 
           </div>
           <SavedPlaces place={pickupLabel && pickupLat && pickupLng ? { label: pickupLabel, lat: Number(pickupLat), lng: Number(pickupLng) } : null} onSelect={(place) => { setPickupLabel(place.label); setPickupLat(String(place.lat)); setPickupLng(String(place.lng)); }} />
-          {connected && <LocationMap
+          {connected && <Button type="button" variant="outline" className="w-full" aria-expanded={pinPicker === "pickup"} onClick={() => { setPickupPinUnavailable(false); setPinPicker(pinPicker === "pickup" ? null : "pickup"); }}><MapPin />{pinPicker === "pickup" ? "Hide map" : "Choose on map"}</Button>}
+          {connected && pinPicker === "pickup" && <LocationMap
             restrictToServiceArea
             onAvailabilityChange={setPickupPinUnavailable}
             lat={pickupLat ? Number(pickupLat) : null}
@@ -884,6 +797,7 @@ function BookingForm({
             confirmLabel="Use this pickup"
             mapClassName="h-48 sm:h-64"
             onConfirm={(place) => {
+              setPinPicker(null);
               setPickupLabel(place.label);
               setPickupLat(String(place.lat));
               setPickupLng(String(place.lng));
@@ -906,7 +820,7 @@ function BookingForm({
               variant="ghost"
               disabled={!connected}
               onClick={() => fillCurrentLocation("dropoff")}
-              className="min-h-11 text-sm"
+              className="min-h-12 text-base"
             >
               Use my location
             </Button>
@@ -928,7 +842,8 @@ function BookingForm({
 
           </div>
           <SavedPlaces place={dropoffLabel && dropoffLat && dropoffLng ? { label: dropoffLabel, lat: Number(dropoffLat), lng: Number(dropoffLng) } : null} onSelect={(place) => { setDropoffLabel(place.label); setDropoffLat(String(place.lat)); setDropoffLng(String(place.lng)); }} />
-          {connected && <LocationMap
+          {connected && <Button type="button" variant="outline" className="w-full" aria-expanded={pinPicker === "dropoff"} onClick={() => { setDropoffPinUnavailable(false); setPinPicker(pinPicker === "dropoff" ? null : "dropoff"); }}><MapPin />{pinPicker === "dropoff" ? "Hide map" : "Choose on map"}</Button>}
+          {connected && pinPicker === "dropoff" && <LocationMap
             restrictToServiceArea
             onAvailabilityChange={setDropoffPinUnavailable}
             lat={dropoffLat ? Number(dropoffLat) : null}
@@ -937,6 +852,7 @@ function BookingForm({
             confirmLabel="Use this drop-off"
             mapClassName="h-48 sm:h-64"
             onConfirm={(place) => {
+              setPinPicker(null);
               setDropoffLabel(place.label);
               setDropoffLat(String(place.lat));
               setDropoffLng(String(place.lng));
@@ -995,7 +911,7 @@ function BookingForm({
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div className="space-y-2">
               <Label htmlFor="pickup-timing">Pickup time</Label>
-              <select id="pickup-timing" className="min-h-11 w-full rounded-md border border-input bg-background p-3 text-base md:text-sm focus-visible:outline-2 focus-visible:outline-ring" value={scheduledAt ? "LATER" : "NOW"} onChange={event => setScheduledAt(event.target.value === "NOW" ? "" : pickupScheduleInput(new Date(Date.now() + 30 * 60_000)))}><option value="NOW">Now</option><option value="LATER">Schedule for later</option></select>
+              <select id="pickup-timing" className="min-h-12 w-full rounded-md border border-input bg-background p-3 text-base md:text-sm focus-visible:outline-2 focus-visible:outline-ring" value={scheduledAt ? "LATER" : "NOW"} onChange={event => setScheduledAt(event.target.value === "NOW" ? "" : pickupScheduleInput(new Date(Date.now() + 30 * 60_000)))}><option value="NOW">Now</option><option value="LATER">Schedule for later</option></select>
               {scheduledAt && <><Label htmlFor="scheduled">Date and time (Philippine time)</Label><Input
                 id="scheduled"
                 type="datetime-local"
@@ -1029,7 +945,7 @@ function BookingForm({
             ] as const).map(place => <div key={place.label} className="flex items-start gap-2">
               <MapPin className={`mt-1 h-4 w-4 shrink-0 ${place.color}`} />
               <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">{place.label}</p><p className="break-words text-sm [overflow-wrap:anywhere]">{place.address}</p></div>
-              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label={`Edit ${place.label.toLowerCase()}`} onClick={() => editFromReview(place.editStep)} className="min-h-11 px-3 text-sm">Edit</Button>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label={`Edit ${place.label.toLowerCase()}`} onClick={() => editFromReview(place.editStep)} className="min-h-12 px-3 text-sm">Edit</Button>
             </div>)}
           </section>
           <section aria-label="Booking details summary" className="rounded-xl bg-muted/30 p-3">
@@ -1040,7 +956,7 @@ function BookingForm({
                 {!scheduleValid && <p role="alert" className="text-destructive">Pickup time has passed. Edit the details to choose a new time.</p>}
                 {!isRide && cargoNotes && <p className="break-words text-muted-foreground [overflow-wrap:anywhere]">{cargoNotes}</p>}
               </div>
-              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label="Edit booking details" onClick={() => editFromReview(2)} className="min-h-11 px-3 text-sm">Edit</Button>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label="Edit booking details" onClick={() => editFromReview(2)} className="min-h-12 px-3 text-sm">Edit</Button>
             </div>
           </section>
 
@@ -1104,6 +1020,7 @@ function BookingForm({
           )}
         </div>
       )}
+      <details className="text-xs text-muted-foreground"><summary className="cursor-pointer min-h-12 py-3">Service-area map information</summary><p className="mt-2">Coverage: <a className="underline" href="https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/" target="_blank" rel="noreferrer">geoBoundaries / OCHA</a> · <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a className="underline" href="/service-area-data.json" target="_blank" rel="noreferrer">Data (ODbL)</a></p></details>
       </div>
 
       {/* Navigation */}
@@ -1127,7 +1044,7 @@ function BookingForm({
             {reviewDraft ? "Save changes" : step === 2 ? "Review booking" : step === 0 ? "Next: drop-off" : "Next: details"}
           </Button>
         ) : (
-          <Button type="button" className="min-w-0 px-3 text-xs sm:text-sm" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
+          <Button type="button" className="min-h-14 min-w-0 px-3 text-base" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
             {submitting ? <FetchItLoader className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             {paymentMethod === "CASH" ? "Confirm booking" : "Continue to payment"}
           </Button>

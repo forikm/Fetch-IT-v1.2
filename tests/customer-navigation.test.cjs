@@ -4,7 +4,7 @@ const fs = require("node:fs"), ts = require("typescript");
 const source = ts.transpileModule(fs.readFileSync("src/hooks/use-customer-view-history.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 test("browser Back restores customer views and cannot restore a signed-out dashboard", () => {
   let state = { view: "landing", user: null }, subscriber, onPop, cleanup;
-  const history = { state: {}, entries: [], replaceState(value) { this.state = value; }, pushState(value) { this.state = value; this.entries.push(value); } };
+  const history = { state: { fetchitOverlay: "stale-before-reload" }, entries: [], replaceState(value) { this.state = value; }, pushState(value) { this.state = value; this.entries.push(value); } };
   const store = { getState: () => state, subscribe: callback => { subscriber = callback; return () => { subscriber = null; }; } };
   state.setView = view => { const previous = state; state = { ...state, view }; subscriber?.(state, previous); };
   const exports = {};
@@ -12,6 +12,7 @@ test("browser Back restores customer views and cannot restore a signed-out dashb
     ? { useEffect: effect => { cleanup = effect(); } } : { useAppStore: store },
     { history, addEventListener: (_, cb) => { onPop = cb; }, removeEventListener: () => { onPop = null; } });
   exports.useCustomerViewHistory(true);
+  assert.equal(history.state.fetchitOverlay, undefined, "Reload clears an old overlay entry before a new dialog opens");
   state.setView("login");
   assert.equal(history.entries.length, 1);
   assert.equal(history.state.fetchitView, "login");
@@ -20,7 +21,11 @@ test("browser Back restores customer views and cannot restore a signed-out dashb
   assert.equal(history.entries.length, 1, "Sign-in replaces its form entry");
   onPop({ state: { fetchitView: "landing" } });
   assert.equal(state.view, "mode-select");
+  state.setView("customer-profile");
+  assert.equal(history.state.fetchitView, "customer-profile");
   state.user = null;
+  onPop({ state: { fetchitView: "customer-profile" } });
+  assert.equal(state.view, "landing");
   onPop({ state: { fetchitView: "ride-dashboard" } });
   assert.equal(state.view, "landing");
   assert.equal(state.user, null);

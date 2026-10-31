@@ -262,3 +262,19 @@ input, textarea, select {
     scroll-behavior: auto !important;
   }
 }
+
+/* Mobile customer workspace: stable navigation, readable forms and safe areas. */
+body { --connection-height: 0px; --app-safe-top: env(safe-area-inset-top); }
+body:has([data-connection-banner]) { --connection-height: calc(3.5rem + env(safe-area-inset-top)); --app-safe-top: 0px; padding-top: var(--connection-height); }
+[data-customer-header] { top: var(--connection-height); }
+summary { min-block-size: 3rem; align-content: center; }
+[data-customer-workspace] { font-size: 1rem; line-height: 1.5; }
+@media (max-width: 639px) {
+  .mobile-fullscreen-dialog { --tw-translate-x: 0px !important; --tw-translate-y: 0px !important; top: var(--connection-height) !important; left: 0 !important; width: 100% !important; max-width: 100% !important; height: calc(100dvh - var(--connection-height)) !important; max-height: calc(100dvh - var(--connection-height)) !important; transform: none !important; translate: none !important; border-radius: 0 !important; border: 0; padding-top: var(--app-safe-top) !important; padding-bottom: env(safe-area-inset-bottom) !important; }
+  .mobile-fullscreen-dialog [data-slot="dialog-close"] { top: calc(0.5rem + env(safe-area-inset-top)); }
+  [data-slot="dialog-content"]:not(.mobile-fullscreen-dialog) { max-height: calc(100dvh - var(--connection-height) - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); top: calc(50% + var(--connection-height) / 2); }
+}
+@media (pointer: coarse) {
+  [data-slot="button"], [data-slot="dialog-close"], [data-slot="tabs-trigger"], [data-slot="select-trigger"], [data-slot="dropdown-menu-item"], input:not([type="checkbox"]):not([type="radio"]) { min-height: 3rem; }
+  [data-slot="button"], [data-slot="dialog-close"], [data-slot="tabs-trigger"] { min-width: 3rem; }
+}

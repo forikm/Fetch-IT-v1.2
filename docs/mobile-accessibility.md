@@ -2,6 +2,8 @@
 
 Reviewed and fixed on 2026-10-31.
 
+The later [mobile PWA redesign](customer-mobile-pwa.md) raises mobile app controls to 48px and replaces the workspace navigation; the measurements below record the earlier pass.
+
 ## Changes
 
 - Primary mobile buttons, tabs, menu options, navigation icons, and saved-place removal controls use targets at least 44 CSS pixels high. Button labels can wrap and their default height grows with the content.

@@ -34,6 +34,7 @@ declare namespace google.maps {
     constructor(el: HTMLElement, opts?: MapOptions);
     panTo(latLng: LatLngLiteral): void;
     setZoom(zoom: number): void;
+    getZoom(): number | undefined;
     getCenter(): LatLng;
     addListener(eventName: "idle", handler: () => void): MapsEventListener;
     getBounds(): LatLngBounds | undefined;

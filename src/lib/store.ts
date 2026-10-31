@@ -35,6 +35,7 @@ export type AppView =
   | "signup"
   | "onboarding"
   // Post-login hub where the customer picks Delivery or Ride.
+  | "customer-profile"
   | "mode-select"
   | "customer-dashboard"
   | "ride-dashboard";
@@ -76,7 +77,13 @@ interface AppState {
   pendingMode: AppMode | null;
   beginService: (mode: AppMode, view: "login" | "signup") => void;
   pendingBookingId: string | null;
-  openBookingSummary: (id: string, mode: AppMode) => void;
+  pendingBookingPresentation: "summary" | "tracking";
+  newBookingRequested: boolean;
+  bookingsTab: "active" | "history";
+  setBookingsTab: (tab: "active" | "history") => void;
+  startBooking: (mode: AppMode) => void;
+  clearNewBookingRequest: () => void;
+  openBookingSummary: (id: string, mode: AppMode, presentation?: "summary" | "tracking") => void;
   clearPendingBooking: () => void;
   setView: (v: AppView) => void;
   setPendingRole: (r: Role | null) => void;
@@ -98,7 +105,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingMode: readService(),
   beginService: (mode, view) => { saveService(mode); set({ pendingMode: mode, pendingRole: "CUSTOMER", view }); },
   pendingBookingId: null,
-  openBookingSummary: (id, mode) => set({ pendingBookingId: id, mode, view: mode === "ride" ? "ride-dashboard" : "customer-dashboard" }),
+  pendingBookingPresentation: "summary",
+  newBookingRequested: false,
+  bookingsTab: "active",
+  setBookingsTab: bookingsTab => set({ bookingsTab }),
+  startBooking: mode => { saveService(null); set({ mode, view: serviceView(mode), newBookingRequested: true, bookingsTab: "active" }); },
+  clearNewBookingRequest: () => set({ newBookingRequested: false }),
+  openBookingSummary: (id, mode, presentation = "summary") => set({ pendingBookingId: id, pendingBookingPresentation: presentation, bookingsTab: "active", mode, view: serviceView(mode) }),
   clearPendingBooking: () => set({ pendingBookingId: null }),
   setView: (v) => set({ view: v }),
   setPendingRole: (r) => set({ pendingRole: r }),
@@ -172,7 +185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     clearAuthProgress();
     clearOfflineAccount(get().user?.id);
     setPendingLogout(true);
-    set({ user: null, offlineAccess: false, view: "landing", pendingRole: null, pendingBookingId: null, mode: null, pendingMode: null });
+    set({ user: null, offlineAccess: false, view: "landing", pendingRole: null, pendingBookingId: null, newBookingRequested: false, mode: null, pendingMode: null });
     try {
       const response = await fetch("/api/auth/logout", { method: "POST" });
       if (response.ok) setPendingLogout(false);
