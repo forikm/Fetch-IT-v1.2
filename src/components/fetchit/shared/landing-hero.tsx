@@ -15,6 +15,8 @@ export function LandingHero({ onStart, onLogin, onSetupPlaces, signedIn, riderAp
   const [mode, setMode] = useState<AppMode>("delivery");
   const [menuOpen, setMenuOpen] = useState(false);
   const mapRef = useRef<SVGSVGElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const navigationRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -26,12 +28,20 @@ export function LandingHero({ onStart, onLogin, onSetupPlaces, signedIn, riderAp
     motion.addEventListener("change", update);
     return () => motion.removeEventListener("change", update);
   }, []);
+  useEffect(() => {
+    if (!menuOpen) return;
+    navigationRef.current?.querySelector<HTMLElement>("a, button")?.focus();
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setMenuOpen(false); menuButtonRef.current?.focus(); } };
+    const outside = (event: PointerEvent) => { if (!headerRef.current?.contains(event.target as Node)) setMenuOpen(false); };
+    document.addEventListener("keydown", escape); document.addEventListener("pointerdown", outside);
+    return () => { document.removeEventListener("keydown", escape); document.removeEventListener("pointerdown", outside); };
+  }, [menuOpen]);
   return <div className={styles["root"]}>
     <div className={styles["orange-field"]} aria-hidden="true" />
 
-<header className={styles["header"]}>
+<header ref={headerRef} className={styles["header"]}>
   <a href="#" className={styles["landing-logo"]} aria-label="Fetch-It home"><FetchItLogo size={42} /></a>
-  <nav className={cn(menuOpen && styles.open)} id="landing-navigation" aria-label="Main navigation" onClick={() => setMenuOpen(false)}
+  <nav ref={navigationRef} className={cn(menuOpen && styles.open)} id="landing-navigation" aria-label="Main navigation" onClick={() => setMenuOpen(false)}
     onKeyDown={(event) => {
       if (event.key === "Escape") {
         setMenuOpen(false);
@@ -47,7 +57,7 @@ export function LandingHero({ onStart, onLogin, onSetupPlaces, signedIn, riderAp
     <a className={styles["nav-link"]} href={riderAppUrl}>Become a rider ↗</a>
     <button type="button" className={cn(styles["nav-link"], styles["login-link"])} onClick={() => onLogin(mode)}>{signedIn ? "Dashboard" : "Sign in"}</button>
   </nav>
-  <button type="button" ref={menuButtonRef} className={styles["menu-button"]} aria-expanded={menuOpen} aria-controls="landing-navigation" aria-label="Toggle navigation" onClick={() => setMenuOpen((open) => !open)}><span /><span /></button>
+  <div className={styles["header-actions"]}><button type="button" className={styles["header-sign-in"]} onClick={() => onLogin(mode)}>{signedIn ? "Dashboard" : "Sign in"}</button><button type="button" ref={menuButtonRef} className={styles["menu-button"]} aria-expanded={menuOpen} aria-controls="landing-navigation" aria-label="Toggle navigation" onClick={() => setMenuOpen((open) => !open)}><span /><span /></button></div>
 </header>
   <svg className={styles["icon-library"]} aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
     <symbol id="fi-landing-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
@@ -61,12 +71,13 @@ export function LandingHero({ onStart, onLogin, onSetupPlaces, signedIn, riderAp
         <div className={styles["eyebrow"]}><span></span> FETCH-IT</div>
         <h1 id="hero-title">Deliveries<br />and <span>rides.</span></h1>
         <p className={styles["intro"]}>Book and track your delivery or ride in one place.</p>
+        <p className={styles["coverage"]}>Serving Pangasinan.</p>
         <div className={styles["service-picker"]} role="group" aria-label="Select service"><button type="button" className={cn(styles.service, mode === "delivery" && styles.selected)} onClick={() => setMode("delivery")} aria-pressed={mode === "delivery"}><svg><use href="#fi-landing-box"/></svg>Delivery</button><button type="button" className={cn(styles.service, mode === "ride" && styles.selected)} onClick={() => setMode("ride")} aria-pressed={mode === "ride"}><svg><use href="#fi-landing-car"/></svg>Ride</button></div>
-        <div className={styles["hero-actions"]}><button type="button" className={styles["primary-button"]} onClick={() => signedIn ? onStart(mode) : onLogin(mode)}><span>{signedIn ? mode === "ride" ? "Book a ride" : "Book a delivery" : "Sign in"}</span><svg><use href="#fi-landing-arrow"/></svg></button>{signedIn ? <a className={styles["how-button"]} href="#how-it-works">How it works</a> : <button type="button" className={styles["how-button"]} onClick={() => onStart(mode)}>Create account</button>}</div>
+        <div className={styles["hero-actions"]}><button type="button" className={styles["primary-button"]} onClick={() => signedIn ? onStart(mode) : onLogin(mode)}><span>{signedIn ? mode === "ride" ? "Book a ride" : "Book a delivery" : mode === "ride" ? "Sign in for a ride" : "Sign in for delivery"}</span><svg><use href="#fi-landing-arrow"/></svg></button>{signedIn ? <a className={styles["how-button"]} href="#how-it-works">How it works</a> : <button type="button" className={styles["how-button"]} onClick={() => onStart(mode)}>Create account</button>}</div>
       </div>
       <div className={styles["hero-art"]} aria-label="Illustrated delivery route preview">
         <div className={styles["mascot"]}>
-          <Image src="/images/fetch-it-mascot.png" alt="Fetch-It dog mascot wearing an orange delivery cap" width={1254} height={1254} sizes="(max-width: 800px) 156px, 190px" />
+          <Image src="/images/fetch-it-mascot.png" alt="Fetch-It dog mascot wearing an orange delivery cap" width={1254} height={1254} sizes="(max-width: 620px) 80px, (max-width: 800px) 140px, (max-width: 1100px) 165px, 190px" />
         </div>
         <span className={cn(styles["ornament"], styles["orb"], styles["orb-one"])} aria-hidden="true"></span><span className={cn(styles["ornament"], styles["triangle"])} aria-hidden="true"></span><span className={cn(styles["ornament"], styles["small-spark"])} aria-hidden="true">✦</span>
         <div className={cn(styles["parcel-card"], styles["floating"])}><div className={styles["parcel-halo"]}></div><svg className={styles["parcel-illustration"]} viewBox="0 0 140 130" aria-hidden="true"><path d="m70 15 51 28-51 29-51-29Z" fill="#ffbd72"/><path d="m19 43 51 29v49l-51-29Z" fill="#f69537"/><path d="m70 72 51-29v49l-51 29Z" fill="#df6c22"/><path d="m46 28 51 29v25l-15 8V65L32 36Z" fill="#ffdcac"/><path d="m33 78 19 11v5L33 83Z" fill="#fff3de"/><path d="m77 104 13-8" stroke="#ffb76e" strokeWidth="3" strokeLinecap="round"/></svg><span className={styles["parcel-check"]}><svg><use href="#fi-landing-check"/></svg></span><span className={styles["parcel-label"]}>Handled with care.</span></div>
@@ -75,7 +86,7 @@ export function LandingHero({ onStart, onLogin, onSetupPlaces, signedIn, riderAp
           <div className={styles["map-surface"]}>
             <svg ref={mapRef} viewBox="0 0 430 300" className={styles["route-map"]} role="img" aria-label="Illustrated delivery route from pickup to your destination">
               <defs><pattern id="fi-landing-blocks" width="95" height="78" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)"><rect width="95" height="78" fill="#f4f1e9"/><rect x="8" y="8" width="78" height="60" rx="8" fill="#e8e7dd"/></pattern><path id="fi-landing-travel-path" d="M76 230 133 218 Q148 215 145 199L130 132Q127 116 145 112L271 85Q291 81 295 103L311 168"/></defs>
-              <rect width="430" height="300" fill="url(#fi-landing-blocks)"/><path d="m352-20 12 93 24 57-3 90 48 99" fill="none" stroke="#d4e9e6" strokeWidth="36"/><path d="m-15 183 452-97M99-15l69 331M272-20l71 330" fill="none" stroke="#fffdf8" strokeWidth="17"/><rect x="174" y="153" width="63" height="63" rx="17" fill="#d8e0cb" transform="rotate(-12 205 185)"/><circle cx="189" cy="178" r="10" fill="#c5d2b9"/><circle cx="215" cy="187" r="12" fill="#c5d2b9"/><text x="29" y="47" className={styles["map-label"]}>LAHUG</text><text x="224" y="254" className={styles["map-label"]}>CEBU CITY</text>
+              <rect width="430" height="300" fill="url(#fi-landing-blocks)"/><path d="m352-20 12 93 24 57-3 90 48 99" fill="none" stroke="#d4e9e6" strokeWidth="36"/><path d="m-15 183 452-97M99-15l69 331M272-20l71 330" fill="none" stroke="#fffdf8" strokeWidth="17"/><rect x="174" y="153" width="63" height="63" rx="17" fill="#d8e0cb" transform="rotate(-12 205 185)"/><circle cx="189" cy="178" r="10" fill="#c5d2b9"/><circle cx="215" cy="187" r="12" fill="#c5d2b9"/><text x="29" y="47" className={styles["map-label"]}>LINGAYEN</text><text x="224" y="254" className={styles["map-label"]}>PANGASINAN</text>
               <use href="#fi-landing-travel-path" fill="none" stroke="#fff" strokeWidth="13" strokeLinecap="round"/><use href="#fi-landing-travel-path" className={styles["draw-route"]} fill="none" stroke="#f48b37" strokeWidth="6" strokeLinecap="round"/>
               <circle cx="76" cy="230" r="15" fill="#203b38" stroke="white" strokeWidth="5"/><circle cx="76" cy="230" r="4" fill="white"/><circle className={styles["destination-pulse"]} cx="311" cy="168" r="23" fill="#f48b37" opacity=".18"/><circle cx="311" cy="168" r="12" fill="#f48b37" stroke="white" strokeWidth="5"/>
               <g className={styles["moving-rider"]}><circle r="19" fill="#fff" stroke="#ffd4ac" strokeWidth="2"/><g transform="translate(-12,-12)" fill="none" stroke="#203b38" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="17" r="3.5"/><circle cx="20" cy="17" r="3.5"/><path d="m5 17 5-8h5l5 8M8 17h7l-5-8m4-4h4l2 12M9 7H5"/></g><animateMotion dur="12s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;.85;1" calcMode="linear"><mpath href="#fi-landing-travel-path"/></animateMotion></g>

@@ -34,3 +34,9 @@ Production build: next build --webpack. Type checking runs separately before the
 Visual verification uses local mock booking data in the production build, not real bookings or payments. Phone-size checks do not certify an operating system's keyboard, installed-PWA behavior or assistive technology.
 
 Final checks passed: 103 relevant automated tests, ESLint, an independent TypeScript check, and the webpack production build. Browser checks covered 390x844, 360x640 and 360x480 phone layouts, plus 1024x768 desktop navigation. Both Home service actions and checked app controls met 48px targets, with no horizontal overflow. The slow-response fixture retained its booking card while showing Updating. Reconnection reserved 56px above the header and adjusted the booking dialog accordingly. Delivery shortcut and map confirmation advanced to the correct form step; Track opened Active bookings.
+
+## Landing-page follow-up
+
+The public landing now has visible mobile sign-in, 48px menu/secondary controls and 56px service/primary controls. The selected service is named in its sign-in action. The phone illustration is shorter, its mascot does not cover the Preview label, repeated promotional rows are hidden on mobile, and the hero supports the selected light/dark appearance. The desktop artwork is retained. Mobile menu opening focuses its first link; Escape closes it and returns focus, and tapping outside closes it.
+
+Verified at 390x844, 360x640 and 1440x900. All measured landing controls met the 48px minimum and no horizontal overflow was found. Both light and dark appearances, service selection/sign-in, and menu keyboard behavior were checked with the local guest fixture. Twenty navigation/session tests, ESLint, independent TypeScript checking and the webpack production build passed.
