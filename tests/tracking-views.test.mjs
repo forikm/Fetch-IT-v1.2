@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import * as bookingUi from "../src/lib/customer-booking-ui.ts";
-import * as bookingWait from "../src/lib/booking-wait.ts";
+
 
 const jsx = { jsx: (type, props, key) => ({ type, props, key }), jsxs: (type, props, key) => ({ type, props, key }) };
 function load(file, mocks) {
@@ -20,6 +20,7 @@ function load(file, mocks) {
   } });
   return exports;
 }
+const bookingWait = load("../src/lib/booking-wait.ts", { "./job-expiry": load("../src/lib/job-expiry.ts", {}) });
 function nodes(node) {
   if (!node || typeof node !== "object") return [];
   if (Array.isArray(node)) return node.flatMap(nodes);
@@ -170,6 +171,7 @@ test("the map draws, moves and removes the customer marker alongside booking mar
       useEffect(effect) { effects.push(effect); },
     },
     "@/lib/google-maps-loader": { loadGoogleMaps: async () => {} },
+    "@/hooks/use-road-route": { useRoadRoute: () => ({ path: [], warnings: [], loading: false, error: null, retry() {} }) },
     globals: { window: { google: { maps: { Marker, Map, LatLngBounds, Polyline: class { setMap() {} }, SymbolPath: { CIRCLE: 0 } } } } },
   });
   const props = { pickup: { lat: 14.6, lng: 120.9 }, dropoff: { lat: 14.7, lng: 121 }, rider: null, customer: { lat: 14.61, lng: 120.91 } };

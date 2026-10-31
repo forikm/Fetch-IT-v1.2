@@ -4,6 +4,8 @@ import { FetchItLoader } from "@/components/fetchit/shared/loading";
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useRoadRoute } from "@/hooks/use-road-route";
+import { RoadRouteStatus } from "./road-route-status";
 import { MapPinOff } from "lucide-react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
@@ -14,12 +16,14 @@ export function LiveTrackingMap({
   dropoff,
   rider,
   customer = null,
+  preview = false,
   className = "h-full w-full",
 }: {
   pickup: Point;
   dropoff: Point;
   rider: Point | null;
   customer?: Point | null;
+  preview?: boolean;
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,12 +33,12 @@ export function LiveTrackingMap({
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [mapVersion, setMapVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     let pickupMarker: google.maps.Marker | null = null;
     let dropoffMarker: google.maps.Marker | null = null;
-    let routeLine: google.maps.Polyline | null = null;
 
     loadGoogleMaps()
       .then(() => {
@@ -42,15 +46,16 @@ export function LiveTrackingMap({
 
         const map = new window.google.maps.Map(containerRef.current, {
           center: pickup,
-          zoom: 14,
+          zoom: preview ? 13 : 14,
           disableDefaultUI: true,
-          zoomControl: true,
-          fullscreenControl: true,
+          zoomControl: !preview,
+          fullscreenControl: !preview,
           gestureHandling: "cooperative",
           mapTypeControl: false,
           streetViewControl: false,
         });
         mapRef.current = map;
+        setMapVersion(value => value + 1);
 
         pickupMarker = new window.google.maps.Marker({
           position: pickup,
@@ -63,13 +68,6 @@ export function LiveTrackingMap({
           map,
           title: "Drop-off",
           label: { text: "B", color: "#fff", fontSize: "11px", fontWeight: "700" },
-        });
-        routeLine = new window.google.maps.Polyline({
-          path: [pickup, dropoff],
-          map,
-          strokeColor: "#ea580c",
-          strokeOpacity: 0.75,
-          strokeWeight: 5,
         });
 
         const bounds = new window.google.maps.LatLngBounds();
@@ -85,7 +83,6 @@ export function LiveTrackingMap({
       cancelled = true;
       pickupMarker?.setMap(null);
       dropoffMarker?.setMap(null);
-      routeLine?.setMap(null);
       riderMarkerRef.current?.setMap(null);
       riderMarkerRef.current = null;
       customerMarkerRef.current?.setMap(null);
@@ -93,7 +90,9 @@ export function LiveTrackingMap({
       mapRef.current = null;
     };
     // Pickup/drop-off belong to one booking and do not change while mounted.
-  }, [pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, attempt]);
+  }, [pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, attempt, preview]);
+
+  const road = useRoadRoute(mapRef, ready, pickup, dropoff, [rider, customer], mapVersion);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -125,7 +124,7 @@ export function LiveTrackingMap({
 
     const visible = map.getBounds();
     if (visible && !visible.contains(rider)) map.panTo(rider);
-  }, [ready, rider?.lat, rider?.lng]);
+  }, [ready, mapVersion, rider?.lat, rider?.lng]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -153,6 +152,7 @@ export function LiveTrackingMap({
       const bounds = new window.google.maps.LatLngBounds();
       bounds.extend(pickup);
       bounds.extend(dropoff);
+      for (const point of road.path) bounds.extend(point);
       bounds.extend(customer);
       if (rider) bounds.extend(rider);
       map.fitBounds(bounds, 64);
@@ -161,7 +161,7 @@ export function LiveTrackingMap({
       const visible = map.getBounds();
       if (visible && !visible.contains(customer)) map.panTo(customer);
     }
-  }, [ready, customer?.lat, customer?.lng, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng]);
+  }, [ready, mapVersion, customer?.lat, customer?.lng, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng]);
 
   if (failed) {
     return (
@@ -179,7 +179,8 @@ export function LiveTrackingMap({
           <FetchItLoader className="h-6 w-6 text-primary" />
         </div>
       )}
-      {ready && !rider && (
+      {ready && <RoadRouteStatus loading={road.loading} error={road.error} warnings={road.warnings} onRetry={road.retry} />}
+      {ready && !preview && !rider && (
         <div className="pointer-events-none absolute bottom-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full border bg-card/95 px-3 py-1.5 text-center text-xs font-medium shadow-sm [overflow-wrap:anywhere]">
           Waiting for your booking partner to share their location…
         </div>

@@ -100,6 +100,10 @@ declare namespace google.maps {
     setMap(map: Map | null): void;
   }
 
+  function importLibrary(name: "routes"): Promise<{
+    Route: { computeRoutes(request: { origin: LatLngLiteral; destination: LatLngLiteral; travelMode: "DRIVING"; fields: string[] }): Promise<{ routes?: { path?: LatLngLiteral[]; warnings?: string[] }[] }> };
+  }>;
+
   namespace places {
     interface PlaceResult {
       name?: string;
