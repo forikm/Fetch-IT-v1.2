@@ -906,7 +906,7 @@ function BookingForm({
               variant="ghost"
               disabled={!connected}
               onClick={() => fillCurrentLocation("dropoff")}
-              className="h-7 text-xs"
+              className="min-h-11 text-sm"
             >
               Use my location
             </Button>
@@ -970,6 +970,9 @@ function BookingForm({
               <Input
                 id="booking-size"
                 type="number"
+                inputMode={isRide ? "numeric" : "decimal"}
+                aria-describedby="booking-size-guidance"
+                aria-invalid={isRide ? !Number.isInteger(Number(passengers)) || Number(passengers) < 1 || Number(passengers) > passengerCapacity : !Number.isFinite(Number(cargoWeightKg)) || Number(cargoWeightKg) <= 0 || Number(cargoWeightKg) > v.capacityKg}
                 step={isRide ? "1" : "0.1"}
                 min={isRide ? "1" : "0.1"}
                 max={isRide ? passengerCapacity : v.capacityKg}
@@ -977,6 +980,7 @@ function BookingForm({
                 onChange={(e) => isRide ? setPassengers(e.target.value) : setCargoWeightKg(e.target.value)}
                 required
               />
+              <p id="booking-size-guidance" className="text-xs text-muted-foreground">{isRide ? "Enter a whole number of passengers, from 1 to " + passengerCapacity + "." : "Enter the package weight in kilograms, up to " + v.capacityKg + " kg. Decimals are allowed."}</p>
               {isRide && (!Number.isInteger(Number(passengers)) || Number(passengers) < 1 || Number(passengers) > passengerCapacity) && (
                 <p className="text-xs text-destructive">Choose 1{passengerCapacity > 1 ? `–${passengerCapacity}` : ""} passenger{passengerCapacity > 1 ? "s" : ""} for {v.label}, or choose a larger vehicle.</p>
               )}
@@ -991,7 +995,7 @@ function BookingForm({
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div className="space-y-2">
               <Label htmlFor="pickup-timing">Pickup time</Label>
-              <select id="pickup-timing" className="w-full rounded-md border bg-background p-3" value={scheduledAt ? "LATER" : "NOW"} onChange={event => setScheduledAt(event.target.value === "NOW" ? "" : pickupScheduleInput(new Date(Date.now() + 30 * 60_000)))}><option value="NOW">Now</option><option value="LATER">Schedule for later</option></select>
+              <select id="pickup-timing" className="min-h-11 w-full rounded-md border border-input bg-background p-3 text-base md:text-sm focus-visible:outline-2 focus-visible:outline-ring" value={scheduledAt ? "LATER" : "NOW"} onChange={event => setScheduledAt(event.target.value === "NOW" ? "" : pickupScheduleInput(new Date(Date.now() + 30 * 60_000)))}><option value="NOW">Now</option><option value="LATER">Schedule for later</option></select>
               {scheduledAt && <><Label htmlFor="scheduled">Date and time (Philippine time)</Label><Input
                 id="scheduled"
                 type="datetime-local"
@@ -1001,7 +1005,7 @@ function BookingForm({
               /><p className="text-xs text-muted-foreground">Riders will see the booking when pickup is due.</p>{!scheduleValid && <p role="alert" className="text-xs text-destructive">Choose a future pickup time or select Now.</p>}</>}
             </div>
             {!isRide && <details className="space-y-2 sm:col-span-2">
-              <summary className="cursor-pointer text-sm font-medium">Add handling instructions (optional){cargoNotes ? " · Added" : ""}</summary>
+              <summary className="cursor-pointer py-3 text-sm font-medium">Add handling instructions (optional){cargoNotes ? " · Added" : ""}</summary>
               <Label htmlFor="notes" className="sr-only">Handling instructions</Label>
               <Input
                 id="notes"

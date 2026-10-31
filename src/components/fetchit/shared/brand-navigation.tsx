@@ -36,6 +36,6 @@ export function BrandNavigation() {
         <DropdownMenuItem asChild className="gap-3 rounded-xl px-3 py-3 cursor-pointer"><Link href="/help"><Mail />Help &amp; Support</Link></DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-    <button type="button" aria-label="Fetch-It home" className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => home()}><FetchItLogo size={32} className="[&_span]:text-lg sm:[&_span]:text-xl" /></button>
+    <button type="button" aria-label="Fetch-It home" className="inline-flex min-h-11 min-w-11 items-center shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => home()}><FetchItLogo size={32} className="[&_span]:text-lg sm:[&_span]:text-xl" /></button>
   </div>;
 }

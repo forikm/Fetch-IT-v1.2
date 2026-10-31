@@ -48,7 +48,7 @@ export function ProfileMenu({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="grid min-h-11 min-w-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Open profile menu"
           >
             <Avatar className="h-9 w-9">

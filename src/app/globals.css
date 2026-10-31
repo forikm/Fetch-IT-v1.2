@@ -58,13 +58,13 @@
   --secondary: #e7eee7;
   --secondary-foreground: #24483c;
   --muted: #eeefe8;
-  --muted-foreground: #627069;
+  --muted-foreground: #58675f;
   --accent: #e7eee7;
   --accent-foreground: #183b33;
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.6 0.18 145);
   --border: #dfe4da;
-  --input: #d7dfd4;
+  --input: #748178;
   --ring: #bd4c1d;
   --chart-1: oklch(0.65 0.19 50);
   --chart-2: oklch(0.7 0.15 145);
@@ -99,7 +99,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --success: oklch(0.7 0.18 145);
   --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
+  --input: #7f9183;
   --ring: oklch(0.72 0.18 55);
   --chart-1: oklch(0.7 0.18 55);
   --chart-2: oklch(0.7 0.15 145);
@@ -137,7 +137,7 @@ body:has([data-booking-service="ride"]) {
   --accent: #dce8df;
   --accent-foreground: #163c34;
   --border: #d2dfd5;
-  --input: #c7d7cb;
+  --input: #718477;
   --ring: #244e42;
   --service-surface: #e0ebe3;
   --service-border: #c7d9ce;
@@ -164,7 +164,7 @@ body:has([data-booking-service="ride"]) {
   --accent: #2b4d3d;
   --accent-foreground: #e6f1e9;
   --border: #345444;
-  --input: #3b5e4d;
+  --input: #7f9d8c;
   --ring: #9ccfb3;
   --service-surface: #1c3d2d;
   --service-border: #3b604b;
@@ -180,6 +180,7 @@ body:has([data-booking-service="ride"]) {
   html {
     scroll-behavior: smooth;
     scroll-padding-top: 6rem;
+    scroll-padding-bottom: 6rem;
   }
   ::selection {
     background: #dbe7d6;
@@ -246,4 +247,18 @@ body:has([data-booking-service="ride"]) {
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .animate-fit-pulse, .animate-route-dash { animation: none; }
+}
+
+/* Leave room around focused fields beside fixed mobile navigation. */
+input, textarea, select {
+  scroll-margin-block: 1rem 6rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

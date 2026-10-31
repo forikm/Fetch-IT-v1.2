@@ -121,6 +121,8 @@ test("the chosen stars and comment are submitted once even on a double click", a
   tree.find(node => node.props?.["aria-label"] === "4 stars").props.onClick();
   tree.find(node => node.type === "Textarea").props.onChange({ target: { value: "Great trip" } });
   tree = app.render();
+  assert(tree.some(node => node.props?.role === "status" && node.props.children === "4 out of 5 stars selected"));
+  assert.equal(tree.find(node => node.props?.["aria-label"] === "4 stars").props["aria-pressed"], true);
   const submit = tree.find(node => node.type === "form").props.onSubmit;
   const first = submit({ preventDefault() {} });
   await submit({ preventDefault() {} });

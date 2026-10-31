@@ -381,7 +381,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
           <button
             onClick={() => { progressEnabled.current = false; clearAuthProgress(); setView("landing"); }}
             disabled={loading || codeBusy}
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
+            className="inline-flex min-h-11 min-w-11 items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring transition"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
