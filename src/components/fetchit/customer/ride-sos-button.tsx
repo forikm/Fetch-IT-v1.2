@@ -24,7 +24,7 @@ export function RideSosButton({ bookingId, disabled }: { bookingId: string; disa
     } catch (failure) { setState("idle"); setError(failure instanceof Error && failure.name !== "AbortError" ? failure.message : "Safety alert delivery could not be confirmed. Retry or use Dial 911."); }
     finally { pending.current = false; }
   }
-  return <div className="space-y-1"><Button variant="destructive" className="min-h-14 w-full" disabled={disabled || state !== "idle"} onClick={() => void send()}>{state === "locating" ? "Getting your location…" : state === "sending" ? "Sending safety alert…" : state === "sent" ? "Safety alert saved for staff" : "Urgent safety alert"}</Button>
+  return <div className="space-y-1"><Button variant="outline" className="min-h-12 w-full" disabled={disabled || state !== "idle"} onClick={() => void send()}>{state === "locating" ? "Getting your location…" : state === "sending" ? "Sending safety alert…" : state === "sent" ? "Safety alert saved for staff" : "Alert Fetch-It staff"}</Button>
     <p role="status" className="text-xs">{state === "sent" ? "Your alert and location are saved for urgent staff review. Staff response is not guaranteed. Use Dial 911 for immediate emergency help." : "Shares your current GPS location with Fetch-It staff. Staff response is not guaranteed. Use Dial 911 for immediate emergency help."}</p>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}</div>;
 }

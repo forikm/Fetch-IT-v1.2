@@ -163,6 +163,26 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   const [summaryBooking, setSummaryBooking] = useState<Booking | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [trackingBooking, setTrackingBooking] = useState<Booking | null>(null);
+  const [openingBookingId, setOpeningBookingId] = useState<string | null>(null);
+  const [proofError, setProofError] = useState<{ booking: Booking; message: string } | null>(null);
+  const proofRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => proofRequest.current?.abort(), [tab, bookingType, user?.id]);
+  async function openDeliveryProof(booking: Booking) {
+    proofRequest.current?.abort();
+    const controller = new AbortController();
+    proofRequest.current = controller;
+    setOpeningBookingId(booking.id); setProofError(null);
+    try {
+      const { data } = await readCustomerBooking<{ booking: Booking }>(user?.id ?? "", `/api/bookings/${encodeURIComponent(booking.id)}`, controller.signal);
+      if (controller.signal.aborted) return;
+      if (data.booking?.id !== booking.id) throw new Error("The delivery details could not be loaded. Please retry.");
+      setTrackingBooking(data.booking);
+    } catch (error) {
+      if (!controller.signal.aborted) setProofError({ booking, message: error instanceof Error ? error.message : "The delivery details could not be loaded. Please retry." });
+    } finally {
+      if (proofRequest.current === controller) setOpeningBookingId(null);
+    }
+  }
   const pendingBookingId = useAppStore((state) => state.pendingBookingId);
   useEffect(() => {
     if (!pendingBookingId) return;
@@ -310,6 +330,8 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
 
 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{!online || offline || savedAt ? (!online ? "You’re offline. Saved statuses may be out of date." : "Reconnecting… Your saved booking and entered details are kept.") : lastChecked ? "Updated " + lastChecked.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading || refreshing || !online} onClick={() => void load()}>{refreshing ? "Updating…" : "Refresh bookings"}</Button></div>
         {tab === "history" && <HistoryFilters bookingType={bookingType} value={filters} onChange={setFilters} />}
+        {tab === "history" && openingBookingId && <p role="status" className="text-sm text-muted-foreground">Loading delivery proof…</p>}
+        {tab === "history" && proofError && <RequestError message={proofError.message} onRetry={() => void openDeliveryProof(proofError.booking)} />}
                 {/* List */}
         {loadError && bookings.length > 0 && !loading && <RequestError message={loadError} onRetry={() => void load()} />}
         {loading ? (
@@ -324,7 +346,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
         ) : (
           <div className={tab === "history" ? "min-w-0 space-y-2" : "grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4"}>
             {bookings.map((b) => (
-              tab === "history" ? <BookingHistoryRow key={b.id} booking={b} onOpen={() => setSummaryBooking(b)} /> : (
+              tab === "history" ? <BookingHistoryRow key={b.id} booking={b} opening={openingBookingId === b.id} onOpen={() => b.type === "DELIVERY" && b.status === "DELIVERED" ? void openDeliveryProof(b) : setSummaryBooking(b)} /> : (
               <CustomerBookingCard
                 key={b.id}
                 booking={b}
@@ -385,13 +407,14 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Navigation className="h-5 w-5 text-primary" />
-                  Track delivery · {trackingBooking.refCode}
+                  {trackingBooking.status === "DELIVERED" ? "Delivery completed" : trackingBooking.status === "CANCELLED" ? "Delivery cancelled" : "Track delivery"} · {trackingBooking.refCode}
                 </DialogTitle>
                 <DialogDescription>
-                  Follow your package from pickup to drop-off.
+                  {trackingBooking.status === "DELIVERED" ? "View delivery proof, payment and receipt details." : trackingBooking.status === "CANCELLED" ? "Review your cancelled delivery and booking details." : "Follow your package from pickup to drop-off."}
                 </DialogDescription>
               </DialogHeader>
               <TrackingView
+                key={trackingBooking.id}
                 booking={trackingBooking}
                 updatesPaused={offline || offlineAccess || !!savedAt}
                 onClose={() => setTrackingBooking(null)}
@@ -425,8 +448,7 @@ function EmptyState({ onNew, bookingType }: { onNew: () => void; bookingType: Bo
         </div>
         <h3 className="font-semibold text-lg">No {isRide ? "rides" : "deliveries"} yet</h3>
         <p className="text-muted-foreground mt-1 max-w-sm mx-auto">
-          Choose your pickup, destination and vehicle to get your first
-          {isRide ? "ride" : "delivery"} on its way.
+          Choose your pickup, destination and vehicle to get your first {isRide ? "ride" : "delivery"} on its way.
         </p>
         <Button className="mt-5" onClick={onNew}>
           <Plus className="h-4 w-4" /> Book a {isRide ? "ride" : "delivery"}
@@ -1133,36 +1155,25 @@ function TrackingView({
   const sigProof = proofs.find((p) => p.proofType === "SIGNATURE");
   const photoProof = proofs.find((p) => p.proofType === "PHOTO" && p.photoUrl);
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [routeOpen, setRouteOpen] = useState(false);
   const otpProof = proofs.find((p) => p.proofType === "OTP" && p.verifiedAt);
 
-  return (
-    <div className="space-y-4">
-      <BookingWaitStatus key={booking.id} booking={{ ...booking, status }} updatesPaused={updatesPaused} onUpdated={onUpdated} />
-      <BookingTimeline hideStatus={isAwaitingAcceptance(status)} status={status} type="DELIVERY" scheduled={status === "PENDING" && !!booking.scheduledAt && new Date(booking.scheduledAt).getTime() > Date.now()} />
+  const terminal = isDelivered || status === "CANCELLED";
+  const routeDetails = <div className="space-y-4">
       {/* Map */}
       <div className="relative rounded-xl overflow-hidden border bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:from-amber-950/30 dark:via-orange-950/30 dark:to-amber-900/30 aspect-[16/10]">
         <LiveTrackingMap
+          showLiveStatus={!terminal}
           vehicleClass={booking.vehicleClass}
           pickup={pickup}
           dropoff={dropoff}
           rider={
-            riderLat != null && riderLng != null ? { lat: riderLat, lng: riderLng } : null
+            !terminal && riderLat != null && riderLng != null ? { lat: riderLat, lng: riderLng } : null
           }
         />
-        <div className="absolute top-2 left-2 right-2 w-fit max-w-[calc(100%-1rem)] bg-card/95 backdrop-blur rounded-lg px-2.5 py-1 text-xs font-medium border shadow-sm flex flex-wrap items-center gap-1.5">
-          <span
-            className={cn(
-              "h-1.5 w-1.5 rounded-full",
-              status === "CANCELLED" ? "bg-rose-500" : status === "DELIVERED" ? "bg-emerald-500" : "bg-primary animate-fit-pulse",
-            )}
-          />
-          {customerStatusLabel(status, "DELIVERY")}
-          {eta != null && !isDelivered && status !== "CANCELLED" && (
-            <span className="text-muted-foreground">· Est. delivery duration {eta} min</span>
-          )}
-        </div>
       </div>
-      {lastGpsAt && (
+      {!terminal && eta != null && <p className="text-sm text-muted-foreground">Est. delivery duration: about {eta} min</p>}
+      {!terminal && lastGpsAt && (
         <p className="text-xs text-muted-foreground">
           {locationUpdateLabel(lastGpsAt)}
         </p>
@@ -1180,7 +1191,7 @@ function TrackingView({
               <p className="text-sm text-muted-foreground break-words">{VEHICLES[booking.vehicleClass]?.label} · {booking.rider.vehiclePlate || "Plate not set"}</p>
             </div>
             {booking.rider.phone && (
-                <Button asChild size="icon" variant="outline" className="h-9 w-9 shrink-0">
+                <Button asChild size="icon" variant="outline" className="h-12 w-12 shrink-0">
                   <a href={`tel:${booking.rider.phone}`} aria-label={`Call ${booking.rider.name}`}>
                   <Phone className="h-4 w-4" />
                   </a>
@@ -1213,31 +1224,37 @@ function TrackingView({
         </div>
       </div>
 
+  </div>;
+
+  return (
+    <div className="space-y-4">
+      <BookingWaitStatus key={booking.id} booking={{ ...booking, status }} updatesPaused={updatesPaused} onUpdated={onUpdated} />
+      {!isDelivered && <BookingTimeline compact hideStatus={isAwaitingAcceptance(status)} status={status} type="DELIVERY" scheduled={status === "PENDING" && !!booking.scheduledAt && new Date(booking.scheduledAt).getTime() > Date.now()} />}
       {/* Proof of delivery */}
       {isDelivered && (
-        <Card className="border-emerald-300 bg-emerald-50/40">
+        <Card className="border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-50">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-emerald-600" /> Proof of delivery
+              <ShieldCheck className="h-5 w-5 text-emerald-700 dark:text-emerald-300" /> Proof of delivery
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-emerald-800 dark:text-emerald-200">
               Delivery confirmed at drop-off.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-2 text-sm">
+            <div className="grid grid-cols-2 gap-3 text-sm">
               {otpProof && <ProofChip ok label="Previous OTP proof" icon={<KeyRound className="h-4 w-4" />} />}
               <ProofChip
                 ok={!!sigProof}
                 label="Signature"
                 icon={<PenTool className="h-4 w-4" />}
               />
-              <ProofChip
-                ok={!!photoProof}
-                onClick={photoProof ? () => setPhotoOpen(true) : undefined}
+              {photoProof ? <ProofChip
+                ok
+                onClick={() => setPhotoOpen(true)}
                 label="View delivery photo"
                 icon={<Camera className="h-4 w-4" />}
-              />
+              /> : <p className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-white/60 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950">No photo recorded for this delivery.</p>}
             </div>
             {sigProof?.signatureSvg && (
               <div>
@@ -1254,7 +1271,14 @@ function TrackingView({
         </Card>
       )}
 
-      <BookingActions booking={{ ...booking, status }} />
+
+      {isDelivered && <BookingActions booking={{ ...booking, status }} readOnly={updatesPaused} />}
+      {isDelivered ? <details open={routeOpen} onToggle={event => setRouteOpen(event.currentTarget.open)} className="rounded-2xl border bg-card px-4">
+        <summary className="min-h-12 cursor-pointer py-3 text-base font-semibold">Delivery details &amp; route</summary>
+        {routeOpen && <div className="space-y-4 pb-4"><BookingTimeline compact status={status} type="DELIVERY" />
+          <p className="text-sm text-muted-foreground">Booking route. Live tracking has ended.</p>{routeDetails}
+        </div>}
+      </details> : <>{routeDetails}<BookingActions booking={{ ...booking, status }} readOnly={updatesPaused} /></>}
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Back to bookings</Button>
       </div>
@@ -1281,13 +1305,13 @@ function ProofChip({
       aria-label={onClick ? "View delivery photo" : undefined}
       className={cn(
         "rounded-lg border p-2 flex flex-col items-center gap-1 text-xs",
-        onClick && "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring hover:bg-emerald-200",
-        ok ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-muted text-muted-foreground",
+        onClick && "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring hover:bg-emerald-200 dark:hover:bg-emerald-900",
+        ok ? "bg-emerald-100 border-emerald-300 text-emerald-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-100" : "bg-card border-border text-muted-foreground",
       )}
     >
       {icon}
       <span className="font-medium">{label}</span>
-      <span>{ok ? "Verified" : "—"}</span>
+      <span>{ok ? "Recorded" : "Not recorded"}</span>
     </Container>
   );
 }

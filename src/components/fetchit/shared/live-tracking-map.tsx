@@ -18,6 +18,7 @@ export function LiveTrackingMap({
   rider,
   customer = null,
   preview = false,
+  showLiveStatus = true,
   vehicleClass = 'SEDAN',
   className = "h-full w-full",
 }: {
@@ -26,6 +27,7 @@ export function LiveTrackingMap({
   rider: Point | null;
   customer?: Point | null;
   preview?: boolean;
+  showLiveStatus?: boolean;
   vehicleClass?: string;
   className?: string;
 }) {
@@ -184,7 +186,7 @@ export function LiveTrackingMap({
       )}
       {ready && !preview && <MapZoomControls onZoomIn={() => { const map = mapRef.current; if (map) map.setZoom(Math.min(21, (map.getZoom() ?? 14) + 1)); }} onZoomOut={() => { const map = mapRef.current; if (map) map.setZoom(Math.max(3, (map.getZoom() ?? 14) - 1)); }} />}
       {ready && <RoadRouteStatus loading={road.loading} error={road.error} warnings={road.warnings} onRetry={road.retry} />}
-      {ready && !preview && !rider && (
+      {ready && !preview && showLiveStatus && !rider && (
         <div className="pointer-events-none absolute bottom-3 left-3 right-20 w-auto rounded-full border bg-card/95 px-3 py-1.5 text-center text-xs font-medium shadow-sm [overflow-wrap:anywhere]">
           Waiting for your booking partner to share their location…
         </div>
