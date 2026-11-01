@@ -12,8 +12,8 @@ const root = path.resolve(import.meta.dirname, "..");
 function load(file, mocks = {}, globals = {}) {
   const exports = {};
   const siblingApp = file.split("/")[1];
-  const resolved = process.env.FETCH_SIBLING_ROOT && file.startsWith("../") && ["fetch-rider", "fetch-admin", "fetch-superadmin"].includes(siblingApp)
-    ? path.resolve(process.env.FETCH_SIBLING_ROOT, file.slice(3)) : path.resolve(root, file);
+  const resolved = process.env.FETCH_SIBLING_ROOT && file.startsWith("../") && ["fetch-customer", "fetch-rider", "fetch-admin", "fetch-superadmin"].includes(siblingApp)
+    ? path.resolve(process.env.FETCH_SIBLING_ROOT, siblingApp, process.env.FETCH_SIBLING_WORKTREE ?? "", ...file.split("/").slice(2)) : path.resolve(root, file);
   const source = ts.transpileModule(fs.readFileSync(resolved, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
@@ -65,7 +65,7 @@ function submission(overrides = {}) {
   const booking = { riderId: "rider-a", type: "DELIVERY", status: "IN_TRANSIT", paymentMethod: "CASH", paymentStatus: "UNPAID", ...overrides.booking };
   const tx = {
     $queryRaw: async () => [], booking: { findUnique: async () => ({ ...booking, ...overrides.transactionBooking }), update: async ({ data }) => { calls.statuses.push(data.status); return { ...booking, ...data }; } },
-    deliveryProof: { count: async () => overrides.photoCount ?? 0, create: async ({ data }) => { calls.creates.push(data); } },
+    deliveryProof: { findFirst: async () => overrides.existingPhoto ? { id: "saved-photo" } : null, count: async () => overrides.photoCount ?? 0, create: async ({ data }) => { calls.creates.push(data); } },
     riderProfile: { update: async () => {} },
   };
   const db = {
@@ -224,7 +224,7 @@ test("photo selection compresses before transmission and releases decoded image 
 test("real staff permission/session checks deny unrelated roles, bans, expiry and revocation", async () => {
   // The Blob release also supports the existing Admin-only portal while the
   // separate staff-portal changes remain under development.
-  if (!fs.existsSync(path.resolve(process.env.FETCH_SIBLING_ROOT || path.resolve(root, ".."), "fetch-admin/src/lib/staff-access.ts"))) {
+  if (!fs.existsSync(path.resolve(process.env.FETCH_SIBLING_ROOT || path.resolve(root, ".."), "fetch-admin", process.env.FETCH_SIBLING_WORKTREE ?? "", "src/lib/staff-access.ts"))) {
     for (const scenario of [{ role: "ADMIN", allowed: true }, { role: "CUSTOMER" }, { role: "RIDER" }, { role: "ADMIN", isBanned: true }, { role: "ADMIN", authInvalidBefore: new Date(Date.now() + 1000) }]) {
       const admin = load("../fetch-admin/src/lib/admin-access.ts", {
         "./db": { db: { user: { findUnique: async () => ({ id: "staff", ...scenario }) } } },
@@ -240,10 +240,26 @@ test("real staff permission/session checks deny unrelated roles, bans, expiry an
     const user = { id: "staff", role: scenario.role, isBanned: scenario.isBanned ?? false, authInvalidBefore: scenario.authInvalidBefore ?? null };
     const access = load("../fetch-admin/src/lib/staff-access.ts", {
       "./db": { db: { user: { findUnique: async () => user }, staffSession: { findUnique: async () => ({ userId: user.id, expiresAt: scenario.expiresAt ?? new Date(Date.now() + 60000), revokedAt: scenario.revokedAt ?? null }) } } },
-      "./session": { getAdminSession: async () => ({ uid: user.id, sid: "session", iat: Date.now() }) },
+      "./session": { getAdminSession: async () => ({ uid: user.id, sid: "session", iat: Date.now(), exp: Date.now() + 60000 }) },
       "./staff-demo": { getDemoController: async () => null }, "./staff-policy": policy, "next/navigation": { redirect() {} }, "./runtime-access": { assertRuntimeAccess: async () => {} },
     });
     const admin = load("../fetch-admin/src/lib/admin-access.ts", { "./staff-access": access });
     assert.equal(Boolean(await admin.currentAdmin()), scenario.allowed ?? false);
   }
+});
+
+
+test("signature without a new or previously saved photo cannot complete delivery", async () => {
+  const app = submission();
+  const res = await app.post({ signatureSvg: "<svg/>" });
+  assert.equal(res.status, 409);
+  assert.match((await res.json()).error, /photo/i);
+  assert.equal(app.calls.creates.length, 0);
+  assert.equal(app.calls.statuses.length, 0);
+});
+test("a previously saved photo satisfies the completion requirement", async () => {
+  const app = submission({ existingPhoto: true });
+  assert.equal((await app.post({ signatureSvg: "<svg/>" })).status, 200);
+  assert.equal(app.calls.statuses[0], "DELIVERED");
+  assert.equal(app.calls.uploads, 0);
 });
