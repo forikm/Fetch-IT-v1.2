@@ -47,7 +47,7 @@ export function PaymentCard({ bookingId, role, readOnly = false, onPaymentReady 
     <div className="flex justify-between gap-2"><strong>{booking ? PAYMENT_METHOD_LABEL[booking.paymentMethod] : "Payment"}</strong><span>{booking ? PAYMENT_STATUS_LABEL[booking.paymentStatus] : "Loading…"}</span></div>
     {demo && <p className="text-xs text-muted-foreground">Test payment — no money charged. {role === "RIDER" ? "Online payment: do not collect cash." : ""}</p>}
     {deliveryCash && !["IN_TRANSIT", "DELIVERED", "CANCELLED"].includes(booking.status) && <p className="text-xs text-muted-foreground">Cash is collected at drop-off. Confirmation will appear after arrival.</p>}
-    {deliveryCash && booking.status === "IN_TRANSIT" && <p role="status" className="rounded-lg bg-muted/40 p-3">{!booking.dropoffReachedAt ? "At the destination, confirm arrival to open cash payment." : deliveryCashCompletionError(booking) ?? "Cash payment confirmed by both sides. Collect the recipient signature to complete delivery."}</p>}
+    {deliveryCash && booking.status === "IN_TRANSIT" && <p role="status" className="rounded-lg bg-muted/40 p-3">{!booking.dropoffReachedAt ? "At the destination, confirm arrival to open cash payment." : deliveryCashCompletionError(booking) ?? "Cash payment confirmed by both sides. Collect the recipient signature and drop-off photo to complete delivery."}</p>}
     {canArrive && <Button type="button" size="sm" disabled={busy} onClick={async () => {
       if (pending.current) return;
       pending.current = true; version.current++; setBusy(true); setError(""); setNotice("");
