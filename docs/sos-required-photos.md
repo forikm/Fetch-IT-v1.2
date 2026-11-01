@@ -10,7 +10,7 @@ Admin and Superadmin notifications prioritize safety-alert requests. Support det
 
 Delivery completion requires a recipient signature AND a saved photo, including through direct status-update requests. Previously uploaded photos count. New photo upload failures cannot complete a delivery. Existing completed deliveries are not changed. Saved images remain private to authorized staff.
 
-No database migration or new secret is required. Deploy Admin/Superadmin first, then Rider, then Customer. These changes have not been pushed or deployed by this task.
+No database migration or new secret is required. Deploy Admin/Superadmin first, then Rider, then Customer. Production releases use the existing GitHub main-branch Vercel deployments. Verify each Vercel commit status and the live endpoints after publication.
 
 Validation: TypeScript checks across all four apps; 22 safety-alert/photo/storage tests in Customer and 26 Rider photo/matching/workspace tests. Customer cross-app tests use FETCH_SIBLING_ROOT=C:/Users/Z/Downloads and FETCH_SIBLING_WORKTREE=tmp/automatch-release. Customer and Rider production builds also pass. Database-dependent end-to-end and real-device GPS tests have not been run.
 
