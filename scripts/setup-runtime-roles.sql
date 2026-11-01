@@ -80,3 +80,7 @@ COMMIT;
 
 GRANT UPDATE("vehicleClass","vehiclePlate","updatedAt") ON "RiderProfile" TO fetch_staff_runtime,fetch_owner_runtime;
 GRANT UPDATE("isOnline","updatedAt") ON "RiderPresence" TO fetch_staff_runtime,fetch_owner_runtime;
+
+-- Automatic nearby offers share the existing restricted runtime groups.
+GRANT SELECT,INSERT,UPDATE ON "AutoDispatch" TO fetch_customer_runtime,fetch_rider_runtime,fetch_staff_runtime,fetch_owner_runtime;
+GRANT UPDATE("lastOfferAt","updatedAt") ON "RiderPresence" TO fetch_staff_runtime,fetch_owner_runtime;
