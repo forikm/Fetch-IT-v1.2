@@ -18,7 +18,7 @@ test('only the owner of an active passenger booking can send SOS',async()=>{
  }
 });
 test('SOS saves an urgent linked ticket with GPS, capture time and accuracy',async()=>{
- const h=harness();await sendRideSos(h.db,'ride','customer',fix());const ticket=h.records[0];assert.equal(ticket.priority,'URGENT');assert.equal(ticket.bookingId,'ride');assert.equal(ticket.customerId,'customer');assert.match(ticket.message,/SOS EMERGENCY ALERT\n/);assert.match(ticket.message,/GPS: 16.02, 120.23/);assert.match(ticket.message,/Accuracy: 12 m/);assert.match(ticket.message,/Captured: /);
+ const h=harness();await sendRideSos(h.db,'ride','customer',fix());const ticket=h.records[0];assert.equal(ticket.priority,'URGENT');assert.equal(ticket.bookingId,'ride');assert.equal(ticket.customerId,'customer');assert.match(ticket.message,/URGENT SAFETY ALERT\n/);assert.match(ticket.message,/GPS: 16.02, 120.23/);assert.match(ticket.message,/Accuracy: 12 m/);assert.match(ticket.message,/Captured: /);
 });
 test('retry returns the unresolved SOS without duplicate tickets',async()=>{
  const h=harness({existing:{id:'existing',createdAt:new Date()}});assert.equal((await sendRideSos(h.db,'ride','customer',fix())).id,'existing');assert.equal(h.records.length,0);
