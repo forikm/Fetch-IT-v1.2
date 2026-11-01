@@ -28,8 +28,8 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
   useTrackingUpdates<Booking>(ride.id, onUpdated);
   return <div className="space-y-4">
     <DialogHeader className="min-h-12 justify-center"><DialogTitle className="flex items-center gap-2"><Navigation className="h-5 w-5 text-primary" />Your ride · {ride.refCode}</DialogTitle><DialogDescription className="sr-only">Your driver, trip map and safety options.</DialogDescription></DialogHeader>
-    <BookingWaitStatus key={ride.id} booking={ride} updatesPaused={readOnly || updatesPaused} onUpdated={onUpdated} />
-    {status === "ACCEPTED" ? <CustomerPickupProgress key={ride.id} bookingId={ride.id} compact /> : <BookingTimeline compact status={status} type="RIDE" hideStatus={isAwaitingAcceptance(status)} />}
+    <BookingWaitStatus key={`wait:${ride.id}`} booking={ride} updatesPaused={readOnly || updatesPaused} onUpdated={onUpdated} />
+    {status === "ACCEPTED" ? <CustomerPickupProgress key={`pickup:${ride.id}`} bookingId={ride.id} compact /> : <BookingTimeline compact status={status} type="RIDE" hideStatus={isAwaitingAcceptance(status)} />}
     {ride.rider && <section aria-label="Your driver" className="flex min-w-0 items-center gap-3 rounded-2xl border bg-card p-3">
       <span aria-hidden="true" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary/10 font-semibold text-primary">{ride.rider.name.trim().split(/\s+/).slice(0,2).map(part => part[0]).join("")}</span>
       <div className="min-w-0 flex-1"><RiderProfile bookingId={ride.id} {...ride.rider} type="RIDE" /><dl className="mt-1 flex flex-wrap gap-x-2 text-sm"><div className="flex gap-1"><dt className="sr-only">Vehicle</dt><dd>{VEHICLES[ride.vehicleClass]?.label ?? ride.vehicleClass}</dd></div><div className="flex gap-1"><dt className="sr-only">Plate number</dt><dd className="break-all font-semibold">{ride.rider.vehiclePlate || "Not available"}</dd></div></dl></div>
