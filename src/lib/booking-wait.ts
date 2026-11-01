@@ -2,7 +2,7 @@ import { requestExpiresAt } from "./job-expiry";
 import type { BookingStatus, BookingType } from "./constants";
 
 export const LONG_BOOKING_WAIT_MS = 3 * 60_000;
-export type WaitingBooking = { id: string; type: BookingType; status: BookingStatus; createdAt: string; scheduledAt?: string | null };
+export type WaitingBooking = { id: string; type: BookingType; status: BookingStatus; createdAt: string; scheduledAt?: string | null; dispatch?: { phase: string } | null };
 
 export function isAwaitingAcceptance(status: string) {
   return status === "PENDING" || status === "MATCHED";
@@ -27,6 +27,7 @@ export function bookingWaitFeedback(booking: WaitingBooking, now: number) {
     kind: "offered", title: "Waiting for " + person + " confirmation",
     message: "An offer has been sent. Your " + person + " has not accepted yet. If there’s no reply before the offer expires, another " + person + " can accept." + deadline, wait,
   };
+  if (booking.dispatch?.phase === 'SEARCHING') return { kind: 'matching', title: 'Finding a nearby ' + person, message: 'We’re checking available riders near your pickup. A match is confirmed only after they accept.' + deadline, wait };
   return elapsed >= LONG_BOOKING_WAIT_MS ? {
     kind: "long", title: "No " + person + " has accepted yet",
     message: "You’ve been waiting a few minutes. Your request remains open for a " + person + " to accept." + deadline, wait,

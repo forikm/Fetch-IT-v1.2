@@ -1,3 +1,4 @@
+import { dispatchSelect } from '@/lib/matching-policy';
 import { withRequestLog, RateLimitError, limitRequests, safeErrorCode } from "@/lib/request-guard";
 import { bookingView, riderSelect } from "@/lib/db-data";
 import type { Prisma } from "@prisma/client";
@@ -67,7 +68,7 @@ async function handleGET(req: NextRequest) {
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      include: {
+      include: { dispatch: { select: dispatchSelect },
         customer: { select: { id: true, name: true, phone: true } },
         rider: { select: riderSelect },
         liveLocation: { select: { lat: true, lng: true, createdAt: true } },
@@ -113,7 +114,7 @@ async function handlePOST(req: NextRequest) {
     const paymentData = { paymentMethod: paymentMethod as PaymentMethod, ...(isDemoPayment(paymentMethod) ? { demoCommissionBps: Math.round(settings.commissionPercent*100) } : {}) };
     const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
     const previous = await findBookingAttempt(db, attemptId, body);
-    if (previous) { schedulePushDelivery(); return NextResponse.json({ booking: omitTicket(bookingView(previous)) }); }
+    if (previous) { schedulePushDelivery(previous.id); return NextResponse.json({ booking: omitTicket(bookingView(previous)) }); }
     async function submit(type: "RIDE" | "DELIVERY", data: Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">) {
       if (isDemoPayment(paymentMethod)) {
         const checkout = await prepareOnlineCheckout(db, data, body);
@@ -125,7 +126,7 @@ async function handlePOST(req: NextRequest) {
         return NextResponse.json(checkout);
       }
       const booking = await createBookingWithRetry(db, type, data, body);
-      schedulePushDelivery();
+      schedulePushDelivery(booking.id);
       return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
     }
     const {

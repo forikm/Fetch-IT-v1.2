@@ -1,3 +1,5 @@
+import { queueAutomaticMatching } from './automatching';
+import { dispatchSelect } from './matching-policy';
 import { queueRiderPushTask } from "./rider-push-tasks";
 import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
@@ -7,7 +9,7 @@ import { riderSelect } from "./db-data";
 import { CustomerError } from "./customer-access";
 import { parsePickupSchedule } from "./pickup-schedule";
 
-const include = { customer: { select: { id: true, name: true, phone: true } }, rider: { select: riderSelect } } as const;
+const include = { dispatch: { select: dispatchSelect }, customer: { select: { id: true, name: true, phone: true } }, rider: { select: riderSelect } } as const;
 
 // A customer-scoped deterministic primary key makes retries safe across servers
 // without an additional table or a database migration. Old clients may omit it.
@@ -52,6 +54,7 @@ export async function createBookingWithRetry(
         const ticketId = await generateTicketId(tx, type);
         // Do not load related users while holding the shared counter row lock.
         const booking = await tx.booking.create({ data: { ...data, ticketId, refCode: generateRefCode(type === "RIDE" ? "RIDE" : "FIT") } });
+        await queueAutomaticMatching(tx, booking);
         await queueRiderPushTask(tx, booking.id, "NEW_REQUEST", booking.id);
         return booking;
       }, { maxWait: 10000, timeout: 15000 });

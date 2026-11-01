@@ -10,6 +10,13 @@ const { bookingWaitFeedback, mergeBookingUpdate, LONG_BOOKING_WAIT_MS } = logic;
 const now = Date.parse("2026-10-30T10:00:00Z");
 const booking = { id: "booking", type: "RIDE", status: "PENDING", createdAt: new Date(now - 30_000).toISOString() };
 
+test('automatic matching explains searching without implying rider acceptance', () => {
+  const feedback = bookingWaitFeedback({ ...booking, dispatch: { phase: 'SEARCHING' } }, now);
+  assert.equal(feedback.title, 'Finding a nearby driver');
+  assert.match(feedback.message, /confirmed only after they accept/);
+  assert.equal(bookingWaitFeedback({ ...booking, dispatch: { phase: 'OPEN' } }, now).kind, 'waiting');
+});
+
 test("unaccepted requests distinguish a recent wait from a long wait without inventing availability", () => {
   assert.equal(bookingWaitFeedback(booking, now).kind, "waiting");
   const long = bookingWaitFeedback({ ...booking, createdAt: new Date(now - LONG_BOOKING_WAIT_MS).toISOString() }, now);

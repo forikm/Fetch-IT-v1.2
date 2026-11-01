@@ -1,3 +1,4 @@
+import { dispatchSelect } from '@/lib/matching-policy';
 import { bookingView, riderSelect } from "@/lib/db-data";
 import { NextRequest, NextResponse } from "next/server";
 import { requireCustomer, CustomerError, customerErrorResponse } from "@/lib/customer-access";
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
       where: bookingStatusWhere(session.uid, ids, onlyTracked),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 100,
-      select: {
+      select: { dispatch: { select: dispatchSelect },
         id: true, refCode: true, type: true, status: true, updatedAt: true,
         createdAt: true, cancellationReason: true, scheduledAt: true, dropoffLabel: true, etaMinutes: true, riderId: true,
         rider: { select: riderSelect },
