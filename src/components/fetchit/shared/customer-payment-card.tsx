@@ -1,4 +1,6 @@
 "use client";
+import { startBookingTiming } from '@/lib/booking-client-timing';
+import { savedMutation } from '@/lib/booking-mutation-client';
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -88,13 +90,25 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
       if (pending.current) return;
       if (!navigator.onLine) { setError("Reconnect to confirm payment."); return; }
       pending.current = true; version.current++; setBusy(true); setError(""); setNotice("");
+      const timing = startBookingTiming('cash_payment');
+      let outcome: 'confirmed' | 'recovered' | 'failed' | 'uncertain' = 'uncertain';
+      let uncertain = true;
       try {
-        const response = await fetch(`/api/bookings/${bookingId}/payment`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount }) });
+        const response = await fetch(`/api/bookings/${bookingId}/payment`, { method: "POST", headers: { "Content-Type": "application/json", ...timing.headers }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ amount }) });
+        timing.response(response); uncertain = response.ok || response.status >= 500;
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Couldn’t confirm payment.");
-        setBooking(data.booking); setConfirmOpen(false); setNotice("Your cash confirmation was saved.");
-      } catch (failure) { setError(failure instanceof Error ? failure.message : "Couldn’t confirm payment."); }
-      finally { pending.current = false; setBusy(false); }
+        if (!data.booking) throw new Error('Couldn’t verify the saved confirmation.');
+        outcome = 'confirmed'; setBooking(data.booking); setConfirmOpen(false); setNotice("Your cash confirmation was saved.");
+      } catch (failure) {
+        if (uncertain) {
+          setNotice('Checking saved payment…');
+          const saved = await savedMutation<{ booking: CustomerPayment }>(`/api/bookings/${bookingId}/payment`, state => !!state.booking?.customerPaidAt && Math.round(Number(state.booking.customerPaidAmount) * 100) === Math.round(Number(amount) * 100));
+          if (saved) { outcome = 'recovered'; setBooking(saved.booking); setConfirmOpen(false); setNotice('Your cash confirmation was saved.'); return; }
+        }
+        outcome = uncertain ? 'uncertain' : 'failed'; setNotice(''); setError(uncertain ? 'Couldn’t verify payment. Your entered amount is kept. Check payment details before retrying.' : failure instanceof Error ? failure.message : 'Couldn’t confirm payment.');
+      }
+      finally { pending.current = false; setBusy(false); timing.finish(outcome); }
     }}>
       <label className="block">Amount you paid (₱)<input required inputMode="decimal" type="number" min="0.01" step="0.01" max="9999999999.99" value={amount} disabled={busy} onChange={event => setAmount(event.target.value)} className="mt-2 min-h-12 w-full rounded-md border border-input bg-background p-2 text-base md:text-sm focus-visible:outline-2 focus-visible:outline-ring" /></label>
       <p className="text-xs text-muted-foreground">Confirm after handing the cash to your {person}. They’ll confirm receipt too.</p>

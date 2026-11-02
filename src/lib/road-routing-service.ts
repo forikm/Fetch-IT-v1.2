@@ -56,14 +56,15 @@ export async function roadRoute(start: RoutePoint, finish: RoutePoint, vehicle: 
   if (reservation.cached) return reservation.cached;
   try {
     // Fixed provider URL, no client-supplied URL and no credentials in logs/URLs.
-    const route = await measure('routing.provider', async () => {
-      const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
+    const route = await measure('routing.response', async () => {
+      const response = await measure('routing.provider', () => fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
         method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(remaining()),
         headers: { Authorization: apiKey, 'Content-Type': 'application/json', Accept: 'application/geo+json' },
         body: JSON.stringify({ coordinates: [[start.lng, start.lat], [finish.lng, finish.lat]], radiuses: [150, 150], instructions: true, language: 'en', units: 'm', options }),
-      });
+      }));
       if (!response.ok) throw new RoutingError(response.status === 429 || response.status === 403 ? 'ROUTE_PROVIDER_LIMIT' : 'ROUTE_PROVIDER', response.status === 404 ? 'No accessible road route was found for these locations.' : 'Road directions are temporarily unavailable. Please retry later.', response.status === 404 ? 422 : 503);
-      return parseRoadRoute(await response.json(), start, finish);
+      const body = await measure('routing.body', () => response.json());
+      return measure('routing.parse', async () => parseRoadRoute(body, start, finish));
     });
     await measure('db.route_cache_write', () => db.$executeRaw`UPDATE "RoadRouteCache" SET "result" = ${JSON.stringify(route)}::jsonb, "expiresAt" = ${new Date(Date.now() + 24 * 3600000)}, "leaseUntil" = NULL WHERE "key" = ${key}`);
     return route;

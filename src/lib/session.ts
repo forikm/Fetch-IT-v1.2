@@ -1,3 +1,4 @@
+import { markVerifiedSession, timeBooking } from "./booking-telemetry";
 import { sessionSecret } from "./session-secret";
 import { db } from "./db";
 // Signed customer cookies retain the original authentication time. Database
@@ -64,8 +65,9 @@ export async function getSession(): Promise<SessionPayload | null> {
   if (!token) return null;
   const session = verifySessionToken(token);
   if (!session) return null;
-  const user = await db.user.findUnique({ where: { id: session.uid }, select: { authInvalidBefore: true, isBanned: true, role: true } });
+  const user = await timeBooking("auth.session_lookup", () => db.user.findUnique({ where: { id: session.uid }, select: { authInvalidBefore: true, isBanned: true, role: true } }));
   if (!user || user.isBanned || user.role !== session.role || (user.authInvalidBefore && (!session.iat || session.iat <= user.authInvalidBefore.getTime()))) return null;
+  markVerifiedSession(session);
   return session;
 }
 

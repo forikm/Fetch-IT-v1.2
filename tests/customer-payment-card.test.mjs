@@ -23,11 +23,11 @@ function harness(record = cash, type = "DELIVERY") {
   };
   const exports = {};
   vm.runInNewContext(compiled, {
-    exports, Date, Number, Error, AbortController, document: { hidden: false }, navigator: { onLine: true },
+    exports, Date, Number, Error, AbortController, AbortSignal, document: { hidden: false }, navigator: { onLine: true },
     setInterval: () => 1, clearInterval() {},
     window: { addEventListener(name, callback) { handlers[name] = callback; }, removeEventListener() {}, location: { assign() {} } },
     fetch: async (url, options = {}) => { requests.push({ url, ...options }); return options.method === "POST" ? postResponse?.() ?? Response.json({ booking: record }) : getResponse?.() ?? Response.json({ booking: record }); },
-    require(name) { if (name === "react") return hooks; if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }; if (name === "@/lib/customer-booking-ui") return ui; if (name === "@/lib/payment-policy") return policy; return { Button: "button" }; },
+    require(name) { if (name === "@/lib/booking-client-timing") return { startBookingTiming: () => ({ headers: {}, response() {}, finish() {} }) }; if (name === "@/lib/booking-mutation-client") return { savedMutation: async () => { try { const response = getResponse?.() ?? Response.json({ booking: record }); const data = await response.json(); return data.booking?.customerPaidAt ? data : null; } catch { return null; } } }; if (name === "react") return hooks; if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }; if (name === "@/lib/customer-booking-ui") return ui; if (name === "@/lib/payment-policy") return policy; return { Button: "button" }; },
   });
   const render = () => { cursor = 0; tree = exports.CustomerPaymentCard({ bookingId: "booking1", type }); return tree; };
   render(); effects.forEach(effect => effect());
@@ -106,3 +106,5 @@ test("cash mismatches remain under review and matching confirmations show paid",
   assert.doesNotMatch(text(paid.render()), /Waiting for|Needs review/);
   assert.equal(paid.find("button", "Confirm cash payment"), undefined);
 });
+
+ test("a lost payment acknowledgement checks saved state and never resubmits cash", async () => { const h = harness(); await h.ready(); h.find("button", "Confirm cash payment").props.onClick(); const form = h.find("form"); h.setPost(() => { throw Error("Lost response"); }); h.setGet(() => Response.json({ booking: { ...cash, customerPaidAt: new Date().toISOString(), customerPaidAmount: 89, paymentStatus: "PENDING" } })); await form.props.onSubmit({ preventDefault() {} }); assert.equal(h.requests.filter(r => r.method === "POST").length, 1); assert.equal(h.find("form"), undefined); assert.match(text(h.render()), /saved/); });

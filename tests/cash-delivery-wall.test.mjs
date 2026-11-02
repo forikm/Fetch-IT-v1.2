@@ -11,7 +11,7 @@ function fixture(overrides = {}) {
   let booking = { id: "delivery", refCode: "FIT-TEST", type: "DELIVERY", status: "IN_TRANSIT", riderId: "rider", customerId: "customer", paymentMethod: "CASH", paymentStatus: "UNPAID", totalFare: 100, customerPaidAt: null, customerPaidAmount: null, riderReceivedAt: null, riderReceivedAmount: null, ...overrides };
   const events = [], exports = {}, updates = [];
   const tx = { $queryRaw: async () => [], booking: { findUnique: async () => booking, update: async ({ data }) => { updates.push(data); booking = { ...booking, ...data }; return booking; } }, paymentEvent: { findFirst: async ({ where }) => events.find(e => e.action === where.action), create: async ({ data }) => { const event = { ...data, createdAt: new Date() }; events.push(event); return event; } } };
-  vm.runInNewContext(code, { exports, Date, require(name) { if (name === "./payment-policy") return policy; if (name === "./receipt-email") return { scheduleReceiptDelivery() {} }; throw Error(name); } });
+  vm.runInNewContext(code, { exports, Date, require(name) { if (name === "./booking-transaction") return { bookingTransaction: (db, fn) => db.$transaction(fn) }; if (name === "./payment-policy") return policy; if (name === "./receipt-email") return { scheduleReceiptDelivery() {} }; throw Error(name); } });
   return { ...exports, db: { $transaction: async fn => fn(tx) }, events, updates, record: () => booking };
 }
 const rider = { uid: "rider", name: "Rider", role: "RIDER" }, customer = { uid: "customer", name: "Customer", role: "CUSTOMER" };

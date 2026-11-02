@@ -1,6 +1,6 @@
 "use client";
 
-export function startBookingTiming(action: "confirm" | "fare") {
+export function startBookingTiming(action: "confirm" | "fare" | "cash_payment" | "dropoff_arrival" | "job_accept" | "job_status" | "pickup_progress" | "proof_submit" | "road_route") {
   const started = performance.now(), eventId = crypto.randomUUID();
   let requestId: string | undefined, backendMs: number | undefined, responseHeadersMs: number | undefined;
   let finished = false;
@@ -13,7 +13,7 @@ export function startBookingTiming(action: "confirm" | "fare") {
       const duration = /(?:^|,\s*)app;dur=([\d.]+)/.exec(response.headers.get("Server-Timing") ?? "");
       if (duration) backendMs = Number(duration[1]);
     },
-    finish(outcome: "confirmed" | "checkout" | "fare_ready" | "failed" | "superseded") {
+    finish(outcome: "confirmed" | "checkout" | "fare_ready" | "failed" | "superseded" | "recovered" | "uncertain") {
       if (finished) return;
       finished = true;
       const beforePaintMs = performance.now() - started;

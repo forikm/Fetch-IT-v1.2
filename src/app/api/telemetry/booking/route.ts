@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     text += decoder.decode();
     const body = JSON.parse(text);
     const duration = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 600000;
-    if (!body || !["confirm", "fare"].includes(body.action) || !["confirmed", "checkout", "fare_ready", "failed", "superseded"].includes(body.outcome) ||
+    if (!body || !["confirm", "fare", "cash_payment", "dropoff_arrival", "job_accept", "job_status", "pickup_progress", "proof_submit", "road_route"].includes(body.action) || !["confirmed", "checkout", "fare_ready", "failed", "superseded", "recovered", "uncertain"].includes(body.outcome) ||
       !validTimingId(body.eventId) || (body.requestId !== undefined && !validTimingId(body.requestId)) || !duration(body.durationMs) ||
       !duration(body.beforePaintMs) || [body.backendMs, body.responseHeadersMs].some(value => value !== undefined && !duration(value))) return new NextResponse(null, { status: 400 });
     await limitRequests("customer:booking-telemetry", session.uid, 60, 60_000);
