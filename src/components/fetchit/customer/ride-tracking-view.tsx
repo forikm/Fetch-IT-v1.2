@@ -52,7 +52,6 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
     <details className="rounded-2xl border bg-card px-4"><summary className="min-h-12 cursor-pointer py-3 text-base font-semibold">Payment, receipt &amp; help</summary><div className="pb-4"><BookingActions booking={ride} readOnly={readOnly} /></div></details>
     <div className="sticky bottom-0 z-20 -mx-4 space-y-2 border-t bg-background/95 px-4 py-3 backdrop-blur">
       <div className="flex gap-3">{ride.rider?.phone && <Button asChild variant="outline" className="min-h-14 flex-1"><a href={`tel:${ride.rider.phone}`} aria-label={`Call ${ride.rider.name}`}><Phone />Call driver</a></Button>}<Button asChild variant="destructive" className="min-h-14 flex-1"><a href="tel:911"><Phone />Dial 911</a></Button></div>
-      <p className="text-center text-xs text-muted-foreground">Dial 911 opens your dialer with the number ready to call.</p>
       {active && <RideSosButton key={ride.id} bookingId={ride.id} disabled={readOnly} />}
     </div>
   </div>;

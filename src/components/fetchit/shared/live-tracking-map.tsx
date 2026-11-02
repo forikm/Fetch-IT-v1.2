@@ -55,7 +55,7 @@ export function LiveTrackingMap({
           disableDefaultUI: true,
           zoomControl: false,
           fullscreenControl: false,
-          gestureHandling: "cooperative",
+          gestureHandling: "greedy",
           mapTypeControl: false,
           streetViewControl: false,
         });
