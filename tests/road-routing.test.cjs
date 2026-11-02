@@ -27,7 +27,7 @@ test('signed quote locks reviewed road fare and rejects tampering, another owner
  const load=loader({'./road-routing-service':{routingEnabled:()=>true,roadRoute:async()=>({distanceMeters:13500,durationSeconds:1500})}},{process:{env}});
  const api=load('src/lib/road-quote.ts'),settings=load('src/lib/platform-policy.ts').defaultPlatformSettings();
  const input={type:'RIDE',pickup:start,dropoff:finish,vehicleClass:'MOTORCYCLE',passengers:1,settings,when:new Date('2026-10-31T02:00:00Z')};
- const quote=await api.newRoadQuote('customer-a',input);assert.equal(quote.distanceKm,13.5);assert.equal(quote.etaMinutes,25);
+ const quote=await api.newRoadQuote('customer-a',input);assert.equal(quote.distanceKm,13.5);assert.equal(quote.etaMinutes,38);
  const confirmed=await api.confirmedRoadQuote(quote.routeQuote,'customer-a',input);assert.equal(confirmed.fare.totalFare,quote.fare.totalFare);
  for(const [token,uid,value] of [[quote.routeQuote+'x','customer-a',input],[quote.routeQuote,'customer-b',input],[quote.routeQuote,'customer-a',{...input,passengers:2}],[quote.routeQuote,'customer-a',{...input,dropoff:{lat:16.02,lng:120.24}}]])assert.throws(()=>api.readRoadQuote(token,uid,value),e=>e.code==='QUOTE_EXPIRED');
  assert.throws(()=>api.readRoadQuote(quote.routeQuote,'customer-a',input,Date.now()+601000),e=>e.code==='QUOTE_EXPIRED');

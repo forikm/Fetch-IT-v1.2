@@ -1,3 +1,4 @@
+import { planningTravelSeconds } from "./eta-policy";
 // Haversine + fare utilities — pure functions shared by API and client.
 //
 // Pricing model (all amounts in PHP):
@@ -177,7 +178,7 @@ export function quoteFare(params: {
     straightLineKm,
     surgeMultiplier,
     fare,
-    etaMinutes: params.route ? Math.max(1, Math.round(params.route.durationSeconds / 60 + vehicle.handlingMinutes)) : etaMinutes(distanceKm, vehicle.speedKph, vehicle.handlingMinutes),
+    etaMinutes: params.route ? Math.max(1, Math.ceil(planningTravelSeconds(distanceKm * 1000, params.route.durationSeconds, params.vehicleClass, vehicle.speedKph) / 60 + vehicle.handlingMinutes)) : etaMinutes(distanceKm, vehicle.speedKph, vehicle.handlingMinutes),
     vehicle,
   };
 }
@@ -222,7 +223,7 @@ export function quoteRideFare(params: {
     surgeMultiplier,
     fare,
     // No loading/paperwork overhead for rides — pickup is just boarding.
-    etaMinutes: params.route ? Math.max(1, Math.round(params.route.durationSeconds / 60)) : etaMinutes(distanceKm, vehicle.speedKph, 0),
+    etaMinutes: params.route ? Math.max(1, Math.ceil(planningTravelSeconds(distanceKm * 1000, params.route.durationSeconds, params.vehicleClass, vehicle.speedKph) / 60)) : etaMinutes(distanceKm, vehicle.speedKph, 0),
     vehicle,
   };
 }

@@ -18,7 +18,7 @@ async function usage(){return(await db.$queryRaw`SELECT COUNT(*)::integer AS cou
  assert.equal((await db.$queryRaw`SELECT current_schema() AS name`)[0].name,schema);
  await db.riderPresence.update({where:{userId:actors.rider.id},data:{isOnline:true}});
  await request('customer','/api/fare/estimate',null,quoteBody,401);checks.push('Unauthenticated quotes rejected');
- const quote=await request('customer','/api/fare/estimate',actors.customer,quoteBody);assert.equal(quote.routingSource,'openrouteservice');assert.equal(quote.distanceKm,13.5);assert.equal(quote.etaMinutes,25);assert(quote.routeQuote);checks.push('Road metrics drive the fare quote');
+ const quote=await request('customer','/api/fare/estimate',actors.customer,quoteBody);assert.equal(quote.routingSource,'openrouteservice');assert.equal(quote.distanceKm,13.5);assert.equal(quote.etaMinutes,38);assert(quote.routeQuote);checks.push('Road metrics drive the fare quote');
  const before=await usage();await request('customer','/api/road-route',actors.customer,quoteBody);assert.equal(await usage(),before);checks.push('Customer quote/map share a cached provider request');
  await request('customer','/api/bookings',actors.customer,{...quoteBody,routeQuote:quote.routeQuote+'x'},409,{'Idempotency-Key':crypto.randomUUID()});
  await request('customer','/api/bookings',actors.customer,{...quoteBody,dropoff:{...quoteBody.dropoff,lng:120.33},routeQuote:quote.routeQuote},409,{'Idempotency-Key':crypto.randomUUID()});checks.push('Forged and changed-route quotes rejected');
@@ -26,7 +26,7 @@ async function usage(){return(await db.$queryRaw`SELECT COUNT(*)::integer AS cou
  const id=created.booking.id;
  await request('rider',`/api/bookings/${id}/route`,actors.customer,{},403);
  const preview=await request('rider',`/api/bookings/${id}/route`,actors.rider,{});assert.equal(preview.destination,'preview');assert.equal(await usage(),before);checks.push('Eligible rider preview shares the same route cache; wrong role rejected');
- const accepted=await patch(id,'ACCEPTED',actors.rider);assert.equal(accepted.etaMinutes,25);
+ const accepted=await patch(id,'ACCEPTED',actors.rider);assert.equal(accepted.etaMinutes,38);
  await request('rider',`/api/bookings/${id}/route`,actors.rider,{},422);checks.push('Navigation requires fresh shared GPS');
  await request('rider','/api/rider/location',actors.rider,{lat:16.021,lng:120.231,capturedAt:Date.now(),accuracy:10});
  const navigation=await request('rider',`/api/bookings/${id}/route`,actors.rider,{});assert.equal(navigation.destination,'pickup');assert.equal(navigation.route.source,'openrouteservice');checks.push('Accepted rider gets road instructions to pickup');
