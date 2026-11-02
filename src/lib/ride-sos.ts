@@ -21,7 +21,7 @@ export async function sendRideSos(db: PrismaClient, bookingId: string, customerI
     const existing = await tx.supportTicket.findFirst({ where: { bookingId, customerId, priority: "URGENT", OR: [{ message: { startsWith: "URGENT SAFETY ALERT\n" } }, { message: { startsWith: "SOS EMERGENCY ALERT\n" } }], status: { in: ["OPEN", "IN_PROGRESS"] } } });
     if (existing) return { id: existing.id, createdAt: existing.createdAt };
     const message = `URGENT SAFETY ALERT\nPassenger requested urgent staff review.\nGPS: ${fix.lat}, ${fix.lng}\nAccuracy: ${Math.round(fix.accuracy)} m\nCaptured: ${new Date(fix.capturedAt).toISOString()}`;
-    const ticket = await tx.supportTicket.create({ data: { bookingId, customerId, category: "RIDER", priority: "URGENT", message } });
+    const ticket = await tx.supportTicket.create({ data: { bookingId, customerId, category: "RIDER", priority: "URGENT", isEmergency: true, message } });
     return { id: ticket.id, createdAt: ticket.createdAt };
   });
 }

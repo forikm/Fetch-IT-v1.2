@@ -84,3 +84,10 @@ GRANT UPDATE("isOnline","updatedAt") ON "RiderPresence" TO fetch_staff_runtime,f
 -- Automatic nearby offers share the existing restricted runtime groups.
 GRANT SELECT,INSERT,UPDATE ON "AutoDispatch" TO fetch_customer_runtime,fetch_rider_runtime,fetch_staff_runtime,fetch_owner_runtime;
 GRANT UPDATE("lastOfferAt","updatedAt") ON "RiderPresence" TO fetch_staff_runtime,fetch_owner_runtime;
+
+-- Staff notification routing (install the additive migration first).
+GRANT SELECT ON "StaffNotice","PlatformIncident","ServiceHealthBucket" TO fetch_staff_runtime,fetch_owner_runtime;
+GRANT SELECT,INSERT ON "StaffNoticeRead" TO fetch_staff_runtime,fetch_owner_runtime;
+GRANT SELECT,INSERT,UPDATE ON "PlatformIncident" TO fetch_owner_runtime;
+GRANT EXECUTE ON FUNCTION fetch_record_service_health(text,boolean) TO fetch_customer_runtime,fetch_rider_runtime,fetch_staff_runtime,fetch_owner_runtime;
+GRANT EXECUTE ON FUNCTION fetch_refresh_operational_signals() TO fetch_customer_runtime,fetch_staff_runtime,fetch_owner_runtime;
