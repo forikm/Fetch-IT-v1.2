@@ -38,12 +38,27 @@ sweep. The alert banner is independent of read state. Safety polls while visible
 every five seconds, other staff every fifteen; polling is not a background
 emergency delivery guarantee and does not contact emergency services.
 
-**Production requirement:** run `scripts/monitor-notifications.cjs` from an
-external scheduler every minute, or `--watch` under a supervised worker, using
-`CUSTOMER_URL` and the existing `CRON_SECRET`. The protected endpoint is
-`GET /api/maintenance/notifications`. The portals also sweep when checking their
-inboxes; those requests alone are insufficient when nobody has a portal open.
-No unsupported hosting-plan cron frequency is silently configured by this change.
+**Production scheduler:** `.github/workflows/notification-monitor.yml` runs
+`scripts/monitor-notifications.cjs` on a standard GitHub-hosted runner about every
+five minutes, plus manual dispatch. The public repository uses free Actions
+runners. GitHub schedules are best effort and can be delayed; a closed-dashboard
+backup may therefore arrive five minutes or more after its 60-second threshold.
+This is not an instant emergency-delivery service or a guaranteed response time.
+The portals also sweep when checking their inboxes.
+
+The workflow calls `GET /api/maintenance/notifications` with a dedicated
+`NOTIFICATION_MONITOR_SECRET`, stored as an encrypted repository secret and a
+sensitive Vercel Production variable. The existing receipts cron keeps its
+separate `CRON_SECRET`. Installations without the dedicated secret retain the
+legacy fallback. Neither credential is exposed to the browser or job logs.
+
+Enable the repository variable `NOTIFICATION_MONITOR_ENABLED=true` only after
+deploying the endpoint and configuring both copies of the new secret. Set it to
+`false` to pause the scheduler. Run **Actions > Notification monitor > Run
+workflow** to verify a deployment; the job fails on HTTP errors, timeouts, or an
+invalid JSON result. Check Actions for failures and disabled schedules: GitHub
+can disable public-repository scheduled workflows after 60 days of inactivity.
+A supervised worker may instead use `--watch` for minute checks.
 
 ## Operational signals
 
@@ -80,7 +95,7 @@ payouts, collision telemetry, or courier emergencies that Fetch does not collect
    manufacture notices, modify incidents, or read Superadmin-only notices.
 3. Deploy the synchronized schema/helpers and Customer, Staff, Superadmin, and
    Rider source changes together. Runtime-role setup also preserves new grants.
-4. Configure the minute scheduler and external uptime/emergency operations.
+4. Configure and verify the GitHub scheduler and external uptime/emergency operations.
 5. Verify fresh request, claim/view-only/cancel, reassignment, replies, both CS
    handoffs, independent decisions, passenger emergency/backup/acknowledgment,
    application routing, cash-review completion, announcements, and security.

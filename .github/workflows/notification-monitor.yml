@@ -1,0 +1,33 @@
+name: Notification monitor
+
+on:
+  schedule:
+    - cron: '2-57/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notification-monitor-production
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    if: vars.NOTIFICATION_MONITOR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check out the production monitor
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Check unattended alerts and operational signals
+        run: node scripts/monitor-notifications.cjs
+        env:
+          CUSTOMER_URL: https://fetch-it-v1-2.vercel.app
+          NOTIFICATION_MONITOR_SECRET: ${{ secrets.NOTIFICATION_MONITOR_SECRET }}
