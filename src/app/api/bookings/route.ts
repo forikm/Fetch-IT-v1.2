@@ -40,6 +40,7 @@ async function handleGET(req: NextRequest) {
     await expireRiderOffers(db);
     const url = new URL(req.url);
     const filter = url.searchParams.get("filter") || "active"; // active | history | all
+    const pageSize = filter === "history" ? 10 : 100;
     const type = url.searchParams.get("type");
     const query = url.searchParams.get("q")?.trim().slice(0, 200);
     const status = url.searchParams.get("status");
@@ -74,14 +75,14 @@ async function handleGET(req: NextRequest) {
         liveLocation: { select: { lat: true, lng: true, createdAt: true } },
         deliveryProofs: true,
       },
-      take: 101,
+      take: pageSize + 1,
     });
 
     // This is the customer app — the R0001/D0001 tracking ticket is a
     // rider-only artifact (see src/lib/ticket.ts) and never leaves the server
     // here.
-    const page = bookings.slice(0, 100);
-    return NextResponse.json({ bookings: page.map(b => omitTicket(bookingView(b))), nextCursor: bookings.length > 100 ? page[page.length - 1].id : null }, { headers: { "Cache-Control": "private, no-store" } });
+    const page = bookings.slice(0, pageSize);
+    return NextResponse.json({ bookings: page.map(b => omitTicket(bookingView(b))), nextCursor: bookings.length > pageSize ? page[page.length - 1].id : null }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     if (error instanceof RateLimitError) throw error; return customerErrorResponse(error); }
 }

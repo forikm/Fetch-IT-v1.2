@@ -17,15 +17,16 @@ function nodes(node) {
 }
 const grouping = load("../src/lib/notification-inbox.ts", { "./customer-booking-ui": { customerStatusLabel: status => status } });
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function harness() {
+function harness(options = {}) {
   const states = [], refs = [], requests = [], opened = [];
-  let index = 0, refIndex = 0, poll;
+  let index = 0, refIndex = 0, poll, nextGet;
+  let legacy = options.legacy ?? [];
   const page = { items: ["DELIVERY", "RIDE", "SUPPORT"].map((category, i) => ({ id: `notice-${i}`, category, title: `${category} update`, body: "Details", bookingId: category === "SUPPORT" ? null : `booking-${i}`, ticketId: category === "SUPPORT" ? "ticket1" : null, read: false, createdAt: "2026-10-17T12:00:00Z" })), unread: { DELIVERY: 1, RIDE: 1, SUPPORT: 1 } };
-  const module = load("../src/components/fetchit/shared/notification-inbox.tsx", {
+  const inboxModule = load("../src/components/fetchit/shared/notification-inbox.tsx", {
     react: { useEffect() {}, useRef: value => refs[refIndex++] ??= { current: value }, useState(value) { const slot = index++; if (!(slot in states)) states[slot] = value; return [states[slot], value => states[slot] = typeof value === "function" ? value(states[slot]) : value]; } },
     "@/lib/store": { useAppStore: selector => selector({ user: { id: "customer1" } }) },
     "@/lib/customer-push": { setPushAccount: async () => {} },
-    "@/hooks/use-customer-data": { useCustomerData: (_id, _key, initial) => [initial, () => {}] },
+    "@/hooks/use-customer-data": { useCustomerData: (_id, key, initial) => key === "notification-inbox-v2" ? [legacy, update => { legacy = typeof update === "function" ? update(legacy) : update; }] : [initial, () => {}] },
     "@/lib/notification-inbox": grouping,
     "@/hooks/use-visible-poll": { useVisiblePoll(_key, callback) { poll = callback; } },
     "next/navigation": { useRouter: () => ({ push: url => opened.push(url) }) },
@@ -33,17 +34,22 @@ function harness() {
     globals: { navigator: { onLine: true }, fetch: async (url, options = {}) => {
       requests.push({ url, ...options });
       if (options.method === "PATCH") {
+        if (patch) await patch();
         const selection = JSON.parse(options.body);
-        for (const item of page.items) if (selection.category === item.category || selection.ids?.includes(item.id)) item.read = true;
-        for (const category of Object.keys(page.unread)) page.unread[category] = page.items.filter(item => item.category === category && !item.read).length;
+        for (const item of page.items) if (selection.category === item.category || selection.ids?.includes(item.id)) { item.read = true; if (selection.action === "dismiss") item.dismissed = true; }
+        for (const category of Object.keys(page.unread)) page.unread[category] = page.items.filter(item => item.category === category && !item.read && !item.dismissed).length;
         return { json: async () => ({ ok: true }) };
       }
-      return { json: async () => JSON.parse(JSON.stringify(url.includes("/support/") ? { items: [] } : page)) };
+      const snapshot = JSON.parse(JSON.stringify({ ...page, support }));
+      if (nextGet) { const pending = nextGet; nextGet = null; await pending; }
+      return { json: async () => snapshot };
     } },
   });
-  const render = () => { index = 0; refIndex = 0; return nodes(module.NotificationInbox({ onBooking: (id, type) => opened.push({ id, type }) })); };
+  const patch = options.patch;
+  const support = options.support ?? [];
+  const render = () => { index = 0; refIndex = 0; return nodes(inboxModule.NotificationInbox({ onBooking: (id, type) => opened.push({ id, type }) })); };
   render();
-  return { render, poll: () => poll(new AbortController().signal), requests, opened, states };
+  return { render, poll: () => poll(new AbortController().signal), requests, opened, states, deferNextGet: pending => { nextGet = pending; } };
 }
 
 test("category labels keep independent red unread circles and tab changes do not mark updates read", async () => {
@@ -77,4 +83,70 @@ test("selecting a support notification opens the specific support conversation",
   const panel = h.render().find(node => node.type === "TabsContent" && node.props.value === "SUPPORT");
   nodes(panel).find(node => node.type === "button").props.onClick(); await flush();
   assert.equal(h.opened[0], "/help?ticket=ticket1");
+});
+
+function deferred() { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
+const panel = (h, category = "DELIVERY") => h.render().find(node => node.type === "TabsContent" && node.props.value === category);
+const mark = h => nodes(panel(h)).find(node => node.type === "Button" && node.props.children === "Mark as read").props.onClick();
+
+test("marking read updates the badge immediately without waiting for a slow save or reloading the inbox", async () => {
+  const save = deferred(), h = harness({ patch: () => save.promise }); await h.poll();
+  mark(h);
+  assert.equal(h.render().find(node => node.type === "TabsTrigger" && node.props.value === "DELIVERY").props["aria-label"], "Deliveries");
+  assert.equal(h.requests.filter(r => r.method === "PATCH").length, 1);
+  await h.poll();
+  assert.equal(h.requests.length, 2, "polls pause while saving");
+  save.resolve(); await flush();
+  assert.equal(h.requests.length, 2, "a successful save needs no trailing GET");
+});
+
+test("failed saves restore unread badges and show a retryable error", async () => {
+  const save = deferred(), h = harness({ patch: () => save.promise }); await h.poll();
+  mark(h); save.reject(Error("Save unavailable")); await flush();
+  assert.equal(h.render().find(node => node.type === "TabsTrigger" && node.props.value === "DELIVERY").props["aria-label"], "Deliveries, 1 unread");
+  assert(h.render().some(node => node.props?.role === "alert"));
+});
+
+test("opening another booking stays available while a mark-read save is pending", async () => {
+  const save = deferred(), h = harness({ patch: () => save.promise }); await h.poll();
+  mark(h);
+  const link = nodes(panel(h, "RIDE")).find(node => node.type === "button");
+  assert(!link.props.disabled);
+  link.props.onClick();
+  assert.deepEqual(h.opened, [{ id: "booking-1", type: "RIDE" }]);
+  assert.equal(h.requests.filter(r => r.method === "PATCH").length, 1);
+  save.resolve(); await flush();
+});
+
+test("an older in-flight refresh cannot undo an optimistic read", async () => {
+  const get = deferred(), save = deferred(), h = harness({ patch: () => save.promise }); await h.poll();
+  h.deferNextGet(get.promise); const refresh = h.poll(); mark(h);
+  get.resolve(); await refresh;
+  assert.equal(h.render().find(node => node.type === "TabsTrigger" && node.props.value === "DELIVERY").props["aria-label"], "Deliveries");
+  save.resolve(); await flush();
+});
+
+test("dismiss hides only the chosen notification immediately and persists after refresh", async () => {
+  const save = deferred(), h = harness({ patch: () => save.promise }); await h.poll();
+  nodes(panel(h)).find(node => node.props?.title === "Dismiss notification").props.onClick();
+  assert(!nodes(panel(h)).some(node => node.props?.title === "Dismiss notification"));
+  assert.equal(h.opened.length, 0, "dismiss does not open or change a booking");
+  assert.deepEqual(JSON.parse(h.requests.find(r => r.method === "PATCH").body).ids, ["notice-0"]);
+  save.resolve(); await flush(); await h.poll();
+  assert(!nodes(panel(h)).some(node => node.props?.title === "Dismiss notification"));
+  assert(nodes(panel(h, "RIDE")).some(node => node.props?.title === "Dismiss notification"));
+});
+
+test("failed dismissal restores the notification", async () => {
+  const h = harness({ patch: async () => { throw Error("Could not save"); } }); await h.poll();
+  nodes(panel(h)).find(node => node.props?.title === "Dismiss notification").props.onClick(); await flush();
+  assert(nodes(panel(h)).some(node => node.props?.title === "Dismiss notification"));
+});
+
+test("dismissed sources suppress old booking and support duplicates", () => {
+  const item = { id: "server", category: "DELIVERY", bookingId: "booking", status: "ACCEPTED", dismissed: true, read: true, createdAt: "2026-11-02T00:00:00Z" };
+  const page = { items: [item, { ...item, id: "reply", sourceId: "support:reply", category: "SUPPORT" }], unread: { DELIVERY: 0, RIDE: 0, SUPPORT: 0 } };
+  const inbox = grouping.combineInbox(page, [{ id: "old", bookingId: "booking", status: "ACCEPTED", type: "DELIVERY" }], [{ id: "reply", createdAt: item.createdAt }]);
+  assert.equal(inbox.items.length, 0);
+  assert.equal(inbox.unread.DELIVERY + inbox.unread.SUPPORT, 0);
 });

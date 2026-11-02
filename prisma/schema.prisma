@@ -818,6 +818,7 @@ model CustomerNotification {
   url               String
   createdAt         DateTime                     @default(now())
   readAt            DateTime?
+  dismissedAt       DateTime?
   pushDeliveredAt   DateTime?
   pushLeaseUntil    DateTime?
   pushNextAttemptAt DateTime                     @default(now())
