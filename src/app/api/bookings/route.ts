@@ -32,12 +32,13 @@ import { parsePickupSchedule } from "@/lib/pickup-schedule";
 import { platformSettings } from "@/lib/platform-settings";
 import { bookingServiceAreaError } from "@/lib/service-area";
 import { schedulePushDelivery } from "@/lib/push-delivery";
+import { timeBooking, withBookingTelemetry } from "@/lib/booking-telemetry";
 
 async function handleGET(req: NextRequest) {
   try {
-    const session = await requireCustomer();
+    const session = await timeBooking("auth", requireCustomer);
 
-    await expireRiderOffers(db);
+    await timeBooking("db.expiry", () => expireRiderOffers(db));
     const url = new URL(req.url);
     const filter = url.searchParams.get("filter") || "active"; // active | history | all
     const pageSize = filter === "history" ? 10 : 100;
@@ -58,7 +59,7 @@ async function handleGET(req: NextRequest) {
           ? { status: { in: ["DELIVERED", "CANCELLED"] } }
           : {};
 
-    const bookings = await db.booking.findMany({
+    const bookings = await timeBooking("db.booking_list", () => db.booking.findMany({
       where: {
         ...where,
         ...statusFilter,
@@ -76,7 +77,7 @@ async function handleGET(req: NextRequest) {
         deliveryProofs: true,
       },
       take: pageSize + 1,
-    });
+    }));
 
     // This is the customer app — the R0001/D0001 tracking ticket is a
     // rider-only artifact (see src/lib/ticket.ts) and never leaves the server
@@ -89,7 +90,7 @@ async function handleGET(req: NextRequest) {
 
 async function handlePOST(req: NextRequest) {
   try {
-    const session = await getSession();
+    const session = await timeBooking("auth", getSession);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -108,14 +109,14 @@ async function handlePOST(req: NextRequest) {
     if (typeof paymentMethod !== "string" || !Object.hasOwn(PAYMENT_METHOD_LABEL, paymentMethod)) throw new CustomerError("Choose a valid payment method.", 400);
     const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
     const [{ settings }, previous] = await Promise.all([
-      platformSettings(),
-      findBookingAttempt(db, attemptId, body),
+      timeBooking("db.settings", platformSettings),
+      timeBooking("db.idempotency", () => findBookingAttempt(db, attemptId, body)),
     ]);
     const paymentData = { paymentMethod: paymentMethod as PaymentMethod, ...(isDemoPayment(paymentMethod) ? { demoCommissionBps: Math.round(settings.commissionPercent*100) } : {}) };
     if (previous) { schedulePushDelivery(previous.id); return NextResponse.json({ booking: omitTicket(bookingView(previous)) }); }
     async function submit(type: "RIDE" | "DELIVERY", data: Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">) {
       if (isDemoPayment(paymentMethod)) {
-        const checkout = await prepareOnlineCheckout(db, data, body);
+        const checkout = await timeBooking("db.checkout_prepare", () => prepareOnlineCheckout(db, data, body));
         if (checkout.bookingId) {
           const booking = await findBookingAttempt(db, checkout.bookingId, body);
           if (!booking) throw new CustomerError("Booking unavailable.", 409);
@@ -179,7 +180,7 @@ async function handlePOST(req: NextRequest) {
       return NextResponse.json({ error: "Choose a future pickup time." }, { status: 400 });
     }
 
-    await limitRequests("customer:booking", session.uid, 30, 5 * 60_000);
+    await timeBooking("db.rate_limit", () => limitRequests("customer:booking", session.uid, 30, 5 * 60_000));
     const isRide = type === "RIDE";
 
     if (isRide) {
@@ -291,5 +292,5 @@ async function handlePOST(req: NextRequest) {
   }
 }
 
-export const GET = withRequestLog("customer:bookings:GET", handleGET);
-export const POST = withRequestLog("customer:bookings:POST", handlePOST);
+export const GET = withBookingTelemetry("list", withRequestLog("customer:bookings:GET", handleGET));
+export const POST = withBookingTelemetry("confirm", withRequestLog("customer:bookings:POST", handlePOST));

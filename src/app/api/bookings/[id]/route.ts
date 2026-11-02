@@ -9,19 +9,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCustomer, customerErrorResponse } from "@/lib/customer-access";
 import { omitTicket } from "@/lib/ticket";
+import { timeBooking, withBookingTelemetry } from "@/lib/booking-telemetry";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Params) {
+async function get(_req: NextRequest, { params }: Params) {
   let session;
-  try { session = await requireCustomer(); }
+  try { session = await timeBooking("auth", requireCustomer); }
   catch (error) { return customerErrorResponse(error); }
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
 
-  const booking = await db.booking.findUnique({
+  const booking = await timeBooking("db.booking_detail", () => db.booking.findUnique({
     where: { id },
     include: {
       customer: { select: { id: true, name: true, phone: true, email: true } },
@@ -29,7 +30,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       liveLocation: { select: { lat: true, lng: true, createdAt: true } },
       deliveryProofs: { orderBy: { createdAt: "desc" } },
     },
-  });
+  }));
 
   if (!booking) {
     return NextResponse.json({ error: "Booking not found." }, { status: 404 });
@@ -56,3 +57,4 @@ export async function GET(_req: NextRequest, { params }: Params) {
     headers: { "Cache-Control": "private, no-store" },
   });
 }
+export const GET = withBookingTelemetry("detail", get);

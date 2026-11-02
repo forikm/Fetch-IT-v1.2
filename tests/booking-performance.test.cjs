@@ -12,6 +12,7 @@ function load(file, dependencies) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   vm.runInNewContext(code, { exports, Date, console, setTimeout, Buffer, require(name) {
+    if (name.endsWith('booking-telemetry')) return { timeBooking: (_, work) => work(), withBookingTelemetry: (_, work) => work };
     if (Object.hasOwn(dependencies, name)) return dependencies[name];
     throw Error(`Unexpected dependency ${name}`);
   } });

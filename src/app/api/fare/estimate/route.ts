@@ -20,11 +20,12 @@ import { withRequestLog, safeErrorCode } from "@/lib/request-guard";
 import { parsePickupSchedule } from "@/lib/pickup-schedule";
 import { platformSettings } from "@/lib/platform-settings";
 import { bookingServiceAreaError } from "@/lib/service-area";
+import { timeBooking, withBookingTelemetry } from "@/lib/booking-telemetry";
 
 async function handlePOST(req: NextRequest) {
   try {
-    const session = await requireCustomer();
-    await limitRequests("customer:fare", session.uid, 30, 60000);
+    const session = await timeBooking("auth", requireCustomer);
+    await timeBooking("db.rate_limit", () => limitRequests("customer:fare", session.uid, 30, 60000));
     const body = await req.json();
     const {
       type = "DELIVERY",
@@ -59,7 +60,7 @@ async function handlePOST(req: NextRequest) {
     }
     const coverageError = bookingServiceAreaError(pickup, dropoff);
     if (coverageError) return NextResponse.json({ error: coverageError, code: "SERVICE_UNAVAILABLE" }, { status: 422 });
-    const {settings}=await platformSettings();
+    const {settings}=await timeBooking("db.settings", platformSettings);
     if((type==="RIDE"&&!settings.rideEnabled)||(type==="DELIVERY"&&!settings.deliveryEnabled)||!settings.vehicles.includes(vehicleClass)) return NextResponse.json({error:"This service or vehicle is temporarily unavailable for new bookings."},{status:409});
     let when: Date;
     try { when = parsePickupSchedule(scheduledAt) ?? new Date(); }
@@ -145,4 +146,4 @@ async function handlePOST(req: NextRequest) {
   }
 }
 
-export const POST = withRequestLog("customer:fare/estimate:POST", handlePOST);
+export const POST = withBookingTelemetry("fare", withRequestLog("customer:fare/estimate:POST", handlePOST));

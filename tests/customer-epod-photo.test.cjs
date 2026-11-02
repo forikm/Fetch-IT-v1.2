@@ -12,6 +12,7 @@ function load(file, mocks = {}, extra = "") {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   new Function("exports", "require", compiled + extra)(exports, name => {
+    if (name === "@/lib/booking-telemetry") return { timeBooking: (_, work) => work(), withBookingTelemetry: (_, work) => work };
     if (name === "react/jsx-runtime") return jsx;
     if (name === "@/hooks/use-customer-overlay-history") return { useCustomerOverlayHistory() {} };
     if (Object.hasOwn(mocks, name)) return mocks[name];

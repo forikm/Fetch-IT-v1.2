@@ -8,6 +8,7 @@ import { riderSelect } from "./db-data";
 import { CustomerError } from "./customer-access";
 import { parsePickupSchedule } from "./pickup-schedule";
 import type { PlatformSettings } from "./platform-policy";
+import { timeBooking } from "./booking-telemetry";
 
 const include = { dispatch: { select: dispatchSelect }, customer: { select: { id: true, name: true, phone: true } }, rider: { select: riderSelect } } as const;
 
@@ -51,22 +52,22 @@ export async function createBookingWithRetry(
 ) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const booking = await db.$transaction(async tx => {
-        const ticketId = await generateTicketId(tx, type);
+      const booking = await timeBooking("db.transaction", () => db.$transaction(async tx => {
+        const ticketId = await timeBooking("db.ticket_counter", () => generateTicketId(tx, type));
         // Do not load related users while holding the shared counter row lock.
         // Reuse the settings validated with the fare. A nested durable dispatch
         // avoids re-reading configuration while holding the shared ticket lock.
         const now = new Date();
         const scheduledAt = data.scheduledAt ? new Date(data.scheduledAt) : null;
-        const booking = await tx.booking.create({ data: { ...data, ticketId, refCode: generateRefCode(type === "RIDE" ? "RIDE" : "FIT"),
+        const booking = await timeBooking("db.booking_write", () => tx.booking.create({ data: { ...data, ticketId, refCode: generateRefCode(type === "RIDE" ? "RIDE" : "FIT"),
           dispatch: { create: { phase: settings.automatchingEnabled ? "SEARCHING" : "OPEN", nextAt: scheduledAt && scheduledAt > now ? scheduledAt : now } },
-        } });
-        await queueRiderPushTask(tx, booking.id, "NEW_REQUEST", booking.id);
+        } }));
+        await timeBooking("db.notification_outbox", () => queueRiderPushTask(tx, booking.id, "NEW_REQUEST", booking.id));
         return booking;
-      }, { maxWait: 10000, timeout: 15000 });
+      }, { maxWait: 10000, timeout: 15000 }));
       // The create committed. A failed detail read can be recovered with the
       // same request key on the next explicit confirmation.
-      return await db.booking.findUniqueOrThrow({ where: { id: booking.id }, include });
+      return await timeBooking("db.booking_detail", () => db.booking.findUniqueOrThrow({ where: { id: booking.id }, include }));
     } catch (error) {
       const previous = await findBookingAttempt(db, data.id, body);
       if (previous) return previous;

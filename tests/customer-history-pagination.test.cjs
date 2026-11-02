@@ -9,6 +9,7 @@ function harness() {
   const records = Array.from({ length: 21 }, (_, i) => ({ id: 'booking-' + i, refCode: 'FIT-' + i, customerId: 'owner' }));
   const exports = {};
   const dependencies = {
+    '@/lib/booking-telemetry': { timeBooking: (_, work) => work(), withBookingTelemetry: (_, work) => work },
     '@/lib/matching-policy': {}, '@/lib/request-guard': { withRequestLog: (_, handler) => handler },
     '@/lib/db-data': { bookingView: b => b }, 'next/server': { NextResponse: Response },
     '@/lib/customer-access': { requireCustomer: async () => ({ uid: 'owner' }), customerErrorResponse: e => { throw e; } },

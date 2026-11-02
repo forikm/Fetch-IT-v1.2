@@ -5,6 +5,7 @@ import { type PlatformSettings } from './platform-policy';
 import { sessionSecret } from './session-secret';
 import { roadRoute, routingEnabled } from './road-routing-service';
 import { RoutingError } from './road-routing';
+import { recordBookingTiming, timeBooking } from './booking-telemetry';
 
 type Input = { type: 'RIDE' | 'DELIVERY'; pickup: LatLng; dropoff: LatLng; vehicleClass: VehicleClass; cargoWeightKg?: number; passengers?: number; when?: Date; scheduledAt?: Date | null; settings: PlatformSettings };
 function identity(uid: string, input: Input) {
@@ -30,7 +31,7 @@ export function readRoadQuote(token: unknown, uid: string, input: Input, now = D
   return data;
 }
 export async function newRoadQuote(uid: string, input: Input) {
-  const route = routingEnabled() ? await roadRoute(input.pickup, input.dropoff, input.vehicleClass) : null;
+  const route = routingEnabled() ? await timeBooking('routing.total', () => roadRoute(input.pickup, input.dropoff, input.vehicleClass, undefined, recordBookingTiming)) : null;
   const params = { ...input, route: route ? { distanceKm: route.distanceMeters / 1000, durationSeconds: route.durationSeconds } : undefined };
   const quote = input.type === 'RIDE' ? quoteRideFare(params) : quoteFare({ ...params, cargoWeightKg: input.cargoWeightKg ?? 1 });
   const routingSource = route ? 'openrouteservice' as const : 'estimate' as const;

@@ -10,6 +10,7 @@ function load(file, dependencies) {
   const exports = {};
   const source = ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   vm.runInNewContext(source, { exports, console, Date, Buffer, Response, require(name) {
+    if (name.endsWith("booking-telemetry")) return { timeBooking: (_, work) => work(), withBookingTelemetry: (_, work) => work };
     if (name in dependencies) return dependencies[name];
     throw Error(`Unexpected dependency ${name}`);
   } });
@@ -42,6 +43,10 @@ function handlers() {
   const session = { uid: "fixture", name: "Fixture", role: "CUSTOMER" };
   class CustomerError extends Error { constructor(message, status) { super(message); this.status = status; } }
   const dependencies = {
+    "@/lib/road-quote": { newRoadQuote: quote, confirmedRoadQuote: quote },
+    "@/lib/road-routing": { RoutingError: class extends Error {} },
+    "@/lib/matching-policy": { dispatchSelect: {} },
+    "@/lib/push-delivery": { schedulePushDelivery() {} },
     "next/server": { NextResponse: Response },
     "@/lib/service-area": area,
     "@/lib/request-guard": { withRequestLog: (_, fn) => fn, limitRequests: async () => {}, safeErrorCode: () => "TEST" },
@@ -90,6 +95,7 @@ test("an older out-of-area online draft cannot become a booking; cancellation st
     $queryRaw: async () => [],
   };
   const { resolveOnlineCheckout } = load("../src/lib/online-checkout.ts", {
+    "./automatching": {}, "./rider-push-tasks": {}, "./push-delivery": {},
     "node:crypto": crypto, "./service-area": area, "./customer-access": {}, "./payments": { PaymentError },
     "./ticket": {}, "./fare": {}, "./payment-policy": { isDemoPayment: () => true },
     "./receipt-email": { scheduleReceiptDelivery: () => { throw Error("Must not send mail"); } },

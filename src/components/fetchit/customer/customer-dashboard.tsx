@@ -1,4 +1,5 @@
 "use client";
+import { startBookingTiming } from "@/lib/booking-client-timing";
 import { useCustomerOverlayHistory } from "@/hooks/use-customer-overlay-history";
 import { CustomerAppShell } from "../shared/customer-app-shell";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
@@ -638,13 +639,14 @@ function BookingForm({
   async function fetchEstimate() {
     if (!online || offlineAccess || !canEstimate()) return;
     const sequence = ++fareSequence.current;
+    const timing = startBookingTiming("fare");
     setEstimating(true);
     setEstimate(null);
     setEstimateError(null);
     try {
       const res = await fetch("/api/fare/estimate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...timing.headers },
         body: JSON.stringify({
           type: bookingType,
           paymentMethod,
@@ -656,9 +658,12 @@ function BookingForm({
           scheduledAt: pickupScheduleIso(scheduledAt),
         }),
       });
+      timing.response(res);
       const data = await customerResponse<NonNullable<typeof estimate>>(res, "We couldn’t load the fare. Please retry.");
       if (sequence === fareSequence.current) { setEstimate(data); setEstimatedKey(fareKey); }
+      timing.finish(sequence === fareSequence.current ? "fare_ready" : "superseded");
     } catch (error) {
+      timing.finish("failed");
       if (sequence === fareSequence.current) setEstimateError(error instanceof Error ? error.message : "We couldn’t load the fare. Please retry.");
     } finally {
       if (sequence === fareSequence.current) setEstimating(false);
@@ -683,6 +688,7 @@ function BookingForm({
     }
     submissionRunning.current = true;
     setSubmitting(true);
+    const timing = startBookingTiming("confirm");
     try {
       const body = JSON.stringify({
           routeQuote: estimate.routeQuote,
@@ -703,12 +709,14 @@ function BookingForm({
       setPendingSubmission(submission);
       const res = await fetch("/api/bookings", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": submission.key },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": submission.key, ...timing.headers },
         body,
       });
+      timing.response(res);
       if (res.status === 409) setPendingSubmission(null);
       const data = await customerResponse<{ booking?: Booking; checkoutUrl?: string }>(res, "We couldn’t confirm your request. Your details are saved; reconnect and retry.");
       if (data.checkoutUrl && /^\/checkout\/[a-zA-Z0-9_-]+$/.test(data.checkoutUrl)) {
+        timing.finish("checkout");
         window.location.assign(data.checkoutUrl);
         return;
       }
@@ -716,7 +724,9 @@ function BookingForm({
       setDraft(emptyDraft);
       setPendingSubmission(null);
       onCreate(data.booking);
+      timing.finish("confirmed");
     } catch (e) {
+      timing.finish("failed");
       setError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check Active bookings before trying again. Your details are saved.");
     } finally {
       submissionRunning.current = false;
