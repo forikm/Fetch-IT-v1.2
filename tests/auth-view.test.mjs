@@ -21,7 +21,7 @@ class Storage {
 }
 beforeEach(() => { globalThis.localStorage = new Storage(); });
 const saved = { mode: "signup", email: "pending@example.invalid", name: "Pending Customer", phone: "+639171234567", firebaseUid: "pending-user", verificationSent: true };
-function harness(firebaseUser, { codes = false, initialMode = "signup", failSignOut = false } = {}) {
+function harness(firebaseUser, { codes = false, initialMode = "signup", failSignOut = false, sessionReply } = {}) {
   let cursor = 0;
   let dirty = true;
   let poll;
@@ -38,6 +38,7 @@ function harness(firebaseUser, { codes = false, initialMode = "signup", failSign
   const sdk = {
     onAuthStateChanged(_, callback) { observer = callback; callback(auth.currentUser); return () => {}; },
     async reload(user) { user.emailVerified = true; },
+    async signInWithEmailAndPassword() { return { user: auth.currentUser }; },
     async updateProfile(user, profile) { user.displayName = profile.displayName; },
     async signOut() { if (failSignOut) throw Error("Sign-out unavailable"); auth.currentUser = null; observer(null); },
     async sendEmailVerification() { requests.push("verification-email"); },
@@ -61,6 +62,7 @@ function harness(firebaseUser, { codes = false, initialMode = "signup", failSign
   const exports = {};
   const fakeFetch = async (path, options) => {
     requests.push({ path, body: JSON.parse(options.body) });
+    if (path === "/api/auth/firebase-session" && sessionReply) return sessionReply(JSON.parse(options.body));
     return new Response(JSON.stringify(path === "/api/auth/firebase-session" ? { user: { id: "fetch-user", role: "CUSTOMER" } } :
       { challengeId: "550e8400-e29b-41d4-a716-446655440000", expiresAt: new Date(Date.now() + 600000).toISOString(), retryAfter: 60, message: "Request complete." }));
   };
@@ -103,6 +105,26 @@ function harness(firebaseUser, { codes = false, initialMode = "signup", failSign
 function firebaseUser(uid = saved.firebaseUid) {
   return { uid, email: saved.email, emailVerified: false, displayName: saved.name, async getIdToken(force) { assert.equal(force, true); return "fixture-verified-token"; } };
 }
+
+test("verified login with an unfinished profile reveals the phone field and can continue", async () => {
+  const app = harness({ ...firebaseUser(), emailVerified: true }, { initialMode: "login", sessionReply: body => body.phone
+    ? Response.json({ user: { id: "new-customer", role: "CUSTOMER" }, isNewUser: true })
+    : Response.json({ code: "PROFILE_REQUIRED", error: "Phone number is required." }, { status: 400 }) });
+  await app.nodes().find(node => node.type === "form" && node.props.onSubmit).props.onSubmit({ preventDefault() {} }); app.render();
+  assert.equal(app.state.user, null);
+  const phone = app.nodes().find(node => node.props?.id === "verification-phone"); assert(phone);
+  assert(app.nodes().some(node => node.props?.role === "status" && /Finish setting up/.test(node.props.children)));
+  phone.props.onChange({ target: { value: "09171234567" } }); app.render();
+  await app.nodes().find(node => node.type === "Button" && Array.isArray(node.props.children) && node.props.children.includes("Continue")).props.onClick(); app.render();
+  assert.equal(app.requests[1].body.phone, "+639171234567"); assert.equal(app.state.user.id, "new-customer");
+});
+
+test("existing verified customers sign in without a phone field or signup prompt", async () => {
+  const app = harness({ ...firebaseUser(), emailVerified: true }, { initialMode: "login" });
+  await app.nodes().find(node => node.type === "form" && node.props.onSubmit).props.onSubmit({ preventDefault() {} }); app.render();
+  assert.equal(app.state.user.id, "fetch-user"); assert.equal(app.requests[0].body.phone, undefined);
+  assert.equal(app.nodes().some(node => node.props?.id === "verification-phone"), false);
+});
 
 test("returning from email restores verification details and completes with the verified token", async () => {
   progress.saveAuthProgress(saved);

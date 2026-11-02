@@ -39,20 +39,20 @@ async function handlePOST(req: NextRequest) {
       return NextResponse.json({ error: "This account cannot be used in the customer app." }, { status: 403 });
     }
     if (!user) {
-      let normalizedPhone: string;
-      try {
-        normalizedPhone = normalizePhilippinePhone(phone);
-      } catch (error) {
-        return NextResponse.json({ error: error instanceof Error ? error.message : "Enter a valid Philippine phone number." }, { status: 400 });
-      }
-      // Never attach a Firebase account to a legacy account by email alone.
-      // Existing users keep their current account until explicitly migrated.
+      // Check existing accounts before asking for signup details. A verified
+      // email alone must never link a Firebase identity to a password account.
       const existing = await db.user.findUnique({ where: { email } });
       if (existing) {
         return NextResponse.json(
           { error: "This email already has a Fetch-It account. Use the existing account or contact support." },
           { status: 409 },
         );
+      }
+      let normalizedPhone: string;
+      try {
+        normalizedPhone = normalizePhilippinePhone(phone);
+      } catch (error) {
+        return NextResponse.json({ code: "PROFILE_REQUIRED", error: error instanceof Error ? error.message : "Enter a valid Philippine phone number." }, { status: 400 });
       }
       user = await db.user.create({
         data: {

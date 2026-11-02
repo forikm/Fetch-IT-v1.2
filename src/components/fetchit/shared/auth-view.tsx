@@ -182,7 +182,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     // handler runs. Keep the HTTP status visible instead of showing a JSON
     // parsing error that hides the real failure.
     const body = await res.text();
-    type SessionResponse = { error?: string; user?: AuthUser; isNewUser?: boolean };
+    type SessionResponse = { error?: string; code?: string; user?: AuthUser; isNewUser?: boolean };
     let data: SessionResponse | null = null;
     if (body) {
       try {
@@ -192,6 +192,13 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       }
     }
     if (!res.ok) {
+      if (res.status === 400 && data?.code === "PROFILE_REQUIRED") {
+        setFirebaseUid(user.uid);
+        setPendingVerification(true);
+        setNotice("Finish setting up your account. Add your phone number so your driver can contact you, then select Continue.");
+        setError(phone.trim() ? data.error || "Enter a valid Philippine phone number." : null);
+        return;
+      }
       throw new Error(data?.error || `Sign-in service failed (HTTP ${res.status}). Please try again later.`);
     }
     if (!data?.user) throw new Error("Sign-in service returned an invalid response.");
@@ -428,7 +435,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                 <Button variant="ghost" className="w-full" disabled={codeBusy || loading} onClick={() => { if (!codePending.current) setResetActive(false); }}>Back to sign in</Button>
               </div> : pendingVerification ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">{emailVerified ? "Your email is verified. Continue below if signup has not finished automatically." : EMAIL_CODES_ENABLED ? "Your signup is saved. Verify your email with the code below." : verificationSent ? "Open the email link, then return here. We’ll check verification when you return; your progress is saved." : "Your signup is saved. Send a verification email below, then open its link and return here."}</p>
+                  <p className="text-sm text-muted-foreground">{emailVerified ? "Your email is verified. Finish setting up your account below." : EMAIL_CODES_ENABLED ? "Your signup is saved. Verify your email with the code below." : verificationSent ? "Open the email link, then return here. We’ll check verification when you return; your progress is saved." : "Your signup is saved. Send a verification email below, then open its link and return here."}</p>
                   {EMAIL_CODES_ENABLED && !emailVerified && <EmailCodeForm key={`${firebaseUid}:${verificationChallenge?.challengeId ?? "new"}`} purpose="verification" email={email} initialChallenge={verificationChallenge}
                     onBusyChange={busy => { codePending.current = busy; setCodeBusy(busy); }}
                     onSend={async () => {
