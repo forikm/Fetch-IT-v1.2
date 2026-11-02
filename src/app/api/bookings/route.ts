@@ -98,22 +98,19 @@ async function handlePOST(req: NextRequest) {
         { status: 403 },
       );
     }
-    const requester = await db.user.findUnique({ where: { id: session.uid } });
-    if (!requester || requester.role !== "CUSTOMER" || requester.isBanned) {
-      return NextResponse.json(
-        { error: "Your account is unavailable. Please contact support." },
-        { status: 403 },
-      );
-    }
+    // getSession already checks the live account, role, ban and reset cutoff.
+    // Avoid repeating that database read on every confirmation.
 
     const body = await req.json();
     if (!body || typeof body !== "object") throw new CustomerError("Booking details are required.", 400);
     const paymentMethod = body.paymentMethod ?? "CASH";
     if (typeof paymentMethod !== "string" || !Object.hasOwn(PAYMENT_METHOD_LABEL, paymentMethod)) throw new CustomerError("Choose a valid payment method.", 400);
-    const {settings}=await platformSettings();
-    const paymentData = { paymentMethod: paymentMethod as PaymentMethod, ...(isDemoPayment(paymentMethod) ? { demoCommissionBps: Math.round(settings.commissionPercent*100) } : {}) };
     const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
-    const previous = await findBookingAttempt(db, attemptId, body);
+    const [{ settings }, previous] = await Promise.all([
+      platformSettings(),
+      findBookingAttempt(db, attemptId, body),
+    ]);
+    const paymentData = { paymentMethod: paymentMethod as PaymentMethod, ...(isDemoPayment(paymentMethod) ? { demoCommissionBps: Math.round(settings.commissionPercent*100) } : {}) };
     if (previous) { schedulePushDelivery(previous.id); return NextResponse.json({ booking: omitTicket(bookingView(previous)) }); }
     async function submit(type: "RIDE" | "DELIVERY", data: Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">) {
       if (isDemoPayment(paymentMethod)) {
@@ -125,7 +122,7 @@ async function handlePOST(req: NextRequest) {
         }
         return NextResponse.json(checkout);
       }
-      const booking = await createBookingWithRetry(db, type, data, body);
+      const booking = await createBookingWithRetry(db, type, data, body, settings);
       schedulePushDelivery(booking.id);
       return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
     }

@@ -1,4 +1,3 @@
-import { queueAutomaticMatching } from './automatching';
 import { dispatchSelect } from './matching-policy';
 import { queueRiderPushTask } from "./rider-push-tasks";
 import { createHash } from "node:crypto";
@@ -8,6 +7,7 @@ import { generateRefCode } from "./fare";
 import { riderSelect } from "./db-data";
 import { CustomerError } from "./customer-access";
 import { parsePickupSchedule } from "./pickup-schedule";
+import type { PlatformSettings } from "./platform-policy";
 
 const include = { dispatch: { select: dispatchSelect }, customer: { select: { id: true, name: true, phone: true } }, rider: { select: riderSelect } } as const;
 
@@ -47,14 +47,20 @@ export async function findBookingAttempt(db: PrismaClient, id: string | undefine
 
 export async function createBookingWithRetry(
   db: PrismaClient, type: TicketType, data: Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">, body: RequestDetails,
+  settings: Pick<PlatformSettings, "automatchingEnabled">,
 ) {
   for (let attempt = 0; ; attempt++) {
     try {
       const booking = await db.$transaction(async tx => {
         const ticketId = await generateTicketId(tx, type);
         // Do not load related users while holding the shared counter row lock.
-        const booking = await tx.booking.create({ data: { ...data, ticketId, refCode: generateRefCode(type === "RIDE" ? "RIDE" : "FIT") } });
-        await queueAutomaticMatching(tx, booking);
+        // Reuse the settings validated with the fare. A nested durable dispatch
+        // avoids re-reading configuration while holding the shared ticket lock.
+        const now = new Date();
+        const scheduledAt = data.scheduledAt ? new Date(data.scheduledAt) : null;
+        const booking = await tx.booking.create({ data: { ...data, ticketId, refCode: generateRefCode(type === "RIDE" ? "RIDE" : "FIT"),
+          dispatch: { create: { phase: settings.automatchingEnabled ? "SEARCHING" : "OPEN", nextAt: scheduledAt && scheduledAt > now ? scheduledAt : now } },
+        } });
         await queueRiderPushTask(tx, booking.id, "NEW_REQUEST", booking.id);
         return booking;
       }, { maxWait: 10000, timeout: 15000 });
