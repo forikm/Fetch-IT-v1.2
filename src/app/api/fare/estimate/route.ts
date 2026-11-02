@@ -136,7 +136,7 @@ async function handlePOST(req: NextRequest) {
     });
   } catch (err) {
     if (err instanceof RateLimitError) throw err;
-    if (err instanceof RoutingError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
+    if (err instanceof RoutingError) return NextResponse.json({ error: err.message, code: err.code, retryAfterSeconds: err.retryAfterSeconds }, { status: err.status, headers: err.retryAfterSeconds ? { "Retry-After": String(err.retryAfterSeconds) } : {} });
     if (err && typeof err === "object" && "status" in err && typeof err.status === "number") return NextResponse.json({error: err instanceof Error ? err.message : "Fare unavailable."}, {status: err.status});
     console.error("[fare/estimate] error", { code: safeErrorCode(err) });
     return NextResponse.json(

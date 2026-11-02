@@ -23,7 +23,7 @@ import { useCustomerData } from "@/hooks/use-customer-data";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { readCustomerBooking } from "@/lib/offline-bookings";
 import { readSnapshot, saveSnapshot } from "@/lib/offline-data";
-import { customerResponse } from "@/lib/customer-request";
+import { customerResponse, CustomerRequestError } from "@/lib/customer-request";
 import { useServiceArea } from "@/hooks/use-service-area";
 import { FetchItLoader } from "@/components/fetchit/shared/loading";
 import { pickupScheduleIso, pickupScheduleInput, formatPickupSchedule } from "@/lib/pickup-schedule";
@@ -525,6 +525,10 @@ function BookingForm({
   } | null>(null);
   const [estimating, setEstimating] = useState(false);
   const fareSequence = useRef(0);
+  const fareRequest = useRef<AbortController | null>(null);
+  const fareRetryAt = useRef(0);
+  const [fareRetrySeconds, setFareRetrySeconds] = useState(0);
+  const fareRetryWaiting = fareRetrySeconds > 0;
   const fareKey = JSON.stringify([online, offlineAccess, pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, isRide ? passengers : cargoWeightKg, scheduledAt]);
   const [estimatedKey, setEstimatedKey] = useState<string | null>(null);
   const estimate = estimatedKey === fareKey ? fareEstimate : null;
@@ -637,8 +641,11 @@ function BookingForm({
   }
 
   async function fetchEstimate() {
-    if (!online || offlineAccess || !canEstimate()) return;
+    if (!online || offlineAccess || !canEstimate() || fareRequest.current || Date.now() < fareRetryAt.current) return;
     const sequence = ++fareSequence.current;
+    const controller = new AbortController();
+    fareRequest.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 45000);
     const timing = startBookingTiming("fare");
     setEstimating(true);
     setEstimate(null);
@@ -646,6 +653,7 @@ function BookingForm({
     try {
       const res = await fetch("/api/fare/estimate", {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json", ...timing.headers },
         body: JSON.stringify({
           type: bookingType,
@@ -659,23 +667,37 @@ function BookingForm({
         }),
       });
       timing.response(res);
-      const data = await customerResponse<NonNullable<typeof estimate>>(res, "We couldn’t load the fare. Please retry.");
+      const data = await customerResponse<NonNullable<typeof estimate>>(res, "We couldn’t load the fare. Please retry.", true);
       if (sequence === fareSequence.current) { setEstimate(data); setEstimatedKey(fareKey); }
       timing.finish(sequence === fareSequence.current ? "fare_ready" : "superseded");
     } catch (error) {
       timing.finish("failed");
-      if (sequence === fareSequence.current) setEstimateError(error instanceof Error ? error.message : "We couldn’t load the fare. Please retry.");
+      if (sequence === fareSequence.current) {
+        const seconds = error instanceof CustomerRequestError ? error.retryAfterSeconds : 0;
+        fareRetryAt.current = Date.now() + seconds * 1000;
+        setFareRetrySeconds(seconds);
+        setEstimateError(controller.signal.aborted ? "The fare request took too long. Please retry." : error instanceof Error ? error.message : "We couldn’t load the fare. Please retry.");
+      }
     } finally {
+      clearTimeout(timeout);
+      if (fareRequest.current === controller) fareRequest.current = null;
       if (sequence === fareSequence.current) setEstimating(false);
     }
   }
 
   // Auto-fetch estimate when all fields are present.
   useEffect(() => {
+    fareRetryAt.current = 0;
     if (!online || offlineAccess || !canEstimate()) return;
-    const t = setTimeout(() => void fetchEstimate(), 350);
-    return () => { clearTimeout(t); fareSequence.current++; };
+    const t = setTimeout(() => { setFareRetrySeconds(0); void fetchEstimate(); }, 350);
+    return () => { clearTimeout(t); fareSequence.current++; fareRequest.current?.abort(); fareRequest.current = null; };
   }, [area, pickupPinUnavailable, dropoffPinUnavailable, online, offlineAccess, pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, cargoWeightKg, passengers, scheduledAt]);
+
+  useEffect(() => {
+    if (!fareRetrySeconds) return;
+    const timer = setInterval(() => setFareRetrySeconds(Math.max(0, Math.ceil((fareRetryAt.current - Date.now()) / 1000))), 1000);
+    return () => clearInterval(timer);
+  }, [fareRetryWaiting]);
 
   async function handleConfirmBooking() {
     setError(null);
@@ -1034,9 +1056,9 @@ function BookingForm({
                     </details>
                   </div>
                 ) : estimateError ? (
-                  <div className="flex items-start gap-2 text-sm text-destructive">
-                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> {estimateError}
-                    <Button type="button" size="sm" variant="outline" onClick={() => void fetchEstimate()}>Retry fare</Button>
+                  <div className="space-y-3 text-sm text-destructive">
+                    <p role="status" className="flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> {estimateError}</p>
+                    <Button type="button" size="sm" variant="outline" disabled={estimating || fareRetrySeconds > 0} onClick={() => void fetchEstimate()}>{fareRetrySeconds > 0 ? `Retry fare in ${fareRetrySeconds}s` : "Retry fare"}</Button>
                   </div>
                 ) : null}
               </CardContent>

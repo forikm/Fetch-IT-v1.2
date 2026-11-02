@@ -5,7 +5,7 @@ export type RoadRoute = {
   coordinates: [number, number][]; steps: RoadStep[]; computedAt: string;
 };
 export class RoutingError extends Error {
-  constructor(public code: string, message: string, public status = 503) { super(message); }
+  constructor(public code: string, message: string, public status = 503, public retryAfterSeconds?: number) { super(message); }
 }
 export function routeOptions(vehicle: string) {
   if (!['MOTORCYCLE', 'TRICYCLE', 'SEDAN'].includes(vehicle)) throw new RoutingError('ROUTE_VEHICLE', 'Routing is unavailable for this vehicle.', 422);

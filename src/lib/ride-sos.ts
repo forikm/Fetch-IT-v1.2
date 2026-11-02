@@ -14,13 +14,15 @@ export async function sendRideSos(db: PrismaClient, bookingId: string, customerI
   const fix = sosLocation(value);
   return db.$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${bookingId} FOR UPDATE`;
-    const booking = await tx.booking.findFirst({ where: { id: bookingId, customerId } });
+    const booking = await tx.booking.findFirst({ where: { id: bookingId, customerId }, include: { rider: { select: { id: true, name: true, phone: true, riderProfile: { select: { vehiclePlate: true } } } } } });
     if (!booking) throw new CustomerError("Booking not found.", 404);
     if (booking.type !== "RIDE" || !["ACCEPTED", "PICKED_UP", "IN_TRANSIT"].includes(booking.status))
       throw new CustomerError("Safety alerts are available only for an active passenger ride.", 409);
     const existing = await tx.supportTicket.findFirst({ where: { bookingId, customerId, priority: "URGENT", OR: [{ message: { startsWith: "URGENT SAFETY ALERT\n" } }, { message: { startsWith: "SOS EMERGENCY ALERT\n" } }], status: { in: ["OPEN", "IN_PROGRESS"] } } });
     if (existing) return { id: existing.id, createdAt: existing.createdAt };
-    const message = `URGENT SAFETY ALERT\nPassenger requested urgent staff review.\nGPS: ${fix.lat}, ${fix.lng}\nAccuracy: ${Math.round(fix.accuracy)} m\nCaptured: ${new Date(fix.capturedAt).toISOString()}`;
+    const rider = booking.rider;
+    const line = (value: string | null | undefined) => value?.replace(/[\r\n]+/g, " ").trim() || "Not available";
+    const message = `URGENT SAFETY ALERT\nPassenger requested urgent staff review.\nBooking: ${line(booking.refCode)}\nRider: ${rider ? line(rider.name) : "No assigned rider"}\nRider ID: ${line(rider?.id)}\nRider phone: ${line(rider?.phone)}\nVehicle: ${line(booking.vehicleClass)}\nPlate: ${line(rider?.riderProfile?.vehiclePlate)}\nGPS: ${fix.lat}, ${fix.lng}\nAccuracy: ${Math.round(fix.accuracy)} m\nCaptured: ${new Date(fix.capturedAt).toISOString()}`;
     const ticket = await tx.supportTicket.create({ data: { bookingId, customerId, category: "RIDER", priority: "URGENT", isEmergency: true, message } });
     return { id: ticket.id, createdAt: ticket.createdAt };
   });

@@ -35,8 +35,8 @@ export async function roadRoute(start: RoutePoint, finish: RoutePoint, vehicle: 
     const rows = await tx.$queryRaw<Cached[]>`SELECT "result", "expiresAt", "leaseUntil" FROM "RoadRouteCache" WHERE "key" = ${key}`;
     const cached = rows[0];
     if (cached?.result && cached.expiresAt > now) return { cached: cached.result };
-    if (cached?.leaseUntil && cached.leaseUntil > now) throw new RoutingError('ROUTE_BUSY', 'Directions are being prepared. Please retry shortly.');
-    if (cached && !cached.result && cached.expiresAt > now) throw new RoutingError('ROUTE_COOLDOWN', 'Routing is temporarily unavailable. Please try again shortly.');
+    if (cached?.leaseUntil && cached.leaseUntil > now) throw new RoutingError('ROUTE_BUSY', 'Directions are being prepared. Please retry shortly.', 503, Math.max(1, Math.ceil((cached.leaseUntil.getTime() - now.getTime()) / 1000)));
+    if (cached && !cached.result && cached.expiresAt > now) throw new RoutingError('ROUTE_COOLDOWN', 'Routing is temporarily unavailable. Please try again shortly.', 503, Math.max(1, Math.ceil((cached.expiresAt.getTime() - now.getTime()) / 1000)));
     const usage = await tx.$queryRaw<{ minute: number; day: number }[]>`SELECT
       COUNT(*) FILTER (WHERE "createdAt" > CURRENT_TIMESTAMP - INTERVAL '60 seconds')::integer AS "minute",
       COUNT(*)::integer AS "day" FROM "RoadRouteRequest" WHERE "account" = ${account} AND "createdAt" > CURRENT_TIMESTAMP - INTERVAL '24 hours'`;
@@ -74,7 +74,7 @@ export async function roadRoute(start: RoutePoint, finish: RoutePoint, vehicle: 
     // normal directions to retry instead of poisoning the cache for a minute.
     await db.$executeRaw`UPDATE "RoadRouteCache" SET "result" = NULL, "expiresAt" = ${new Date(Date.now() + (deadlineReached ? 0 : 60000))}, "leaseUntil" = NULL WHERE "key" = ${key}`;
     if (deadlineReached) throw new RoutingError('ROUTE_DEADLINE', 'Pickup ETA is taking too long. Nearby distance will be used.');
-    if (error instanceof RoutingError) throw error;
-    throw new RoutingError('ROUTE_PROVIDER', 'Road directions could not load. Check your connection and retry.');
+    if (error instanceof RoutingError) { error.retryAfterSeconds = 60; throw error; }
+    throw new RoutingError('ROUTE_PROVIDER', 'Road directions could not load. Check your connection and retry.', 503, 60);
   }
 }
