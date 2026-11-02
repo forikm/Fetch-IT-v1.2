@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { PAYMENT_STATUS_LABEL, PAYMENT_METHOD_LABEL, cashConfirmationAvailable, deliveryCashCompletionError, isDemoPayment, type PaymentMethod, type PaymentStatus } from "@/lib/payment-policy";
+import { PAYMENT_STATUS_LABEL, PAYMENT_METHOD_LABEL, cashConfirmationAvailable, completionPaymentError, deliveryCashCompletionError, isDemoPayment, type PaymentMethod, type PaymentStatus } from "@/lib/payment-policy";
 type PaymentBooking = { type: string; dropoffReachedAt: string | null; paymentMethod: PaymentMethod; paymentStatus: PaymentStatus; status: string; totalFare: number; customerPaidAmount: number | null; riderReceivedAmount: number | null; customerPaidAt: string | null; riderReceivedAt: string | null; paidAt: string | null; paymentReference: string | null; demoCommissionBps: number | null; demoCommission: number | null; demoRiderEarnings: number | null; demoPayoutAt: string | null; demoPayoutReference: string | null };
 export function PaymentCard({ bookingId, role, readOnly = false, onPaymentReady }: { bookingId: string; role: "CUSTOMER" | "RIDER"; readOnly?: boolean; onPaymentReady?: (ready: boolean) => void }) {
   const [booking, setBooking] = useState<PaymentBooking | null>(null);
@@ -11,7 +11,7 @@ export function PaymentCard({ bookingId, role, readOnly = false, onPaymentReady 
   const [notice, setNotice] = useState("");
   const pending = useRef(false);
   const version = useRef(0);
-  useEffect(() => { onPaymentReady?.(!!booking && !deliveryCashCompletionError(booking) && (booking.type !== "DELIVERY" || booking.paymentMethod !== "CASH" || !!booking.dropoffReachedAt)); }, [booking, onPaymentReady]);
+  useEffect(() => { onPaymentReady?.(!readOnly && !busy && !error && !!booking && !completionPaymentError(booking) && (booking.type !== "DELIVERY" || booking.paymentMethod !== "CASH" || !!booking.dropoffReachedAt)); }, [booking, readOnly, busy, error, onPaymentReady]);
   useEffect(() => {
     if (readOnly) return;
     const controller = new AbortController();
@@ -45,6 +45,7 @@ export function PaymentCard({ bookingId, role, readOnly = false, onPaymentReady 
   const mismatch = booking && booking.customerPaidAmount !== null && booking.riderReceivedAmount !== null && (booking.customerPaidAmount !== booking.riderReceivedAmount || booking.customerPaidAmount !== booking.totalFare);
   return <section className="rounded-xl border p-4 space-y-3 text-sm" aria-label="Payment">
     <div className="flex justify-between gap-2"><strong>{booking ? PAYMENT_METHOD_LABEL[booking.paymentMethod] : "Payment"}</strong><span>{booking ? PAYMENT_STATUS_LABEL[booking.paymentStatus] : "Loading…"}</span></div>
+    {booking?.type === 'RIDE' && booking.paymentMethod === 'CASH' && booking.status === 'IN_TRANSIT' && <p role="status" className="rounded-lg bg-muted/40 p-3">{!booking.riderReceivedAt ? role === 'RIDER' ? 'Confirm cash received after collecting the fare.' : 'Waiting for the rider to confirm cash received.' : !booking.customerPaidAt ? role === 'CUSTOMER' ? 'Confirm cash paid after handing the fare to the rider.' : 'Your cash confirmation is saved. Waiting for the customer to confirm payment.' : completionPaymentError(booking) ?? 'Cash payment confirmed by both sides. This ride can now be completed.'}</p>}
     {demo && <p className="text-xs text-muted-foreground">Test payment — no money charged. {role === "RIDER" ? "Online payment: do not collect cash." : ""}</p>}
     {deliveryCash && !["IN_TRANSIT", "DELIVERED", "CANCELLED"].includes(booking.status) && <p className="text-xs text-muted-foreground">Cash is collected at drop-off. Confirmation will appear after arrival.</p>}
     {deliveryCash && booking.status === "IN_TRANSIT" && <p role="status" className="rounded-lg bg-muted/40 p-3">{!booking.dropoffReachedAt ? "At the destination, confirm arrival to open cash payment." : deliveryCashCompletionError(booking) ?? "Cash payment confirmed by both sides. Collect the recipient signature and drop-off photo to complete delivery."}</p>}
