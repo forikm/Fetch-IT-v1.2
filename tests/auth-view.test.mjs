@@ -21,7 +21,7 @@ class Storage {
 }
 beforeEach(() => { globalThis.localStorage = new Storage(); });
 const saved = { mode: "signup", email: "pending@example.invalid", name: "Pending Customer", phone: "+639171234567", firebaseUid: "pending-user", verificationSent: true };
-function harness(firebaseUser, { codes = false, initialMode = "signup", failSignOut = false, sessionReply } = {}) {
+function harness(firebaseUser, { codes = false, initialMode = "signup", failSignOut = false, sessionReply, codeStatus = 200 } = {}) {
   let cursor = 0;
   let dirty = true;
   let poll;
@@ -63,6 +63,7 @@ function harness(firebaseUser, { codes = false, initialMode = "signup", failSign
   const fakeFetch = async (path, options) => {
     requests.push({ path, body: JSON.parse(options.body) });
     if (path === "/api/auth/firebase-session" && sessionReply) return sessionReply(JSON.parse(options.body));
+    if (path.startsWith("/api/auth/email-code/") && codeStatus !== 200) return Response.json({ error: codeStatus === 401 ? "Sign in again to verify your email." : "Could not send the email. Wait a minute and request a new code." }, { status: codeStatus });
     return new Response(JSON.stringify(path === "/api/auth/firebase-session" ? { user: { id: "fetch-user", role: "CUSTOMER" } } :
       { challengeId: "550e8400-e29b-41d4-a716-446655440000", expiresAt: new Date(Date.now() + 600000).toISOString(), retryAfter: 60, message: "Request complete." }));
   };
@@ -124,6 +125,32 @@ test("existing verified customers sign in without a phone field or signup prompt
   await app.nodes().find(node => node.type === "form" && node.props.onSubmit).props.onSubmit({ preventDefault() {} }); app.render();
   assert.equal(app.state.user.id, "fetch-user"); assert.equal(app.requests[0].body.phone, undefined);
   assert.equal(app.nodes().some(node => node.props?.id === "verification-phone"), false);
+});
+
+test("an expired verification session opens sign-in and preserves signup details", async () => {
+  progress.saveAuthProgress(saved);
+  const app = harness(firebaseUser(), { codes: true, codeStatus: 401 });
+  const form = app.nodes().find(node => node.type === "EmailCodeForm");
+  await assert.rejects(form.props.onSend(), /Sign in again/); app.render();
+  assert.equal(app.nodes().some(node => node.type === "EmailCodeForm"), false);
+  assert.equal(app.nodes().find(node => node.props?.id === "email").props.value, saved.email);
+  assert.equal(app.nodes().find(node => node.props?.id === "password").props.value, "");
+  assert.equal(progress.readAuthProgress().phone, saved.phone); assert.equal(progress.readAuthProgress().name, saved.name);
+  assert(app.nodes().some(node => node.props?.role === "status" && /Sign in again with this email/.test(node.props.children)));
+  assert.equal(app.state.user, null);
+});
+
+test("verification has a direct sign-in recovery action without deleting signup progress", async () => {
+  progress.saveAuthProgress(saved); const app = harness(firebaseUser(), { codes: true });
+  app.nodes().find(node => node.type === "Button" && node.props.children === "Sign in again to continue").props.onClick(); app.render();
+  assert.equal(app.nodes().some(node => node.type === "EmailCodeForm"), false);
+  assert.equal(progress.readAuthProgress().phone, saved.phone); assert.deepEqual(app.requests, []);
+});
+
+test("email delivery outages keep verification retry available instead of requiring sign-in", async () => {
+  progress.saveAuthProgress(saved); const app = harness(firebaseUser(), { codes: true, codeStatus: 503 });
+  await assert.rejects(app.nodes().find(node => node.type === "EmailCodeForm").props.onSend(), /Could not send/); app.render();
+  assert(app.nodes().some(node => node.type === "EmailCodeForm")); assert.equal(app.state.user, null);
 });
 
 test("returning from email restores verification details and completes with the verified token", async () => {

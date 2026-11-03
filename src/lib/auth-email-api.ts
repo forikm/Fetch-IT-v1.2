@@ -24,7 +24,8 @@ async function verificationTarget(idToken: unknown): Promise<EmailCodeTarget | n
   const email = user.email.toLowerCase();
   if (token.email?.toLowerCase() !== email) return null;
   const existing = await db.user.findUnique({ where: { email }, include: { authIdentities: true } });
-  if (existing && (existing.role !== "CUSTOMER" || existing.isBanned || !existing.authIdentities.some(i => i.provider === "FIREBASE" && i.providerUserId === user.uid))) return null;
+  if (existing && (existing.role !== "CUSTOMER" || existing.isBanned || !existing.authIdentities.some(i => i.provider === "FIREBASE" && i.providerUserId === user.uid)))
+    throw Object.assign(new Error("This email already has a Fetch-It account that cannot complete customer signup here. Sign in through the app where you registered, use another email for a customer account, or contact support."), { code: "CUSTOMER_ACCOUNT_UNAVAILABLE" });
   return { email, subjectId: user.uid, provider: "FIREBASE" };
 }
 async function resetTarget(email: string): Promise<EmailCodeTarget | null> {
@@ -53,7 +54,11 @@ export async function handleEmailCode(req: NextRequest, action: "send-verificati
   await limitRequests(`email-code:${sending ? "send" : "check"}-ip`, clientAddress(req), sending ? 30 : 120, 60 * 60_000);
   let target: EmailCodeTarget | null = null;
   if (verification) {
-    target = await verificationTarget(body.idToken);
+    try { target = await verificationTarget(body.idToken); }
+    catch (error) {
+      if ((error as { code?: string }).code === "CUSTOMER_ACCOUNT_UNAVAILABLE") return NextResponse.json({ error: (error as Error).message }, { status: 409 });
+      throw error;
+    }
     if (!target) return NextResponse.json({ error: "Sign in again to verify your email." }, { status: 401 });
   }
   if (sending) {

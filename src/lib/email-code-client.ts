@@ -5,7 +5,7 @@ export async function emailCodeRequest(path: string, body: Record<string, unknow
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const error = new Error(data?.error || "Could not complete this request. Please try again.");
-    Object.assign(error, { retryAfter: Number(response.headers.get("Retry-After")) || 0 });
+    Object.assign(error, { status: response.status, retryAfter: Number(response.headers.get("Retry-After")) || 0 });
     throw error;
   }
   return data as CodeChallenge & { message: string };
