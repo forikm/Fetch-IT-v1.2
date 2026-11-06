@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { SupportContact } from "./support-contact";
 import { LandingHero } from "./landing-hero";
+import styles from "./landing-page.module.css";
 
 const FEATURES = [
   { icon: MapPin, title: "Track your booking", desc: "See route maps and status updates." },
@@ -54,7 +55,7 @@ export function LandingView() {
   }
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-background">
+    <div className={cn(styles.page, "min-h-screen overflow-x-clip bg-background")}>
       <main>
         <LandingHero
           signedIn={!!user}

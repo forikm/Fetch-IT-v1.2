@@ -1,4 +1,4 @@
-.root { --ink:#203b38;--orange:#ef7b30;--muted:#7b8580;--ease:cubic-bezier(.2,.7,.2,1) }
+.root { --ink:#203b38;--orange:#bd4c1d;--muted:#52615a;--ease:cubic-bezier(.2,.7,.2,1) }
 .root * { box-sizing:border-box }
 .root { margin:0;min-height:100vh;padding:0;background:#fffefa;color:var(--ink);font-family:var(--font-geist-sans), sans-serif }
 .root button, .root input { font:inherit }
@@ -26,11 +26,11 @@
 .root h1 { font-family:var(--font-geist-sans), sans-serif;font-size:clamp(42px,4.9vw,73px);font-weight:800;letter-spacing:-3.8px;line-height:1.1;margin:25px 0 23px }
 .root h1 span { color:var(--orange);position:relative }
 .root h1 span:after { content:'';position:absolute;left:0;bottom:-6px;width:100%;height:8px;border-top:2px solid #ed9f6688;border-radius:50%;transform:rotate(-3deg) }
-.root .intro { font-size:14px;color:#7b827c;line-height:1.85;margin:0 0 26px }
+.root .intro { font-size:16px;color:var(--muted);line-height:1.7;margin:0 0 26px }
 .root .service-picker { display:flex;gap:8px;margin-bottom:26px }
-.root .service { border:1px solid transparent;border-radius:9px;background:none;color:#7b827c;font-size:11px;display:flex;gap:8px;align-items:center;padding:10px 12px;transition:background .25s,border-color .25s,color .25s }
+.root .service { border:1px solid transparent;border-radius:9px;background:none;color:var(--muted);font-size:14px;display:flex;gap:8px;align-items:center;padding:10px 12px;min-height:44px;transition:background .25s,border-color .25s,color .25s }
 .root .service svg { width:17px;height:17px }
-.root .service.selected { color:#b7602a;background:#fff1df;border-color:#f8ddbf }
+.root .service.selected { color:#9d451d;background:#fff1df;border-color:#e5b98b }
 .root .service:hover { background:#fff0df }
 .root .hero-actions { display:flex;gap:20px;align-items:center }
 .root .primary-button { background:var(--ink);color:#fff;border-radius:50px;display:flex;justify-content:center;align-items:center;gap:28px;padding:17px 23px;font-size:12px;font-weight:600;box-shadow:0 8px 15px #203b3812;transition:transform .25s,box-shadow .25s,background .25s }
@@ -40,8 +40,8 @@
 .root .primary-button:hover svg { transform:translateX(4px) }
 .root .how-button { display:flex;align-items:center;gap:8px;background:none;color:#52615a;font-size:10px;font-weight:600;padding:10px 0 }
 .root .play-icon { width:24px;height:24px;display:grid;place-items:center;border:1px solid #cdd2c9;border-radius:50%;font-size:7px;padding-left:2px }
-.root .trust-line { display:flex;gap:8px;align-items:center;font-size:10px;color:#8c928b;margin-top:30px }
-.root .trust-check { width:16px;height:16px;background:#e9eee5;border-radius:50%;display:grid;place-items:center;color:#6f8468 }
+.root .trust-line { display:flex;gap:8px;align-items:center;font-size:13px;line-height:1.5;color:var(--muted);margin-top:24px;max-width:360px }
+.root .trust-check { width:16px;height:16px;flex-shrink:0;background:#e9eee5;border-radius:50%;display:grid;place-items:center;color:#52654c }
 .root .trust-check svg { width:10px;height:10px;stroke-width:2.5 }
 .root .hero-art { position:relative;min-width:0;height:545px;align-self:center;perspective:1000px }
 .root .availability { position:absolute;right:18%;top:7px;display:flex;gap:7px;align-items:center;color:#fff9ee;font-size:10px;letter-spacing:.3px }
@@ -253,7 +253,7 @@
 .root .nav-link { color: #203b38; }
 .root .nav-link:hover { color: #38594e; }
 @media (max-width: 1000px) {
-  .root .menu-button { display: grid; gap: 5px; place-content: center; width: 37px; height: 37px; border-radius: 50%; background: #fff0dd; }
+  .root .menu-button { display: grid; gap: 5px; place-content: center; width: 44px; height: 44px; border-radius: 50%; background: #fff0dd; }
   .root .menu-button span { height: 2px; width: 15px; background: var(--ink); }
   .root .header nav { display: none; position: absolute; z-index: 10; top: calc(100% - 12px); right: 7%; background: #fffefa; border: 1px solid #e9e5db; box-shadow: 0 10px 30px #203b381a; border-radius: 14px; padding: 15px 24px; align-items: flex-start; min-width: 170px; }
   .root .header nav.open { display: flex; flex-direction: column; gap: 7px; }
@@ -299,4 +299,52 @@
 }
 @media (max-width: 360px) {
   .root .mascot { width: 140px; }
+}
+
+/* Readable controls and a compact phone illustration, without changing the
+   authenticated app's styles or the supplied mascot and route artwork. */
+.root .service { font-size: 14px; }
+.root .how-button { min-height: 44px; font-size: 14px; }
+.root .trust-line { font-size: 13px; }
+.root .nav-link { min-height: 44px; padding-block: 12px; }
+.root .tiny-label, .root .rider-info > span, .root .eta > span,
+.root .parcel-label { color: #52615a; }
+.root .live-pill { color: #465f3b; }
+.root .map-label { fill: #626c5b; }
+.root .availability { color: #203b38; }
+.root .canvas-footer { color: #52615a; }
+
+@media (max-width: 620px) {
+  .root { min-height: 0; }
+  .root .header { height: 76px; }
+  .root .hero { padding-top: 8px; padding-bottom: 0; }
+  .root .hero-copy h1 { font-size: clamp(44px, 12vw, 60px); margin: 16px 0; }
+  .root .hero-copy .intro { font-size: 16px; margin-bottom: 18px; }
+  .root .eyebrow { font-size: 10px; letter-spacing: 1.3px; }
+  .root .service { font-size: 13px; padding: 10px; }
+  .root .service-picker { margin-bottom: 16px; flex-wrap: wrap; }
+  .root .primary-button { font-size: 14px; min-height: 48px; padding: 14px 18px; }
+  .root .hero-actions { gap: 16px; }
+  .root .how-button { font-size: 13px; }
+  .root .trust-line { margin-top: 16px; font-size: 12px; }
+  .root .hero-art { height: 350px; margin-top: 24px; }
+  .root .orange-field { top: auto; bottom: -35px; height: 400px; }
+  .root .map-card { width: 84%; right: 0; top: 92px; }
+  .root .map-header { height: 48px; padding: 10px 12px; }
+  .root .map-header h2 { font-size: 15px; margin: 0; }
+  .root .tiny-label { display: none; }
+  .root .map-surface { height: 158px; }
+  .root .map-footer { height: 44px; padding: 8px 12px; }
+  .root .rider-info strong { font-size: 10px; }
+  .root .rider-info > span { font-size: 9px; }
+  .root .eta { display: none; }
+  .root .mascot { width: 110px; top: -8px; right: -2%; }
+  .root .parcel-card { width: 90px; height: 100px; top: 0; left: 0; }
+  .root .parcel-illustration { width: 65px; height: 68px; }
+  .root .parcel-halo { width: 62px; height: 62px; top: 18px; }
+  .root .parcel-check { width: 24px; height: 24px; right: 5px; top: 5px; }
+  .root .parcel-label { font-size: 7px; }
+  .root .delivered-card, .root .availability, .root .canvas-footer > span { display: none; }
+  .root .canvas-footer { padding-top: 0; padding-bottom: 20px; }
+  .root .explore-link { font-size: 12px; min-height: 32px; display: flex; align-items: center; }
 }

@@ -2,16 +2,19 @@
 
 import { useCustomerViewHistory } from "@/hooks/use-customer-view-history";
 import { useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useAppStore } from "@/lib/store";
 import { LandingView } from "@/components/fetchit/shared/landing";
-import { AuthView } from "@/components/fetchit/shared/auth-view";
-import { CustomerProfile } from "@/components/fetchit/customer/customer-profile";
-import { ModeSelect } from "@/components/fetchit/customer/mode-select";
-import { CustomerDashboard } from "@/components/fetchit/customer/customer-dashboard";
-import { RideDashboard } from "@/components/fetchit/customer/ride-dashboard";
 import { FetchItLoadingScreen } from "@/components/fetchit/shared/loading";
-import { SignupPlaces } from "@/components/fetchit/shared/signup-places";
 import { setPushAccount } from "@/lib/customer-push";
+
+// Load authentication, maps and booking tools only when their view is opened.
+const AuthView = dynamic(() => import("@/components/fetchit/shared/auth-view").then(module => module.AuthView), { loading: FetchItLoadingScreen });
+const CustomerProfile = dynamic(() => import("@/components/fetchit/customer/customer-profile").then(module => module.CustomerProfile), { loading: FetchItLoadingScreen });
+const ModeSelect = dynamic(() => import("@/components/fetchit/customer/mode-select").then(module => module.ModeSelect), { loading: FetchItLoadingScreen });
+const CustomerDashboard = dynamic(() => import("@/components/fetchit/customer/customer-dashboard").then(module => module.CustomerDashboard), { loading: FetchItLoadingScreen });
+const RideDashboard = dynamic(() => import("@/components/fetchit/customer/ride-dashboard").then(module => module.RideDashboard), { loading: FetchItLoadingScreen });
+const SignupPlaces = dynamic(() => import("@/components/fetchit/shared/signup-places").then(module => module.SignupPlaces), { loading: FetchItLoadingScreen });
 
 export default function Home() {
   const { view, user, bootstrapped, bootstrap, openBookingSummary } = useAppStore();

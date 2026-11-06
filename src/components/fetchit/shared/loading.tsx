@@ -1,14 +1,14 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-// Keep the supplied GIF animated; show the still logo for reduced motion.
+// Keep the supplied animation in a smaller WebP; show a still for reduced motion.
 export function FetchItLoader({ className }: { className?: string }) {
   return (
     <span aria-hidden="true" className={cn("inline-flex h-5 w-5 shrink-0 items-center justify-center", className)}>
       <picture className="contents">
         <source media="(prefers-reduced-motion: reduce)" srcSet="/fetch-logo-final.png" />
         <Image
-          src="/fetch-loading.gif"
+          src="/fetch-loading.webp"
           alt=""
           width={96}
           height={96}

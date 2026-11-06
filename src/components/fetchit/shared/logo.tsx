@@ -21,7 +21,6 @@ export function FetchItLogo({
         alt=""
         aria-hidden="true"
         className="shrink-0 object-contain"
-        unoptimized
       />
       {showWordmark && (
         <span className="font-semibold text-xl tracking-[-0.05em]">

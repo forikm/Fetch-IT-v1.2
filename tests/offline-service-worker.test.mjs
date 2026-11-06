@@ -41,6 +41,8 @@ test("installation caches the shell and its JS/CSS/fonts before the app is contr
   const h = harness(); await h.dispatch("install");
   assert(h.requested.includes(origin + "/_next/static/chunks/app.js"));
   assert(h.requested.includes(origin + "/_next/static/media/font.woff2"));
+  assert(h.requested.includes(origin + "/fetch-loading.webp"));
+  assert(!h.requested.includes(origin + "/fetch-loading.gif"));
   h.setOnline(false);
   const response = await h.dispatch("fetch", { url: origin + "/", method: "GET", mode: "navigate" });
   assert.match(await response.text(), /app.js/);
