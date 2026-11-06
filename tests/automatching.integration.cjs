@@ -59,8 +59,23 @@ async function main(){
  await waitFor(async()=>{const row=await db.autoDispatch.findUnique({where:{bookingId:second.id},include:{booking:true}});return row.phase==='OPEN'&&row.booking.status==='PENDING'&&!row.booking.riderId;},'Offer retry limit did not release to open requests');
  assert.equal((await db.autoDispatch.findUnique({where:{bookingId:second.id}})).attempts,3);
  for(const [i,rider]of riders.entries())ok(await rider.http('/api/rider/location',fix(i)));
- assert(ok(await riders[0].http('/api/rider/available?includeMatched=true')).jobs.some(booking=>booking.id===second.id));
- pass('three unanswered offers release the job to the open list, where riders can choose it themselves');await cancel(second);
+ const exhausted=await db.booking.findUnique({where:{id:second.id}});
+ assert.equal(new Set(exhausted.excludedRiderIds).size,3);
+ for(const rider of riders){
+  for(const suffix of ['', '?includeMatched=true'])assert(!ok(await rider.http('/api/rider/available'+suffix)).jobs.some(booking=>booking.id===second.id));
+  assert.equal((await rider.http(`/api/bookings/${second.id}`,{status:'ACCEPTED'},'PATCH')).status,409);
+  assert.equal((await rider.http(`/api/bookings/${second.id}/route`,{})).status,403);
+ }
+ pass('declined and expired offers stay hidden after the round ends; saved-link acceptance and route preview are blocked');
+ const nextUser=await seed(`rider-next-${tag}@matching.fetchit.invalid`,'Local Rider Next','RIDER',3),nextRider={user:nextUser,http:actor(state.riderUrl)};
+ riders.push(nextRider);state.riders=riders.map(r=>({id:r.user.id,email:r.user.email}));fs.writeFileSync(stateFile,JSON.stringify(state,null,2));
+ ok(await nextRider.http('/api/auth/login',{email:nextUser.email,password:state.password,role:'RIDER'}));
+ ok(await nextRider.http('/api/push/subscription',{endpoint:'https://fcm.googleapis.com/fcm/send/local-matching-'+crypto.randomUUID(),keys:{p256dh:crypto.createECDH('prime256v1').generateKeys().toString('base64url'),auth:crypto.randomBytes(16).toString('base64url')}}));
+ ok(await nextRider.http('/api/rider/status',{online:true,notificationPermission:'granted',location:fix(3)}));
+ assert(ok(await nextRider.http('/api/rider/available?includeMatched=true')).jobs.some(booking=>booking.id===second.id));
+ ok(await nextRider.http(`/api/bookings/${second.id}`,{status:'ACCEPTED',location:fix(3)},'PATCH'));
+ assert.equal((await db.booking.findUnique({where:{id:second.id}})).riderId,nextUser.id);
+ pass('an unoffered eligible rider can still see and accept the open request');await cancel(second);
  await db.riderPresence.updateMany({where:{userId:{in:riders.map(r=>r.user.id)}},data:{locationAt:new Date(Date.now()-180000)}});
  const third=await create();await waitFor(async()=>((await db.autoDispatch.findUnique({where:{bookingId:third.id}})).phase==='OPEN'),'Stale riders should fall back');
  assert.equal((await db.booking.findUnique({where:{id:third.id}})).riderId,null);assert.equal(ok(await riders[0].http('/api/rider/stats')).matchingReady,false);pass('stale saved GPS pauses matching and is never presented as a current location');await cancel(third);
