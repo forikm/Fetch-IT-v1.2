@@ -5,6 +5,12 @@ import { KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FetchItLoader } from "../shared/loading";
+import dynamic from "next/dynamic";
+import { PickupQrFallback } from "./pickup-qr-fallback";
+
+const PickupQrCode = dynamic(() => import("./pickup-qr-code"), {
+  loading: () => <p role="status" className="text-sm text-muted-foreground">Preparing pickup QR… You can still use the code below.</p>,
+});
 
 // Mounted only while an accepted ride awaits boarding. Unmounting clears the
 // code and ignores pending responses when the ride advances or is cancelled.
@@ -44,6 +50,7 @@ export function RidePickupOtp({ bookingId }: { bookingId: string }) {
         <p className="text-sm text-muted-foreground">Check your driver's name and vehicle. Share this code only when you meet at pickup, before boarding.</p>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {otp ? <>
+          {expiresAt && <PickupQrFallback key={expiresAt}><PickupQrCode bookingId={bookingId} otp={otp} expiresAt={expiresAt} /></PickupQrFallback>}
           <p aria-label="Your ride pickup code" className="rounded-lg border bg-card py-3 text-center font-mono text-3xl tracking-[0.25em]">{otp}</p>
           {expiresAt && <p className="text-xs text-muted-foreground">Valid until {new Date(expiresAt).toLocaleTimeString("en-PH", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit" })} Philippine time.</p>}
           <Button type="button" variant="ghost" size="sm" disabled={loading} onClick={reveal}>{loading ? "Checking code…" : "Refresh pickup code"}</Button>
