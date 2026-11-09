@@ -8,6 +8,7 @@ type Location = { lat: number; lng: number };
 export function useRideLocation(enabled: boolean) {
   const [location, setLocation] = useState<Location | null>(null);
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!enabled || !navigator.geolocation) return;
@@ -28,10 +29,12 @@ export function useRideLocation(enabled: boolean) {
       { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 },
     );
     return () => { closed = true; navigator.geolocation.clearWatch(watch); };
-  }, [enabled]);
+  }, [enabled, attempt]);
 
   return {
     location: enabled ? location : null,
+    canRetry: enabled && !!error,
+    retry: () => { setError(''); setLocation(null); setAttempt(value => value + 1); },
     message: !enabled ? "" : typeof navigator !== "undefined" && !navigator.geolocation
       ? "This browser cannot share your location. Pickup and drop-off are still shown."
       : error || (location ? "Your current location is marked in blue." : "Allow location access to see where you are on the map. Pickup and drop-off are shown while we locate you."),

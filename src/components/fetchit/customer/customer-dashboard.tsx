@@ -12,6 +12,8 @@ import { BookingSummary } from "../shared/booking-summary";
 import { BookingTimeline } from "../shared/booking-timeline";
 import { CustomerBookingCard } from "./customer-booking-card";
 import { customerStatusLabel, formatPeso, locationUpdateLabel, routeTimeLabel } from "@/lib/customer-booking-ui";
+import { BookingEmptyState } from "./booking-empty-state";
+import { SlowRequestFeedback } from "../shared/slow-request-feedback";
 import { HistoryFilters, emptyHistoryFilter } from "../shared/history-filters";
 import { useTrackingUpdates } from "@/hooks/use-tracking-updates";
 import { useCompletedBookingRatings } from "@/hooks/use-completed-booking-ratings";
@@ -267,7 +269,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
       if (!Array.isArray(data.bookings)) throw new Error("We couldn’t load your bookings. Please try again.");
       if (sequence === loadSequence.current) { loadedQuery.current = query; if (!result.cached) observeRatings(data.bookings); setBookings(data.bookings ?? []); setNextCursor(data.nextCursor ?? null); setMoreError(null); }
     } catch (e) {
-      if (sequence === loadSequence.current) setLoadError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
+      if (sequence === loadSequence.current) setLoadError(e instanceof Error && e.name !== "TimeoutError" && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
     } finally {
       if (sequence === loadSequence.current) { setLoading(false); setRefreshing(false); }
     }
@@ -289,10 +291,9 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     setBookings((prev) => [b, ...prev.filter((x) => x.id !== b.id)]);
     setShowNew(false);
     setTab("active");
-    const demo = b.paymentMethod?.startsWith("DEMO_");
-    if (demo) setSummaryBooking(b);
+    setSummaryBooking(b);
     toast({
-      title: "Booking created",
+      title: "Booking requested",
       description: b.scheduledAt && new Date(b.scheduledAt) > new Date() ? `${b.refCode} · Scheduled for ${formatPickupSchedule(b.scheduledAt)} Philippine time. Riders will see it when pickup is due.` : `${b.refCode} · ${formatPeso(b.totalFare)} · ${
         b.rider ? (isRide ? "Driver matched!" : "Rider matched!") : (isRide ? "Searching for a driver…" : "Searching for a rider…")
       }`,
@@ -343,7 +344,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
         ) : loadError && bookings.length === 0 ? (
           <RequestError message={loadError} onRetry={() => void load()} />
         ) : bookings.length === 0 ? (
-          tab === "history" ? <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">No bookings match these filters.</p> : <EmptyState bookingType={bookingType} onNew={() => { setRepeatBooking(null); setShowNew(true); }} />
+          <BookingEmptyState history={tab === "history"} filtered={tab === "history" && Object.values(filters).some(value => value.trim())} service={isRide ? "rides" : "deliveries"} offline={!online || offlineAccess || !!savedAt} onClear={() => setFilters(emptyHistoryFilter)} onBook={() => { setRepeatBooking(null); setShowNew(true); }}/>
         ) : (
           <div className={tab === "history" ? "min-w-0 space-y-2" : "grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4"}>
             {bookings.map((b) => (
@@ -437,28 +438,6 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   );
 }
 
-// ------------------------------ Empty state ------------------------------
-function EmptyState({ onNew, bookingType }: { onNew: () => void; bookingType: BookingType }) {
-  const isRide = bookingType === "RIDE";
-  const ServiceIcon = isRide ? Car : Package;
-  return (
-    <Card className="border-2 border-dashed bg-card">
-      <CardContent className="py-16 text-center">
-        <div className="mx-auto h-14 w-14 rounded-full bg-primary/10 grid place-items-center mb-4">
-          <ServiceIcon className="h-7 w-7 text-primary" />
-        </div>
-        <h3 className="font-semibold text-lg">No {isRide ? "rides" : "deliveries"} yet</h3>
-        <p className="text-muted-foreground mt-1 max-w-sm mx-auto">
-          Choose your pickup, destination and vehicle to get your first {isRide ? "ride" : "delivery"} on its way.
-        </p>
-        <Button className="mt-5" onClick={onNew}>
-          <Plus className="h-4 w-4" /> Book a {isRide ? "ride" : "delivery"}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
 // ------------------------------ Booking form ------------------------------
 function BookingForm({
   bookingType,
@@ -536,6 +515,7 @@ function BookingForm({
 
   const [paymentMethod, setPaymentMethod] = useCustomerData(userId, isRide ? "ride-payment-method" : "delivery-payment-method", "CASH", true);
   const [submitting, setSubmitting] = useState(false);
+  const [locationFeedback, setLocationFeedback] = useState<{target: "pickup" | "dropoff"; message: string} | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const { area, failed: coverageFailed } = useServiceArea();
@@ -568,6 +548,7 @@ function BookingForm({
   }, [step]);
 
   function fillCurrentLocation(target: "pickup" | "dropoff") {
+    setLocationFeedback({target, message: "Finding your location… Allow location access when asked."});
     const applyFallback = () => {
       toast({
         title: "We couldn’t get your location",
@@ -576,11 +557,13 @@ function BookingForm({
     };
 
     if (!navigator.geolocation) {
+      setLocationFeedback({target, message: "This browser can’t share your location. Search for an address or choose a place on the map."});
       applyFallback();
       return;
     }
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        setLocationFeedback(null);
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         // Fall back to raw coordinates immediately, then upgrade to a real
@@ -609,8 +592,8 @@ function BookingForm({
           // No API key / script failed to load — keep the raw coordinate label.
         }
       },
-      () => {
-        // User denied — prefill demo coordinates instead.
+      (failure) => {
+        setLocationFeedback({target, message: failure.code === 1 ? "Location access is blocked. Allow Location in your browser’s site settings, then tap Use my location again. You can also search for the address." : "We couldn’t find your location. Check device location services and retry, or search for the address."});
         applyFallback();
       },
       { enableHighAccuracy: false, timeout: 4000 },
@@ -732,11 +715,11 @@ function BookingForm({
       const res = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": submission.key, ...timing.headers },
-        body,
+        body, signal: AbortSignal.timeout(30000),
       });
       timing.response(res);
       if (res.status === 409) setPendingSubmission(null);
-      const data = await customerResponse<{ booking?: Booking; checkoutUrl?: string }>(res, "We couldn’t confirm your request. Your details are saved; reconnect and retry.");
+      const data = await customerResponse<{ booking?: Booking; checkoutUrl?: string }>(res, "We couldn’t confirm your request. Check Active bookings before trying again. Your details are saved.");
       if (data.checkoutUrl && /^\/checkout\/[a-zA-Z0-9_-]+$/.test(data.checkoutUrl)) {
         timing.finish("checkout");
         window.location.assign(data.checkoutUrl);
@@ -749,7 +732,7 @@ function BookingForm({
       timing.finish("confirmed");
     } catch (e) {
       timing.finish("failed");
-      setError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check Active bookings before trying again. Your details are saved.");
+      setError(e instanceof Error && e.name !== "TimeoutError" && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check Active bookings before trying again. Your details are saved.");
     } finally {
       submissionRunning.current = false;
       setSubmitting(false);
@@ -775,6 +758,7 @@ function BookingForm({
       }}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
+      {locationFeedback && ((step === 0 && locationFeedback.target === "pickup") || (step === 1 && locationFeedback.target === "dropoff")) && <p role="status" className="mx-4 rounded-xl border bg-muted/30 p-3 text-sm sm:mx-6">{locationFeedback.message}</p>}
       {/* Step indicator */}
       <div aria-label="Booking progress" className="grid shrink-0 grid-cols-4 gap-1 border-b px-4 pb-3 text-xs font-medium text-muted-foreground sm:px-6">
         {stepLabels.map((label, i) => {
@@ -1083,6 +1067,9 @@ function BookingForm({
 
       {/* Navigation */}
       <div className="shrink-0 space-y-3 border-t bg-background px-4 py-3 sm:px-6">
+      {submitting && <div className="px-4 py-2 sm:px-6"><p role="status" className="text-sm">Sending your booking request…</p><SlowRequestFeedback message="This is taking longer than usual. Keep this page open while we confirm your request; avoid submitting another booking."/></div>}
+      {estimating && <div className="px-4 py-2 sm:px-6"><SlowRequestFeedback message="We’re still checking your route and fare. Your booking details are kept here."/></div>}
+      {error && /check active bookings/i.test(error) && <Button type="button" variant="outline" className="mx-4 min-h-12" onClick={() => { useAppStore.getState().setBookingsTab("active"); onCancel(); }}>Check Active bookings</Button>}
       {error && /fare.*refresh|refresh.*fare/i.test(error) && <Button type="button" variant="outline" disabled={estimating || submitting} onClick={()=>void fetchEstimate()}>Refresh fare</Button>}
       {step === 3 && <div aria-live="polite" className="flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">Total fare</span><strong className="text-2xl">{estimate ? formatPeso(estimate.fare.totalFare) : estimating ? "Calculating…" : "—"}</strong></div>}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">
@@ -1105,7 +1092,7 @@ function BookingForm({
         ) : (
           <Button type="button" className="min-h-14 min-w-0 px-3 text-base" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
             {submitting ? <FetchItLoader className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-            {paymentMethod === "CASH" ? "Confirm booking" : "Continue to payment"}
+            {submitting ? "Submitting…" : paymentMethod === "CASH" ? "Confirm booking" : "Continue to payment"}
           </Button>
         )}
       </DialogFooter>

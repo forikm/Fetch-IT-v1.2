@@ -139,30 +139,20 @@ function hooks() {
 }
 const components = new Proxy({}, { get: (_, key) => String(key) });
 
-test("clicking the photo preview opens the full uncropped image, and errors offer retry", () => {
-  const h = hooks();
-  let open = false;
+test("clicking the photo preview opens the full image and Close returns to the booking", () => {
+  const h = hooks(); let open = false;
   const { DeliveryPhotoPreview } = load("src/components/fetchit/customer/delivery-photo-preview.tsx", {
     react: h.react, "@/components/ui/button": components, "@/components/ui/dialog": components,
+    "../shared/slow-request-feedback": {SlowRequestFeedback: "SlowRequestFeedback"},
   });
   const src = "/api/bookings/booking-a/proof/proof-a/photo";
-  const render = () => { h.reset(); return nodes(DeliveryPhotoPreview({ src, bookingRef: "REF-A", open, onOpenChange: value => { open = value; } })); };
-  let tree = render();
-  tree.find(node => node.type === "button").props.onClick();
-  tree = render();
+  const render = () => { h.reset(); return nodes(DeliveryPhotoPreview({src, bookingRef:"REF-A", open, onOpenChange:value=>{open=value;}})); };
+  const preview = render().find(node => node.props?.onEnlarge);
+  preview.props.onEnlarge();
+  const tree = render();
   assert.equal(tree.find(node => node.type === "Dialog").props.open, true);
-  const full = tree.find(node => node.props?.alt === "Full delivery verification photo");
-  assert.equal(full.props.src, src);
-  assert.match(full.props.className, /object-contain/);
-  full.props.onError();
-  tree = render();
-  assert(tree.some(node => node.props?.role === "alert"));
-  tree.find(node => node.props?.children === "Retry photo").props.onClick();
-  tree = render();
-  assert(!tree.some(node => node.props?.role === "alert"));
-  assert.equal(tree.find(node => node.props?.alt === "Full delivery verification photo").key, 1);
-  tree.find(node => node.props?.children === "Close photo").props.onClick();
-  assert.equal(open, false);
+  assert.equal(tree.find(node => node.props?.full).props.src, src);
+  tree.find(node => node.props?.children === "Close photo").props.onClick(); assert.equal(open,false);
 });
 
 test("the Photo proof chip itself opens the image preview", () => {

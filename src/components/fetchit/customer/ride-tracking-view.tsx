@@ -24,7 +24,7 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
   const status = ride.status;
   const location = ride.trackingUpdates?.[0];
   const active = ["ACCEPTED", "PICKED_UP", "IN_TRANSIT"].includes(status);
-  const { location: customerLocation, message: locationMessage } = useRideLocation(active);
+  const { location: customerLocation, message: locationMessage, canRetry: canRetryLocation, retry: retryLocation } = useRideLocation(active);
   useTrackingUpdates<Booking>(ride.id, onUpdated);
   return <div className="space-y-4">
     <DialogHeader className="min-h-12 justify-center"><DialogTitle className="flex items-center gap-2"><Navigation className="h-5 w-5 text-primary" />Your ride · {ride.refCode}</DialogTitle><DialogDescription className="sr-only">Your driver, trip map and safety options.</DialogDescription></DialogHeader>
@@ -40,6 +40,7 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
       {active && location?.createdAt && <p role="status" className="text-sm text-muted-foreground">{locationUpdateLabel(location.createdAt, Date.now(), "RIDE")}</p>}
       {active && (readOnly || updatesPaused) && <p role="status" className="text-sm font-medium text-amber-800 dark:text-amber-200">Live updates paused. Locations may be out of date.</p>}
       {locationMessage && <p role="status" className="text-sm text-muted-foreground">{locationMessage}</p>}
+      {canRetryLocation && <Button type="button" variant="outline" className="min-h-12" onClick={retryLocation}>Retry my location</Button>}
     </section>
     {status === "ACCEPTED" && ride.rider && !readOnly && <RidePickupOtp key={`${ride.id}:${ride.riderId}`} bookingId={ride.id} />}
     <details className="rounded-2xl border bg-card px-4"><summary className="min-h-12 cursor-pointer py-3 text-base font-semibold">Trip details &amp; options</summary>
@@ -50,6 +51,7 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
       <Button variant="outline" className="w-full" onClick={onClose}>Back to bookings</Button></div>
     </details>
     <details className="rounded-2xl border bg-card px-4"><summary className="min-h-12 cursor-pointer py-3 text-base font-semibold">Payment, receipt &amp; help</summary><div className="pb-4"><BookingActions booking={ride} readOnly={readOnly} /></div></details>
+    {status === 'DELIVERED' && <div className="space-y-3 rounded-2xl border bg-card p-4"><p className="font-semibold">You’ve arrived. Your receipt is in Payment, receipt &amp; help.</p><Button className="min-h-12 w-full" onClick={onClose}>Back to bookings</Button></div>}
     <div className="sticky bottom-0 z-20 -mx-4 space-y-2 border-t bg-background/95 px-4 py-3 backdrop-blur">
       <div className="flex gap-3">{ride.rider?.phone && <Button asChild variant="outline" className="min-h-14 flex-1"><a href={`tel:${ride.rider.phone}`} aria-label={`Call ${ride.rider.name}`}><Phone />Call driver</a></Button>}<Button asChild variant="destructive" className="min-h-14 flex-1"><a href="tel:911"><Phone />Dial 911</a></Button></div>
       {active && <RideSosButton key={ride.id} bookingId={ride.id} disabled={readOnly} />}

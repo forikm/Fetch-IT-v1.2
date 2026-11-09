@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Package, Bike, MessageCircle, X } from "lucide-react";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { SlowRequestFeedback } from './slow-request-feedback';
 import { customerResponse } from "@/lib/customer-request";
 import { useAppStore } from "@/lib/store";
 import { useCustomerData } from "@/hooks/use-customer-data";
@@ -20,6 +22,7 @@ function Badge({ count }: { count: number }) {
 }
 
 export function NotificationInbox({ onBooking }: { onBooking: (id: string, type: "DELIVERY" | "RIDE") => void }) {
+  const online = useOnlineStatus();
   const id = useAppStore(state => state.user?.id ?? "anonymous");
   const owner = useRef(id);
   useEffect(() => {
@@ -91,6 +94,7 @@ export function NotificationInbox({ onBooking }: { onBooking: (id: string, type:
     try {
       if (serverIds.size || supportIds.size || !item) await customerResponse(await fetch("/api/notifications", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15000),
         body: JSON.stringify({ action, ...(item ? { ids: [...serverIds] } : { category }), supportIds: [...supportIds], before: current?.page.asOf }),
       }), dismiss ? "Couldn’t dismiss the notification. Please retry." : "Couldn’t mark notifications as read. Please retry.");
       if (owner.current !== id) return;
@@ -98,7 +102,7 @@ export function NotificationInbox({ onBooking }: { onBooking: (id: string, type:
     } catch (failure) { if (owner.current === id) {
       setState(current);
       saveLegacy(previous => [...previous.filter(entry => !legacyIds.has(entry.id)), ...legacy.filter(entry => legacyIds.has(entry.id))]);
-      setFeedback(""); setError((failure as Error).message);
+      setFeedback(""); setError(failure instanceof Error && failure.name === "TimeoutError" ? "We couldn’t confirm this notification change. Reconnect and retry; your booking is kept." : (failure as Error).message);
     } }
     finally { if (saving.current === id) { saving.current = null; setSavingFor(previous => previous === id ? null : previous); } }
   }
@@ -110,20 +114,22 @@ export function NotificationInbox({ onBooking }: { onBooking: (id: string, type:
       <DialogHeader><DialogTitle>Notifications</DialogTitle><DialogDescription>Choose a service to see its updates. Unread updates have a red badge.</DialogDescription></DialogHeader>
       {error && <p role="alert" className="text-sm text-destructive">{error} <button className="underline" onClick={() => void refresh()}>Retry</button></p>}
       {feedback && <p role="status" className="text-xs text-muted-foreground">{feedback}</p>}
+      {busy && <SlowRequestFeedback message="We’re still saving this change. Your notification status will be checked again if the connection fails."/>}
+      {!online && <p role="status" className="text-sm text-muted-foreground">You’re offline. Saved notifications may be out of date.</p>}
       <Tabs value={category} onValueChange={value => setCategory(value as NotificationCategory)}>
         <TabsList aria-label="Notification categories" className="grid h-auto w-full grid-cols-3 gap-1">
           {NOTIFICATION_CATEGORIES.map(key => { const Icon = icons[key]; return <TabsTrigger key={key} value={key} className="min-h-12 min-w-0 flex-wrap gap-1 px-1 py-2 text-xs sm:text-sm" aria-label={`${NOTIFICATION_LABELS[key]}${inbox.unread[key] ? `, ${inbox.unread[key]} unread` : ""}`}><Icon className="h-4 w-4" />{NOTIFICATION_LABELS[key]}<Badge count={inbox.unread[key]} /></TabsTrigger>; })}
         </TabsList>
         {NOTIFICATION_CATEGORIES.map(key => <TabsContent key={key} value={key}>
           <div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{NOTIFICATION_LABELS[key]}</h3><Button variant="ghost" size="sm" className="min-h-12" disabled={!inbox.unread[key] || busy} onClick={() => void changeNotifications("read")}>Mark as read</Button></div>
-          {!current && !error ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Loading updates…</p> : inbox.items.some(item => item.category === key) ? <ul className="divide-y">{inbox.items.filter(item => item.category === key).map(item => <li className="flex items-start gap-1 py-1" key={`${item.legacy ?? "server"}:${item.id}`}>
+          {!current && !error && online && !inbox.items.some(item => item.category === key) ? <div role="status" className="space-y-3 py-8 text-center text-sm text-muted-foreground"><p>Loading updates…</p><SlowRequestFeedback message="Checking your notifications is taking longer than usual. Your booking details are still available."/></div> : inbox.items.some(item => item.category === key) ? <ul className="divide-y">{inbox.items.filter(item => item.category === key).map(item => <li className="flex items-start gap-1 py-1" key={`${item.legacy ?? "server"}:${item.id}`}>
             <button type="button" className={`min-h-12 min-w-0 flex-1 rounded-lg p-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${item.read ? "" : "bg-red-50 dark:bg-red-950/20"}`} onClick={() => {
               void changeNotifications("read", item); setOpen(false);
               if (item.category === "SUPPORT" && item.ticketId) router.push(`/help?ticket=${encodeURIComponent(item.ticketId)}`);
               else if (item.bookingId && item.category !== "SUPPORT") onBooking(item.bookingId, item.category);
             }}><div className="flex items-center justify-between gap-2"><span className="text-sm font-medium">{item.title}</span>{!item.read && <span className="h-2 w-2 shrink-0 rounded-full bg-red-600" aria-label="Unread" />}</div><p className="mt-1 break-words text-sm">{item.body}</p><time className="mt-1 block text-xs text-muted-foreground" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></button>
             <Button type="button" variant="ghost" size="icon" className="h-12 w-12 shrink-0" disabled={busy} aria-label={`Dismiss notification: ${item.title}`} title="Dismiss notification" onClick={() => void changeNotifications("dismiss", item)}><X className="h-4 w-4" /></Button>
-          </li>)}</ul> : <p className="py-8 text-center text-sm text-muted-foreground">No {NOTIFICATION_LABELS[key].toLowerCase()} updates yet.</p>}
+          </li>)}</ul> : <p className="py-8 text-center text-sm text-muted-foreground">{!online ? 'Reconnect to check for new updates.' : error && !current ? 'Updates are unavailable. Retry above to check again.' : `No ${NOTIFICATION_LABELS[key].toLowerCase()} updates yet. New updates will appear here.`}</p>}
         </TabsContent>)}
       </Tabs>
       <details className="border-t pt-3"><summary className="cursor-pointer text-sm font-medium">Notification preferences</summary><div className="mt-3"><NotificationSettings /></div></details>
