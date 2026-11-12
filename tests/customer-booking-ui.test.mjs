@@ -36,7 +36,8 @@ test("scheduled bookings do not promise that matching or travel has already star
 });
 
 test("currency and route duration labels stay consistent and do not claim a pickup ETA", () => {
-  assert.equal(formatPeso(89), "₱89.00");
+  assert.equal(formatPeso(89), "₱89");
+  assert.equal(formatPeso(89.5), "₱89.50");
   assert.equal(formatPeso(1200.5), "₱1,200.50");
   assert.equal(routeTimeLabel("RIDE"), "Est. trip duration");
   assert.equal(routeTimeLabel("DELIVERY"), "Est. delivery duration");

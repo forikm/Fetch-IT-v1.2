@@ -5,6 +5,9 @@ import vm from "node:vm";
 import ts from "typescript";
 import * as ui from "../src/lib/customer-booking-ui.ts";
 import * as policy from "../src/lib/payment-policy.ts";
+const farePolicy = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../src/lib/fare-policy.ts',import.meta.url),'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,
+  {exports:farePolicy,require:()=>policy});
 
 const source = fs.readFileSync(new URL("../src/components/fetchit/shared/customer-payment-card.tsx", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -27,7 +30,7 @@ function harness(record = cash, type = "DELIVERY") {
     setInterval: () => 1, clearInterval() {},
     window: { addEventListener(name, callback) { handlers[name] = callback; }, removeEventListener() {}, location: { assign() {} } },
     fetch: async (url, options = {}) => { requests.push({ url, ...options }); return options.method === "POST" ? postResponse?.() ?? Response.json({ booking: record }) : getResponse?.() ?? Response.json({ booking: record }); },
-    require(name) { if (name === "@/lib/booking-client-timing") return { startBookingTiming: () => ({ headers: {}, response() {}, finish() {} }) }; if (name === "@/lib/booking-mutation-client") return { savedMutation: async () => { try { const response = getResponse?.() ?? Response.json({ booking: record }); const data = await response.json(); return data.booking?.customerPaidAt ? data : null; } catch { return null; } } }; if (name === "react") return hooks; if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }; if (name === "@/lib/customer-booking-ui") return ui; if (name === "@/lib/payment-policy") return policy; return { Button: "button" }; },
+    require(name) { if (name === "@/lib/fare-policy") return farePolicy; if (name === "@/lib/booking-client-timing") return { startBookingTiming: () => ({ headers: {}, response() {}, finish() {} }) }; if (name === "@/lib/booking-mutation-client") return { savedMutation: async () => { try { const response = getResponse?.() ?? Response.json({ booking: record }); const data = await response.json(); return data.booking?.customerPaidAt ? data : null; } catch { return null; } } }; if (name === "react") return hooks; if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }; if (name === "@/lib/customer-booking-ui") return ui; if (name === "@/lib/payment-policy") return policy; return { Button: "button" }; },
   });
   const render = () => { cursor = 0; tree = exports.CustomerPaymentCard({ bookingId: "booking1", type }); return tree; };
   render(); effects.forEach(effect => effect());
@@ -38,7 +41,7 @@ function harness(record = cash, type = "DELIVERY") {
 test("customer payment display omits earnings and keeps cash entry behind an explicit action", async () => {
   const h = harness({ ...cash, paymentMethod: "DEMO_GCASH", demoCommission: 12, demoRiderEarnings: 77, demoPayoutReference: "private-payout" });
   await h.ready();
-  assert.match(text(h.render()), /₱89.00/);
+  assert.ok(text(h.render()).includes(ui.formatPeso(89)));
   assert.doesNotMatch(text(h.render()), /commission|earnings|payout|private-payout/i);
   const c = harness(); await c.ready();
   assert.equal(c.find("form"), undefined);

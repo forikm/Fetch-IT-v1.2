@@ -27,8 +27,9 @@ export function customerStatusLabel(status: BookingStatus, type: BookingType = "
   return customerProgress(status, type).label;
 }
 
-const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-export function formatPeso(amount: number) { return peso.format(amount); }
+const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const pesoWithCents = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export function formatPeso(amount: number) { return (Number.isInteger(amount) ? peso : pesoWithCents).format(amount); }
 
 /** The existing quote is route duration, not the rider's time to reach pickup. */
 export function routeTimeLabel(type: BookingType) { return type === "RIDE" ? "Est. trip duration" : "Est. delivery duration"; }

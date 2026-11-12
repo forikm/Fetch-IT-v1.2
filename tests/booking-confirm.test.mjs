@@ -22,7 +22,7 @@ const compiled = ts.transpileModule(handler, { compilerOptions: { target: ts.Scr
 function fixture(fetch, pending = null) {
   const context = {
     startBookingTiming: () => ({ headers: {}, response() {}, finish() {} }),
-    crypto, Error, navigator: { onLine: true }, offlineAccess: false, coverageError: null,
+    crypto, Error, AbortSignal, navigator: { onLine: true }, offlineAccess: false, coverageError: null,
     pendingSubmission: pending, submissionRunning: { current: false },
     bookingType: "DELIVERY", isRide: false, passengers: "1", pickupLat: "14.6", pickupLng: "120.98", pickupLabel: "Pickup",
     dropoffLat: "14.62", dropoffLng: "121.01", dropoffLabel: "Destination", vehicleClass: "MOTORCYCLE",

@@ -5,10 +5,12 @@ import { savedMutation } from '@/lib/booking-mutation-client';
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatPeso } from "@/lib/customer-booking-ui";
+import { readFareSnapshot } from "@/lib/fare-policy";
 import type { BookingType } from "@/lib/constants";
 import { PAYMENT_METHOD_LABEL, cashConfirmationAvailable, isDemoPayment, type PaymentMethod, type PaymentStatus } from "@/lib/payment-policy";
 
 type CustomerPayment = {
+  fareBreakdown?: unknown;
   type?: string; dropoffReachedAt?: string | null; paymentMethod: PaymentMethod; paymentStatus: PaymentStatus; status: string; totalFare: number;
   customerPaidAmount: number | null; riderReceivedAmount: number | null;
   customerPaidAt: string | null; riderReceivedAt: string | null; paidAt: string | null; paymentReference: string | null;
@@ -62,10 +64,12 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
   const collectionAvailable = booking && cashConfirmationAvailable(booking.type ?? type, booking.status, booking.dropoffReachedAt);
   const canConfirm = booking && booking.paymentMethod === "CASH" && collectionAvailable && !booking.customerPaidAt && booking.paymentStatus !== "REFUNDED";
   const mismatch = booking && booking.customerPaidAmount !== null && booking.riderReceivedAmount !== null && (booking.customerPaidAmount !== booking.riderReceivedAmount || booking.customerPaidAmount !== booking.totalFare);
+  const savedFare = booking ? readFareSnapshot(booking.fareBreakdown, booking.totalFare) : null;
   const paymentLabel = !booking ? "Loading…" : booking.paymentStatus === "PAID" ? "Paid" : booking.paymentStatus === "REFUNDED" ? "Refunded" : booking.paymentStatus === "FAILED" ? "Payment failed" : mismatch ? "Needs review" : booking.customerPaidAt ? `You confirmed payment. Waiting for your ${person} to confirm receipt.` : booking.status === "CANCELLED" ? "Booking cancelled" : booking.paymentMethod === "CASH" && type === "DELIVERY" && !collectionAvailable ? "Pay at drop-off. Waiting for the rider to confirm arrival." : booking.paymentStatus === "PENDING" ? "Payment confirmation is pending" : booking.paymentMethod === "CASH" ? `Pay your ${person} in cash` : "Payment needed";
 
   return <section className="space-y-3 rounded-xl border p-4 text-sm" aria-label="Payment">
     <div className="flex flex-wrap justify-between gap-2"><h3 className="font-semibold">{booking ? PAYMENT_METHOD_LABEL[booking.paymentMethod] + (demo ? " (simulated)" : "") : "Payment"}</h3>{booking && <strong>{formatPeso(Number(booking.totalFare))}</strong>}</div>
+    {savedFare && <dl className="space-y-1"><div className="flex justify-between gap-3"><dt>Transport fare</dt><dd>{formatPeso(savedFare.transportFare)}</dd></div><div className="flex justify-between gap-3"><dt>Fetch-It booking fee</dt><dd>{formatPeso(savedFare.bookingFee)}</dd></div></dl>}
     <p className="text-muted-foreground" role="status">{paymentLabel}</p>
     {demo && <p className="text-xs text-muted-foreground">Simulated payment. No money is charged.</p>}
     {booking && !demo && booking.paymentMethod === "CASH" && <dl className="space-y-2 rounded-lg bg-muted/40 p-3"><div className="flex flex-wrap justify-between gap-2"><dt>Your cash confirmation</dt><dd className="font-medium">{booking.customerPaidAt ? formatPeso(Number(booking.customerPaidAmount)) + " confirmed" : "Not confirmed"}</dd></div><div className="flex flex-wrap justify-between gap-2"><dt>{type === "RIDE" ? "Driver" : "Rider"} cash confirmation</dt><dd className="font-medium">{booking.riderReceivedAt ? formatPeso(Number(booking.riderReceivedAmount)) + " received" : "Waiting for confirmation"}</dd></div></dl>}

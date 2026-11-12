@@ -492,6 +492,8 @@ function BookingForm({
       distanceFare: number;
       weightFare: number;
       surgeFare: number;
+      bookingFee?: number;
+      roundingAdjustment?: number;
       minimumAdjustment: number;
       totalFare: number;
       billableKm: number;
@@ -1016,7 +1018,7 @@ function BookingForm({
                     <details>
                       <summary className="cursor-pointer text-sm font-medium">View fare breakdown</summary>
                       <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                      <FareLine label="Base" value={formatPeso(estimate.fare.baseFare)} />
+                      <FareLine label={isRide && vehicleClass === "TRICYCLE" ? `Base (${passengers} passenger${passengers === "1" ? "" : "s"})` : "Base"} value={formatPeso(estimate.fare.baseFare)} />
                       <FareLine
                         label={`Distance charge (${estimate.fare.billableKm} km)`}
                         value={formatPeso(estimate.fare.distanceFare)}
@@ -1030,6 +1032,8 @@ function BookingForm({
                         value={formatPeso(estimate.fare.weightFare)}
                       />}
                       {estimate.fare.surgeFare > 0 && <FareLine label="Busy-period charge" value={formatPeso(estimate.fare.surgeFare)} />}
+                      {!!estimate.fare.roundingAdjustment && <FareLine label="Fare rounding" value={formatPeso(estimate.fare.roundingAdjustment)} />}
+                      {!!estimate.fare.bookingFee && <FareLine label="Booking fee" value={formatPeso(estimate.fare.bookingFee)} />}
                       {estimate.fare.minimumAdjustment > 0 && (
                         <FareLine
                           label="Minimum fare top-up"
