@@ -1,9 +1,10 @@
 import { Check, Circle } from "lucide-react";
 import type { BookingStatus, BookingType } from "@/lib/constants";
 import { customerProgress } from "@/lib/customer-booking-ui";
+import type { RideConfirmations } from "@/lib/ride-confirmation-policy";
 
-export function BookingTimeline({ status, type, scheduled = false, compact = false, hideStatus = false }: { status: BookingStatus; type: BookingType; scheduled?: boolean; compact?: boolean; hideStatus?: boolean }) {
-  const progress = customerProgress(status, type, scheduled);
+export function BookingTimeline({ status, type, scheduled = false, compact = false, hideStatus = false, confirmations }: { status: BookingStatus; type: BookingType; scheduled?: boolean; compact?: boolean; hideStatus?: boolean; confirmations?: RideConfirmations }) {
+  const progress = customerProgress(status, type, scheduled, confirmations);
   const stages = <ol aria-label="Booking progress" className="grid grid-cols-1 gap-0 text-xs sm:grid-cols-4 sm:gap-3">
       {progress.stages.map((label, index) => {
         const complete = index < progress.current || status === "DELIVERED";

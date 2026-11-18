@@ -1,13 +1,15 @@
 import type { BookingStatus, BookingType } from "./constants";
+import type { RideConfirmations } from "./ride-confirmation-policy";
 
 const stageIndex: Record<BookingStatus, number> = {
   PENDING: 0, MATCHED: 0, ACCEPTED: 1, PICKED_UP: 2, IN_TRANSIT: 2, DELIVERED: 3, CANCELLED: -1,
 };
 
 /** Customer presentation only: matching and transit remain distinct backend states. */
-export function customerProgress(status: BookingStatus, type: BookingType, scheduled = false) {
+export function customerProgress(status: BookingStatus, type: BookingType, scheduled = false, confirmations: RideConfirmations = {}) {
   const ride = type === "RIDE";
-  const stages = ["Booked", "Accepted", "Picked up", ride ? "Arrived" : "Delivered"];
+  const tripStage = ride ? status === "PICKED_UP" ? confirmations.customerPickupConfirmedAt ? "On board" : "Pickup verified" : "Trip" : "Picked up";
+  const stages = ["Booked", "Accepted", tripStage, ride ? "Arrived" : "Delivered"];
   const current = stageIndex[status];
   const messages: Record<BookingStatus, string> = {
     PENDING: scheduled
@@ -15,16 +17,16 @@ export function customerProgress(status: BookingStatus, type: BookingType, sched
       : `Waiting for a ${ride ? "driver" : "rider"} to accept your booking.`,
     MATCHED: `A ${ride ? "driver" : "rider"} has been assigned. Waiting for acceptance.`,
     ACCEPTED: ride ? "Your driver accepted your booking. Check their location below." : "Your rider accepted your booking. Check their location below.",
-    PICKED_UP: ride ? "You’re on board. Your trip has started." : "Your package has been picked up.",
-    IN_TRANSIT: ride ? "You’re on the way to your drop-off." : "Your package is on the way to drop-off.",
+    PICKED_UP: ride ? confirmations.customerPickupConfirmedAt ? "You confirmed pickup. Your driver can now start the trip." : "Your pickup code is verified. Confirm you’re on board before your driver starts the trip." : "Your package has been picked up.",
+    IN_TRANSIT: ride ? confirmations.customerDropoffConfirmedAt ? "You confirmed arrival. Waiting for your driver to complete the ride." : "You’re on the way to your drop-off." : "Your package is on the way to drop-off.",
     DELIVERED: ride ? "You’ve arrived at your drop-off." : "Your package has been delivered.",
     CANCELLED: `Your ${ride ? "ride" : "delivery"} was cancelled.`,
   };
   return { stages, current, label: current < 0 ? "Cancelled" : stages[current], message: messages[status] };
 }
 
-export function customerStatusLabel(status: BookingStatus, type: BookingType = "DELIVERY") {
-  return customerProgress(status, type).label;
+export function customerStatusLabel(status: BookingStatus, type: BookingType = "DELIVERY", confirmations: RideConfirmations = {}) {
+  return customerProgress(status, type, false, confirmations).label;
 }
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 0, maximumFractionDigits: 2 });

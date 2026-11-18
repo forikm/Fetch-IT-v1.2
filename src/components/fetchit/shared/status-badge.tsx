@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { type BookingStatus } from "@/lib/constants";
 import { customerStatusLabel } from "@/lib/customer-booking-ui";
 import { cn } from "@/lib/utils";
+import type { RideConfirmations } from "@/lib/ride-confirmation-policy";
 
 const STATUS_CLASS: Record<BookingStatus, string> = {
   PENDING: "bg-amber-100 text-amber-800 border-amber-200",
@@ -20,9 +21,11 @@ const STATUS_CLASS: Record<BookingStatus, string> = {
 export function StatusBadge({
   status,
   type = "DELIVERY",
+  confirmations,
 }: {
   status: BookingStatus;
   type?: "DELIVERY" | "RIDE";
+  confirmations?: RideConfirmations;
 }) {
   const cls = STATUS_CLASS[status] ?? "";
   return (
@@ -33,7 +36,7 @@ export function StatusBadge({
         cls,
       )}
     >
-      {customerStatusLabel(status, type)}
+      {customerStatusLabel(status, type, confirmations)}
     </Badge>
   );
 }

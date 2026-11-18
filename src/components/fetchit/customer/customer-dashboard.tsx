@@ -128,6 +128,8 @@ export interface Booking {
   etaMinutes: number | null;
   createdAt: string;
   updatedAt: string;
+  customerPickupConfirmedAt?: string | null;
+  customerDropoffConfirmedAt?: string | null;
   customer: { id: string; name: string; phone: string | null };
   rider: {
     id: string;
@@ -310,7 +312,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     setTrackingBooking((previous) => {
       const latest = updated.find((booking) => booking.id === previous?.id);
       // The dialog owns fresh GPS/proof data; list status patches must preserve it.
-      return previous && latest ? mergeBookingUpdate(previous, { status: latest.status, etaMinutes: latest.etaMinutes, riderId: latest.riderId, rider: latest.rider, updatedAt: latest.updatedAt }) : previous;
+      return previous && latest ? mergeBookingUpdate(previous, { status: latest.status, etaMinutes: latest.etaMinutes, riderId: latest.riderId, rider: latest.rider, customerPickupConfirmedAt: latest.customerPickupConfirmedAt, customerDropoffConfirmedAt: latest.customerDropoffConfirmedAt, updatedAt: latest.updatedAt }) : previous;
     });
   });
   return (

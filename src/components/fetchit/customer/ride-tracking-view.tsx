@@ -3,6 +3,7 @@ import { RideSosButton } from "./ride-sos-button";
 import { BookingWaitStatus } from "./booking-wait-status";
 import { isAwaitingAcceptance } from "@/lib/booking-wait";
 import { CustomerPickupProgress } from "./pickup-progress";
+import { CustomerRideConfirmations } from "./ride-confirmations";
 import { RiderProfile } from "../shared/rider-profile";
 import { Navigation, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,11 +30,12 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
   return <div className="space-y-4">
     <DialogHeader className="min-h-12 justify-center"><DialogTitle className="flex items-center gap-2"><Navigation className="h-5 w-5 text-primary" />Your ride · {ride.refCode}</DialogTitle><DialogDescription className="sr-only">Your driver, trip map and safety options.</DialogDescription></DialogHeader>
     <BookingWaitStatus key={`wait:${ride.id}`} booking={ride} updatesPaused={readOnly || updatesPaused} onUpdated={onUpdated} />
-    {status === "ACCEPTED" ? <CustomerPickupProgress key={`pickup:${ride.id}`} bookingId={ride.id} compact /> : <BookingTimeline compact status={status} type="RIDE" hideStatus={isAwaitingAcceptance(status)} />}
+    {status === "ACCEPTED" ? <CustomerPickupProgress key={`pickup:${ride.id}`} bookingId={ride.id} compact /> : <BookingTimeline compact status={status} type="RIDE" confirmations={ride} hideStatus={isAwaitingAcceptance(status)} />}
     {ride.rider && <section aria-label="Your driver" className="flex min-w-0 items-center gap-3 rounded-2xl border bg-card p-3">
       <span aria-hidden="true" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary/10 font-semibold text-primary">{ride.rider.name.trim().split(/\s+/).slice(0,2).map(part => part[0]).join("")}</span>
       <div className="min-w-0 flex-1"><RiderProfile bookingId={ride.id} {...ride.rider} type="RIDE" /><dl className="mt-1 flex flex-wrap gap-x-2 text-sm"><div className="flex gap-1"><dt className="sr-only">Vehicle</dt><dd>{VEHICLES[ride.vehicleClass]?.label ?? ride.vehicleClass}</dd></div><div className="flex gap-1"><dt className="sr-only">Plate number</dt><dd className="break-all font-semibold">{ride.rider.vehiclePlate || "Not available"}</dd></div></dl></div>
     </section>}
+    <CustomerRideConfirmations key={`confirm:${ride.id}`} ride={ride} disabled={readOnly || updatesPaused} onUpdated={onUpdated} />
     <section aria-label="Trip map" className="space-y-2">
       <div className="relative h-64 overflow-hidden rounded-2xl border sm:h-80"><LiveTrackingMap showLiveStatus={active} vehicleClass={ride.vehicleClass} key={ride.id} pickup={{lat:ride.pickupLat,lng:ride.pickupLng}} dropoff={{lat:ride.dropoffLat,lng:ride.dropoffLng}} rider={active && location ? {lat:location.lat,lng:location.lng} : null} customer={customerLocation} className="absolute inset-0 h-full w-full border-0 rounded-none" /></div>
       <p className="text-xs text-muted-foreground">A: Pickup · B: Drop-off{active ? " · Orange arrow: Driver" : ""}{customerLocation ? " · Blue dot: You" : ""}</p>

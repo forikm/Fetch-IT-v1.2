@@ -36,7 +36,7 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-sm text-muted-foreground">{booking.refCode}</span>
-            <StatusBadge status={booking.status} type={booking.type} />
+            <StatusBadge status={booking.status} type={booking.type} confirmations={booking} />
           </div>
           <CardTitle className="text-base mt-1.5 [overflow-wrap:anywhere]">{openRide ? <button type="button" onClick={onTrack} aria-label={`View rider profile and map for ${booking.refCode}`} className="min-h-12 min-w-12 rounded text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">{booking.dropoffLabel}</button> : booking.dropoffLabel}</CardTitle>
           <CardDescription className="flex w-full min-w-0 items-start gap-1 mt-0.5">
@@ -65,7 +65,7 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
       </div>}
 
       <BookingWaitStatus key={booking.id} booking={booking} updatesPaused={updatesPaused || readOnly} readOnly={readOnly} onCancelled={onRefresh} onUpdated={onUpdated} />
-      <BookingTimeline compact status={booking.status} type={booking.type} scheduled={scheduled} hideStatus={isAwaitingAcceptance(booking.status)} />
+      <BookingTimeline compact status={booking.status} type={booking.type} confirmations={booking} scheduled={scheduled} hideStatus={isAwaitingAcceptance(booking.status)} />
       <div className="flex flex-wrap gap-2 pt-1">
         {booking.status !== "CANCELLED" && !readOnly && !(delivered && !ride) && <Button size="sm" className="flex-1" onClick={onTrack}><Navigation className="h-3.5 w-3.5" />{delivered ? "View ride details" : isAwaitingAcceptance(booking.status) ? "View booking" : ride ? "Track ride" : "Track delivery"}</Button>}
         {canCancel && !isAwaitingAcceptance(booking.status) && <CancelBooking bookingId={booking.id} readOnly={readOnly} onCancelled={onRefresh} />}

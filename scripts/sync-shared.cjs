@@ -7,6 +7,7 @@ const commonFiles = ["src/lib/eta-policy.ts", "prisma/migrations/202610310001_ro
 commonFiles.push('prisma/migrations/202611010002_matching_runtime_grants/migration.sql', 'src/lib/automatching.ts', 'src/lib/matching-policy.ts', 'src/lib/road-routing.ts', 'src/lib/road-routing-service.ts', 'src/lib/service-area.ts', 'public/service-area-data.json', 'prisma/migrations/202611010001_automatic_matching/migration.sql', 'docs/automatic-matching.md');
 commonFiles.push('prisma/migrations/202611020001_notification_dismissal/migration.sql');
 commonFiles.push('src/lib/fare-policy.ts', 'prisma/migrations/202611120001_separate_fares/migration.sql');
+commonFiles.push('src/lib/ride-confirmation-policy.ts', 'prisma/migrations/202611180001_customer_ride_confirmations/migration.sql');
 commonFiles.push('src/lib/local-demo-runtime.ts', 'src/lib/local-demo-files.ts', 'src/lib/application-demo-mode.ts', 'src/hooks/use-local-demo.ts', 'src/hooks/use-visible-poll.ts');
 commonFiles.push('prisma/migrations/202610280001_rider_application_demo/migration.sql');
 commonFiles.push('prisma/migrations/202610280002_application_document_names/migration.sql');
