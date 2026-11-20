@@ -10,6 +10,7 @@ import { generateTicketId } from "./ticket";
 import { generateRefCode } from "./fare";
 import { isDemoPayment } from "./payment-policy";
 import { bookingServiceAreaError } from "./service-area";
+import { requireCompletedBookingRatings } from "./booking-rating";
 
 type Actor = { uid: string; name: string; role: string };
 type BookingInput = Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">;
@@ -36,6 +37,7 @@ export async function prepareOnlineCheckout(db: PrismaClient, data: BookingInput
     const draft = await tx.checkoutDraft.findUniqueOrThrow({ where: { id } });
     if (draft.customerId !== data.customerId || draft.requestHash !== requestHash) throw new CustomerError("This checkout request was already used for different details. Start a new request.", 409);
     if (draft.bookingId) return { bookingId: draft.bookingId };
+    await requireCompletedBookingRatings(tx, data.customerId);
     const previousFare = (draft.bookingData as { totalFare?: unknown }).totalFare;
     if (Number(previousFare) !== Number(data.totalFare)) throw new CustomerError("The fare changed. Review the new fare and confirm again.", 409);
     if (draft.expiresAt <= new Date()) throw new CustomerError("This fare has expired. Review your details and start a new checkout.", 409);
@@ -63,6 +65,7 @@ export async function resolveOnlineCheckout(db: PrismaClient, checkoutId: string
     const data = draft.bookingData as unknown as BookingInput;
     if (!isDemoPayment(String(data.paymentMethod)) || (data.type !== "RIDE" && data.type !== "DELIVERY")) throw new PaymentError("Checkout details are unavailable.", 409);
     if (outcome === "SUCCEEDED") {
+      await requireCompletedBookingRatings(tx, actor.uid);
       const coverageError = bookingServiceAreaError({ lat: data.pickupLat, lng: data.pickupLng }, { lat: data.dropoffLat, lng: data.dropoffLng });
       if (coverageError) throw new PaymentError(coverageError, 422);
     }
@@ -98,6 +101,7 @@ export async function retryOnlineCheckout(db: PrismaClient, checkoutId: string, 
     const draft = await tx.checkoutDraft.findUniqueOrThrow({ where: { id: attempt.draftId } });
     if (actor.role !== "CUSTOMER" || draft.customerId !== actor.uid) throw new PaymentError("Checkout not found.", 404);
     if (draft.bookingId || draft.expiresAt <= new Date()) throw new PaymentError("Return to Fetch-It to review your request.", 409);
+    await requireCompletedBookingRatings(tx, actor.uid);
     const pending = await tx.demoCheckout.findFirst({ where: { draftId: draft.id, status: "PENDING" } });
     const checkout = pending ?? await tx.demoCheckout.create({ data: { draftId: draft.id } });
     return { checkoutUrl: `/checkout/${checkout.id}` };

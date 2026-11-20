@@ -18,7 +18,7 @@ function load(file, dependencies) {
   } });
   return exports;
 }
-class CustomerError extends Error { constructor(message, status) { super(message); this.status = status; } }
+class CustomerError extends Error { constructor(message, status, code) { super(message); this.status = status; this.code = code; } }
 const payload = { type: 'DELIVERY', pickup: { lat: 16.02, lng: 120.23, label: 'Pickup' },
   dropoff: { lat: 16.04, lng: 120.33, label: 'Drop-off' }, vehicleClass: 'MOTORCYCLE', cargoWeightKg: 2 };
 const settings = { automatchingEnabled: true, commissionPercent: 15, deliveryEnabled: true, rideEnabled: true, vehicles: ['MOTORCYCLE'] };
@@ -68,11 +68,16 @@ test('unauthenticated and non-customer sessions cannot start booking work', asyn
   }
 });
 
-function createFixture({ loseResponse = false, failOutbox = false } = {}) {
+function createFixture({ loseResponse = false, failOutbox = false, pendingRating = false } = {}) {
   let committed = null, staged = null;
   const calls = [];
   const tx = {
-    booking: { create: async ({ data }) => {
+    booking: { findFirst: async ({ where }) => {
+      assert.equal(where.customerId, 'customer');
+      assert.equal(where.status, 'DELIVERED');
+      assert.equal(where.review.is, null);
+      return pendingRating ? { id: 'previous-booking' } : null;
+    }, create: async ({ data }) => {
       calls.push('booking');
       staged = { ...data, id: data.id, scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
         passengers: 1, cargoNotes: null };
@@ -95,6 +100,7 @@ function createFixture({ loseResponse = false, failOutbox = false } = {}) {
     'node:crypto': crypto, './ticket': { generateTicketId: async () => { calls.push('ticket'); return 'D0001'; } },
     './fare': { generateRefCode: () => 'FIT-TEST' }, './db-data': { riderSelect: {} },
     './customer-access': { CustomerError }, './pickup-schedule': { parsePickupSchedule: value => value ? new Date(value) : null },
+    './booking-rating': load('src/lib/booking-rating.ts', { './customer-access': { CustomerError } }),
   });
   async function create(enabled, scheduledAt = null, type = 'DELIVERY') {
     const body = { ...payload, type, scheduledAt };
@@ -105,6 +111,13 @@ function createFixture({ loseResponse = false, failOutbox = false } = {}) {
   }
   return { create, calls, committed: () => committed };
 }
+
+test('a completed unrated booking blocks a new cash booking before any writes', async () => {
+  const f = createFixture({ pendingRating: true });
+  await assert.rejects(f.create(true), error => error.code === 'RATING_REQUIRED' && error.status === 409);
+  assert.deepEqual(f.calls, ['rollback']);
+  assert.equal(f.committed(), null);
+});
 
 test('ride and delivery dispatch is durable with the booking and respects matching availability', async () => {
   for (const type of ['RIDE', 'DELIVERY']) for (const enabled of [true, false]) {

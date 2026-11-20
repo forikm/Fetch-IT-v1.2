@@ -7,6 +7,8 @@ import { RiderProfile } from "../shared/rider-profile";
 
 import { BookingHistoryRow } from "../shared/booking-history-row";
 import { BookingWaitStatus } from "./booking-wait-status";
+import { DeliveryReceipt } from "./delivery-receipt";
+import { BookingRatingGate } from "./booking-rating-gate";
 import { isAwaitingAcceptance, mergeBookingUpdate } from "@/lib/booking-wait";
 import { BookingSummary } from "../shared/booking-summary";
 import { BookingTimeline } from "../shared/booking-timeline";
@@ -26,6 +28,7 @@ import { useOnlineStatus } from "@/hooks/use-online-status";
 import { readCustomerBooking } from "@/lib/offline-bookings";
 import { readSnapshot, saveSnapshot } from "@/lib/offline-data";
 import { customerResponse, CustomerRequestError } from "@/lib/customer-request";
+import type { FareBreakdown } from "@/lib/fare";
 import { useServiceArea } from "@/hooks/use-service-area";
 import { FetchItLoader } from "@/components/fetchit/shared/loading";
 import { pickupScheduleIso, pickupScheduleInput, formatPickupSchedule } from "@/lib/pickup-schedule";
@@ -161,6 +164,10 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   const user = useAppStore((s) => s.user) as AuthUser | null;
   const { toast } = useToast();
   const { ratingBooking, observeRatings, dismissRating } = useCompletedBookingRatings();
+  const [ratingCheck, setRatingCheck] = useState(0);
+  const markRated = useCallback((id: string) => {
+    if (ratingBooking?.id === id) dismissRating();
+  }, [ratingBooking?.id, dismissRating]);
 
   const tab = useAppStore(s => s.bookingsTab);
   const setTab = useAppStore(s => s.setBookingsTab);
@@ -392,12 +399,15 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
               Choose a route and review your booking.
             </DialogDescription>
           </DialogHeader>
-          <BookingForm
-            bookingType={bookingType}
-            initialBooking={repeatBooking}
-            onCreate={onNewBookingCreated}
-            onCancel={() => setShowNew(false)}
-          />
+          <BookingRatingGate connected={online && !offlineAccess} revision={ratingCheck} onRated={markRated}>
+            <BookingForm
+              bookingType={bookingType}
+              initialBooking={repeatBooking}
+              onCreate={onNewBookingCreated}
+              onCancel={() => setShowNew(false)}
+              onRatingRequired={() => setRatingCheck(value => value + 1)}
+            />
+          </BookingRatingGate>
         </DialogContent>
       </Dialog>
 
@@ -414,7 +424,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
                   {trackingBooking.status === "DELIVERED" ? "Delivery completed" : trackingBooking.status === "CANCELLED" ? "Delivery cancelled" : "Track delivery"} · {trackingBooking.refCode}
                 </DialogTitle>
                 <DialogDescription>
-                  {trackingBooking.status === "DELIVERED" ? "View delivery proof, payment and receipt details." : trackingBooking.status === "CANCELLED" ? "Review your cancelled delivery and booking details." : "Follow your package from pickup to drop-off."}
+                  {trackingBooking.status === "DELIVERED" ? "Review delivery proof and confirm receipt or report a problem." : trackingBooking.status === "CANCELLED" ? "Review your cancelled delivery and booking details." : "Follow your package from pickup to drop-off."}
                 </DialogDescription>
               </DialogHeader>
               <TrackingView
@@ -434,23 +444,34 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
         setSummaryBooking(null);
       }} onDetails={() => { setTrackingBooking(summaryBooking); setSummaryBooking(null); }} />}</DialogContent></Dialog>
       <Dialog open={!!summaryError} onOpenChange={(open) => !open && setSummaryError(null)}><DialogContent><DialogHeader><DialogTitle>Summary unavailable</DialogTitle><DialogDescription>{summaryError}</DialogDescription></DialogHeader></DialogContent></Dialog>
-      {ratingBooking && !trackingBooking && !summaryBooking && !showNew && !summaryError && <BookingActions key={"rating:" + ratingBooking.id} booking={ratingBooking} ratingPrompt onRatingPromptClosed={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
+      {ratingBooking && !trackingBooking && !summaryBooking && !showNew && !summaryError && <BookingActions key={"rating:" + ratingBooking.id} booking={ratingBooking} completionReminder onRated={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
     </div>
     </CustomerAppShell>
   );
 }
+
+type BookingFareEstimate = {
+  distanceKm: number;
+  fare: FareBreakdown;
+  etaMinutes: number;
+  routeQuote?: string;
+  routingSource?: "openrouteservice" | "estimate";
+  vehicle?: { includedKm: number; perKm?: number; longHaulPerKm?: number };
+};
 
 // ------------------------------ Booking form ------------------------------
 function BookingForm({
   bookingType,
   onCreate,
   onCancel,
+  onRatingRequired,
   initialBooking,
 }: {
   bookingType: BookingType;
   initialBooking: Booking | null;
   onCreate: (b: Booking) => void;
   onCancel: () => void;
+  onRatingRequired: () => void;
 }) {
   const { toast } = useToast();
   const userId = useAppStore((state) => state.user?.id ?? "anonymous");
@@ -485,27 +506,7 @@ function BookingForm({
   }, [initialBooking]);
 
   // Fare estimate
-  const [fareEstimate, setEstimate] = useState<{
-    distanceKm: number;
-    straightLineKm?: number;
-    surgeMultiplier: number;
-    fare: {
-      baseFare: number;
-      distanceFare: number;
-      weightFare: number;
-      surgeFare: number;
-      bookingFee?: number;
-      roundingAdjustment?: number;
-      minimumAdjustment: number;
-      totalFare: number;
-      billableKm: number;
-      chargeableKg: number;
-      currency: string;
-    };
-    etaMinutes: number;
-    routeQuote?: string;
-    routingSource?: "openrouteservice" | "estimate";
-  } | null>(null);
+  const [fareEstimate, setEstimate] = useState<BookingFareEstimate | null>(null);
   const [estimating, setEstimating] = useState(false);
   const fareSequence = useRef(0);
   const fareRequest = useRef<AbortController | null>(null);
@@ -722,7 +723,15 @@ function BookingForm({
         body, signal: AbortSignal.timeout(30000),
       });
       timing.response(res);
-      if (res.status === 409) setPendingSubmission(null);
+      if (res.status === 409) {
+        const conflict = await res.clone().json().catch(() => null);
+        if (conflict?.code === "RATING_REQUIRED") {
+          timing.finish("failed");
+          onRatingRequired();
+          return;
+        }
+        setPendingSubmission(null);
+      }
       const data = await customerResponse<{ booking?: Booking; checkoutUrl?: string }>(res, "We couldn’t confirm your request. Check Active bookings before trying again. Your details are saved.");
       if (data.checkoutUrl && /^\/checkout\/[a-zA-Z0-9_-]+$/.test(data.checkoutUrl)) {
         timing.finish("checkout");
@@ -984,6 +993,24 @@ function BookingForm({
       {/* Step 3: Review and payment */}
       {step === 3 && (
         <div className="space-y-4">
+          {online && !offlineAccess && canEstimate() && (
+            <Card className="py-0 shadow-none">
+              <CardContent className="p-3">
+                {estimate ? (
+                  <BookingFareBreakdown estimate={estimate} bookingType={bookingType} pricedPassengers={isRide && vehicleClass === "TRICYCLE" ? Number(passengers) : 1} />
+                ) : estimateError && !estimating ? (
+                  <div className="space-y-3 text-sm text-destructive">
+                    <p role="status" className="flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> {estimateError}</p>
+                    <Button type="button" size="sm" variant="outline" disabled={fareRetrySeconds > 0} onClick={() => void fetchEstimate()}>{fareRetrySeconds > 0 ? `Retry fare in ${fareRetrySeconds}s` : "Retry fare"}</Button>
+                  </div>
+                ) : (
+                  <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <FetchItLoader className="h-4 w-4" /> Calculating fare…
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
           <section aria-label="Route summary" className="rounded-xl border p-3 space-y-3">
             {([
               { label: "Pickup", address: pickupLabel, editStep: 0, color: "text-emerald-600" },
@@ -1005,55 +1032,6 @@ function BookingForm({
               <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label="Edit booking details" onClick={() => editFromReview(2)} className="min-h-12 px-3 text-sm">Edit</Button>
             </div>
           </section>
-
-          {/* Fare estimate */}
-          {online && !offlineAccess && canEstimate() && (
-            <Card className="py-0 shadow-none">
-              <CardContent className="p-3">
-                {estimating ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <FetchItLoader className="h-4 w-4" /> Calculating fare…
-                  </div>
-                ) : estimate ? (
-                  <div className="space-y-3">
-                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span>{estimate.distanceKm} km · {estimate.routingSource === "openrouteservice" ? "Road route" : "Estimated distance"}</span><span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {routeTimeLabel(bookingType)}: about {estimate.etaMinutes} min</span></p>
-                    <details>
-                      <summary className="cursor-pointer text-sm font-medium">View fare breakdown</summary>
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                      <FareLine label={isRide && vehicleClass === "TRICYCLE" ? `Base (${passengers} passenger${passengers === "1" ? "" : "s"})` : "Base"} value={formatPeso(estimate.fare.baseFare)} />
-                      <FareLine
-                        label={`Distance charge (${estimate.fare.billableKm} km)`}
-                        value={formatPeso(estimate.fare.distanceFare)}
-                      />
-                      {!isRide && <FareLine
-                        label={
-                          estimate.fare.chargeableKg > 0
-                            ? `Extra weight (${estimate.fare.chargeableKg} kg)`
-                            : `Weight (first ${v!.freeWeightKg} kg included)`
-                        }
-                        value={formatPeso(estimate.fare.weightFare)}
-                      />}
-                      {estimate.fare.surgeFare > 0 && <FareLine label="Busy-period charge" value={formatPeso(estimate.fare.surgeFare)} />}
-                      {!!estimate.fare.roundingAdjustment && <FareLine label="Fare rounding" value={formatPeso(estimate.fare.roundingAdjustment)} />}
-                      {!!estimate.fare.bookingFee && <FareLine label="Booking fee" value={formatPeso(estimate.fare.bookingFee)} />}
-                      {estimate.fare.minimumAdjustment > 0 && (
-                        <FareLine
-                          label="Minimum fare top-up"
-                          value={formatPeso(estimate.fare.minimumAdjustment)}
-                        />
-                      )}
-                      </div>
-                    </details>
-                  </div>
-                ) : estimateError ? (
-                  <div className="space-y-3 text-sm text-destructive">
-                    <p role="status" className="flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> {estimateError}</p>
-                    <Button type="button" size="sm" variant="outline" disabled={estimating || fareRetrySeconds > 0} onClick={() => void fetchEstimate()}>{fareRetrySeconds > 0 ? `Retry fare in ${fareRetrySeconds}s` : "Retry fare"}</Button>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          )}
 
           <div className="space-y-2">
             <Label htmlFor="payment-method">Payment method</Label>
@@ -1077,7 +1055,6 @@ function BookingForm({
       {estimating && <div className="px-4 py-2 sm:px-6"><SlowRequestFeedback message="We’re still checking your route and fare. Your booking details are kept here."/></div>}
       {error && /check active bookings/i.test(error) && <Button type="button" variant="outline" className="mx-4 min-h-12" onClick={() => { useAppStore.getState().setBookingsTab("active"); onCancel(); }}>Check Active bookings</Button>}
       {error && /fare.*refresh|refresh.*fare/i.test(error) && <Button type="button" variant="outline" disabled={estimating || submitting} onClick={()=>void fetchEstimate()}>Refresh fare</Button>}
-      {step === 3 && <div aria-live="polite" className="flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">Total fare</span><strong className="text-2xl">{estimate ? formatPeso(estimate.fare.totalFare) : estimating ? "Calculating…" : "—"}</strong></div>}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">
         <Button
           type="button"
@@ -1107,11 +1084,47 @@ function BookingForm({
   );
 }
 
-function FareLine({ label, value }: { label: string; value: string }) {
+function BookingFareBreakdown({ estimate, bookingType, pricedPassengers }: {
+  estimate: BookingFareEstimate;
+  bookingType: BookingType;
+  pricedPassengers: number;
+}) {
+  const { fare, vehicle } = estimate;
+  const includedKm = vehicle?.includedKm ?? 0;
+  const baseLabel = includedKm > 0
+    ? estimate.distanceKm >= includedKm ? `First ${includedKm} km` : `Base fare · up to ${includedKm} km`
+    : "Base fare";
+  const perKm = vehicle?.perKm;
+  const distanceRate = perKm !== undefined && perKm === vehicle?.longHaulPerKm ? ` × ${formatPeso(perKm)}/km` : "";
+  const distanceLabel = includedKm > 0 ? `Next ${fare.billableKm} km` : `Distance (${fare.billableKm} km)`;
+  const passengerLabel = pricedPassengers > 1 ? ` · ${pricedPassengers} passengers` : "";
+
+  return <section aria-label="Fare breakdown" className="space-y-3">
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+      <span>{estimate.distanceKm} km · {estimate.routingSource === "openrouteservice" ? "Road route" : "Estimated distance"}</span>
+      <span className="flex items-center gap-1"><Clock aria-hidden="true" className="h-3.5 w-3.5" /> {routeTimeLabel(bookingType)}: about {estimate.etaMinutes} min</span>
+    </p>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1" role="status">
+      <h3 className="text-base font-semibold">Total fare</h3>
+      <strong className="text-2xl tabular-nums">{formatPeso(fare.totalFare)}</strong>
+    </div>
+    <dl className="space-y-2 border-t pt-3 text-sm">
+      <FareLine label={baseLabel + passengerLabel} amount={fare.baseFare} />
+      {(fare.billableKm > 0 || fare.distanceFare > 0) && <FareLine label={distanceLabel + distanceRate + passengerLabel} amount={fare.distanceFare} />}
+      {bookingType === "DELIVERY" && fare.chargeableKg > 0 && <FareLine label={`Extra weight (${fare.chargeableKg} kg)`} amount={fare.weightFare} />}
+      {fare.surgeFare > 0 && <FareLine label="Busy-period charge" amount={fare.surgeFare} />}
+      {fare.minimumAdjustment > 0 && <FareLine label="Minimum fare adjustment" amount={fare.minimumAdjustment} />}
+      {!!fare.roundingAdjustment && <FareLine label="Fare rounding" amount={fare.roundingAdjustment} />}
+      {!!fare.bookingFee && <FareLine label="Booking fee" amount={fare.bookingFee} />}
+    </dl>
+  </section>;
+}
+
+function FareLine({ label, amount }: { label: string; amount: number }) {
   return (
-    <div className="space-y-0.5">
-      <div className="text-muted-foreground">{label}</div>
-      <div className="font-medium">{value}</div>
+    <div className="flex items-start justify-between gap-3">
+      <dt className="min-w-0 text-muted-foreground">{label}</dt>
+      <dd className="shrink-0 font-medium tabular-nums">{formatPeso(amount)}</dd>
     </div>
   );
 }
@@ -1297,6 +1310,7 @@ function TrackingView({
       )}
 
 
+      {isDelivered && <DeliveryReceipt key={booking.id} bookingId={booking.id} />}
       {isDelivered && <BookingActions booking={{ ...booking, status }} readOnly={updatesPaused} />}
       {isDelivered ? <details open={routeOpen} onToggle={event => setRouteOpen(event.currentTarget.open)} className="rounded-2xl border bg-card px-4">
         <summary className="min-h-12 cursor-pointer py-3 text-base font-semibold">Delivery details &amp; route</summary>

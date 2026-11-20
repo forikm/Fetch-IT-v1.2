@@ -1,5 +1,6 @@
 "use client";
 import { BookingWaitStatus } from "../customer/booking-wait-status";
+import { DeliveryReceipt } from "../customer/delivery-receipt";
 import { isAwaitingAcceptance } from "@/lib/booking-wait";
 import type { Booking } from "../customer/customer-dashboard";
 import { RiderProfile } from "./rider-profile";
@@ -21,6 +22,7 @@ export function BookingSummary({ booking, onRepeat, onDetails, onUpdated, onCanc
   return <div className="space-y-5 min-w-0">
     <div className="flex flex-wrap items-center justify-between gap-2"><StatusBadge status={booking.status} type={booking.type} /><span className="text-xl font-semibold">{formatPeso(booking.totalFare)}</span></div>
     {completedDelivery && online && !offlineAccess && <Button className="w-full" onClick={onDetails}>View delivery proof</Button>}
+    {completedDelivery && <DeliveryReceipt key={booking.id} bookingId={booking.id} />}
     {!["DELIVERED", "CANCELLED"].includes(booking.status) && online && !offlineAccess && <Button className="min-h-12 w-full" onClick={onDetails}>Track booking</Button>}
     {booking.status === "PENDING" && booking.scheduledAt && new Date(booking.scheduledAt) > new Date() && <p className="rounded-lg bg-muted p-3 text-sm">Scheduled pickup: {formatPickupSchedule(booking.scheduledAt)} Philippine time. Riders can review this request now; acceptance opens when pickup is due.</p>}
     <BookingWaitStatus key={booking.id} booking={booking} updatesPaused={updatesPaused} readOnly={offlineAccess} onCancelled={onCancelled} onUpdated={onUpdated} />

@@ -1,4 +1,5 @@
 export const SUPPORT_CATEGORIES = ["BOOKING", "FARE", "RIDER", "LOST_ITEM", "OTHER"] as const;
+export const DELIVERY_RECEIPT_ISSUE = "Issue with Delivery · Problem with a delivered parcel";
 export const SUPPORT_LABELS: Record<string, string> = {
   BOOKING: "Ride or delivery help", FARE: "Fare or payment", RIDER: "Issue with the rider",
   LOST_ITEM: "Lost item", OTHER: "Account or general help",
@@ -49,6 +50,7 @@ export function supportContext(topic: unknown, issue: unknown) {
 
 export function supportSubject(ticket: { message: string; category: string }) {
   const firstLine = ticket.message.split("\n", 1)[0];
+  if (firstLine === DELIVERY_RECEIPT_ISSUE) return firstLine;
   return SUPPORT_TOPICS.some(topic => topic.issues.some(issue => `${topic.label} · ${issue.label}` === firstLine))
     ? firstLine : SUPPORT_LABELS[ticket.category] ?? "Support request";
 }

@@ -7,15 +7,19 @@ export function DemoCheckoutControls({ checkoutId, amount, customerId, draftId, 
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [ratingRequired, setRatingRequired] = useState(false);
   const [result, setResult] = useState<"SUCCEEDED" | "FAILED" | "CANCELLED" | null>(null);
   const [returnUrl, setReturnUrl] = useState("/");
   async function pay(outcome: "SUCCEEDED" | "FAILED" | "CANCELLED") {
     if (pending.current) return;
-    pending.current = true; setBusy(true); setError("");
+    pending.current = true; setBusy(true); setError(""); setRatingRequired(false);
     try {
       const response = await fetch(`/api/checkouts/${checkoutId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ outcome }) });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Payment could not be completed. Please retry.");
+      if (!response.ok) {
+        setRatingRequired(data.code === "RATING_REQUIRED");
+        throw new Error(data.error || "Payment could not be completed. Please retry.");
+      }
       if (outcome === "SUCCEEDED" && draftId) {
         // Clear only this paid request's retry key. A subsequent deliberate
         // booking of the same route must get a new key; other tabs keep theirs.
@@ -35,11 +39,14 @@ export function DemoCheckoutControls({ checkoutId, amount, customerId, draftId, 
   }
   async function retry() {
     if (pending.current) return;
-    pending.current = true; setBusy(true); setError("");
+    pending.current = true; setBusy(true); setError(""); setRatingRequired(false);
     try {
       const response = await fetch(`/api/checkouts/${checkoutId}/retry`, { method: "POST" });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Return to Fetch-It to retry checkout.");
+      if (!response.ok) {
+        setRatingRequired(data.code === "RATING_REQUIRED");
+        throw new Error(data.error || "Return to Fetch-It to retry checkout.");
+      }
       window.location.replace(data.checkoutUrl);
     } catch (error) { setError(error instanceof Error ? error.message : "Reconnect to retry checkout."); }
     finally { pending.current = false; setBusy(false); }
@@ -51,5 +58,6 @@ export function DemoCheckoutControls({ checkoutId, amount, customerId, draftId, 
       <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Simulation options</summary><Button className="mt-2" size="sm" variant="outline" disabled={busy} onClick={() => void pay("FAILED")}>Simulate unsuccessful payment</Button></details>
     </>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {ratingRequired && <Button asChild variant="outline"><Link href={bookingType === "RIDE" ? "/?action=book&service=ride" : "/?action=book&service=delivery"}>Rate your completed booking</Link></Button>}
   </div>;
 }

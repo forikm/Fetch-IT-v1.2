@@ -87,6 +87,8 @@ async function handlePOST(req: NextRequest) {
           id: quote.vehicle.id,
           label: quote.vehicle.label,
           includedKm: quote.vehicle.includedKm,
+          perKm: quote.vehicle.perKm,
+          longHaulPerKm: quote.vehicle.longHaulPerKm,
         },
       });
     }
@@ -131,7 +133,9 @@ async function handlePOST(req: NextRequest) {
         label: v.label,
         capacityKg: v.capacityKg,
         freeWeightKg: v.freeWeightKg,
-        includedKm: v.includedKm,
+        includedKm: quote.vehicle.includedKm,
+        perKm: quote.vehicle.perKm,
+        longHaulPerKm: quote.vehicle.longHaulPerKm,
       },
     });
   } catch (err) {

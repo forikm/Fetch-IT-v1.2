@@ -9,6 +9,7 @@ import { CustomerError } from "./customer-access";
 import { parsePickupSchedule } from "./pickup-schedule";
 import type { PlatformSettings } from "./platform-policy";
 import { timeBooking } from "./booking-telemetry";
+import { requireCompletedBookingRatings } from "./booking-rating";
 
 const include = { dispatch: { select: dispatchSelect }, customer: { select: { id: true, name: true, phone: true } }, rider: { select: riderSelect } } as const;
 
@@ -53,6 +54,7 @@ export async function createBookingWithRetry(
   for (let attempt = 0; ; attempt++) {
     try {
       const booking = await timeBooking("db.transaction", () => db.$transaction(async tx => {
+        await requireCompletedBookingRatings(tx, data.customerId);
         const ticketId = await timeBooking("db.ticket_counter", () => generateTicketId(tx, type));
         // Do not load related users while holding the shared counter row lock.
         // Reuse the settings validated with the fare. A nested durable dispatch

@@ -4,7 +4,7 @@ import { getSession } from "@/lib/session";
 import { NextResponse } from "next/server";
 
 export class CustomerError extends Error {
-  constructor(message: string, public status: number) { super(message); }
+  constructor(message: string, public status: number, public code?: string) { super(message); }
 }
 export async function requireCustomer() {
   const session = await getSession();
@@ -17,5 +17,6 @@ export async function requireCustomer() {
 }
 export function customerErrorResponse(error: unknown) {
   if (!(error instanceof CustomerError)) bookingFailure("handler", error);
-  return NextResponse.json({ error: error instanceof CustomerError ? error.message : "This service is temporarily unavailable. Please try again." }, { status: error instanceof CustomerError ? error.status : 503 });
+  if (error instanceof CustomerError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+  return NextResponse.json({ error: "This service is temporarily unavailable. Please try again." }, { status: 503 });
 }

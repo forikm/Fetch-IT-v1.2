@@ -98,6 +98,7 @@ test("an older out-of-area online draft cannot become a booking; cancellation st
     "./automatching": {}, "./rider-push-tasks": {}, "./push-delivery": {},
     "node:crypto": crypto, "./service-area": area, "./customer-access": {}, "./payments": { PaymentError },
     "./ticket": {}, "./fare": {}, "./payment-policy": { isDemoPayment: () => true },
+    "./booking-rating": { requireCompletedBookingRatings: async () => {} },
     "./receipt-email": { scheduleReceiptDelivery: () => { throw Error("Must not send mail"); } },
   });
   const db = { $transaction: async fn => fn(transaction) }, actor = { uid: "fixture", role: "CUSTOMER" };
@@ -105,4 +106,27 @@ test("an older out-of-area online draft cannot become a booking; cancellation st
   assert.equal(writes, 0);
   assert.equal(await resolveOnlineCheckout(db, "checkout", actor, "CANCELLED"), null);
   assert.equal(writes, 1);
+});
+
+test("a pending rating blocks checkout success before any payment or booking write", async () => {
+  let writes = 0;
+  const blocked = Object.assign(new Error("Rate your completed booking."), { code: "RATING_REQUIRED", status: 409 });
+  const { resolveOnlineCheckout } = load("../src/lib/online-checkout.ts", {
+    "./automatching": {}, "./rider-push-tasks": {}, "./push-delivery": {}, "node:crypto": crypto,
+    "./service-area": area, "./customer-access": {}, "./payments": { PaymentError: Error }, "./ticket": {}, "./fare": {},
+    "./payment-policy": { isDemoPayment: () => true }, "./receipt-email": {},
+    "./booking-rating": { requireCompletedBookingRatings: async (_tx, uid) => { assert.equal(uid, "fixture"); throw blocked; } },
+  });
+  const tx = {
+    demoCheckout: {
+      findUnique: async () => ({ draftId: "draft" }),
+      findUniqueOrThrow: async () => ({ status: "PENDING" }),
+      update: async () => { writes++; },
+    },
+    checkoutDraft: { findUniqueOrThrow: async () => ({ customerId: "fixture", expiresAt: new Date(Date.now() + 100000), bookingData: { type: "DELIVERY" } }) },
+    booking: { create: async () => { writes++; } },
+    $queryRaw: async () => [],
+  };
+  await assert.rejects(resolveOnlineCheckout({ $transaction: async fn => fn(tx) }, "checkout", { uid: "fixture", role: "CUSTOMER" }, "SUCCEEDED"), { code: "RATING_REQUIRED" });
+  assert.equal(writes, 0);
 });

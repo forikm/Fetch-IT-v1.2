@@ -27,6 +27,7 @@ function hooks() {
       useState(initial) { const index = stateIndex++; if (!(index in states)) states[index] = initial; return [states[index], value => { states[index] = typeof value === "function" ? value(states[index]) : value; }]; },
       useRef(value) { return refs[refIndex++] ??= { current: value }; },
       useCallback: callback => callback,
+      useId: () => "comment-id",
       useEffect(effect, deps) {
         const index = effectIndex++, old = dependencies[index];
         if (!old || deps.some((value, i) => value !== old[i])) { dependencies[index] = deps; pending.push(effect); }
@@ -74,50 +75,45 @@ test("old completed history, cancellation and bookings without a rider do not pr
 });
 
 const customerRequest = load("src/lib/customer-request.ts");
-function actions(request, options = {}) {
+function ratingForm(request, options = {}) {
   const h = hooks(), requests = [];
   let dismissed = 0;
-  const props = { booking: { ...base, status: "DELIVERED" }, ratingPrompt: true, onRatingPromptClosed: () => dismissed++, ...options };
-  const { BookingActions } = load("src/components/fetchit/shared/booking-actions.tsx", {
-    react: h.react, "@/hooks/use-online-status": { useOnlineStatus: () => true },
-    "@/lib/store": { useAppStore: selector => selector({ offlineAccess: false }) },
+  const props = { bookingId: base.id, onRated: () => dismissed++, ...options };
+  const { BookingRatingForm } = load("src/components/fetchit/shared/booking-rating-form.tsx", {
+    react: h.react,
     "@/lib/customer-request": customerRequest,
     "@/components/ui/button": components, "@/components/ui/label": components, "@/components/ui/textarea": components,
-    "@/components/ui/dialog": components, "./support-center": components, "./customer-payment-card": components,
   }, { ...options.globals, fetch: async (url, init) => { requests.push({ url, init }); return request(url, init); } });
   return {
     props, requests, h,
-    render() { h.reset(); return nodes(BookingActions(props)); },
+    render() { h.reset(); return nodes(BookingRatingForm(props)); },
     dismissed: () => dismissed,
     async start() { this.render(); h.effects(); await flush(); return this.render(); },
   };
 }
 const noReview = () => Response.json({ review: null });
 
-test("completion prompt checks for an existing review and requires an explicit star choice", async () => {
-  const app = actions(noReview);
+test("a required rating checks for an existing review and has no skip action", async () => {
+  const app = ratingForm(noReview);
   const tree = await app.start();
   assert.equal(app.requests.length, 1);
   assert.equal(app.requests[0].init.cache, "no-store");
-  assert.equal(tree.find(node => node.type === "Dialog").props.open, true);
-  assert(!tree.some(node => node.type === "CustomerPaymentCard"));
   assert.equal(tree.find(node => node.props?.children === "Submit rating").props.disabled, true);
   assert.equal(tree.filter(node => node.type === "button" && node.props["aria-pressed"]).length, 0);
-  tree.find(node => node.props?.children === "Not now").props.onClick();
-  assert.equal(app.dismissed(), 1);
+  assert(!tree.some(node => node.props?.children === "Not now"));
+  assert.equal(app.dismissed(), 0);
 });
 
 test("already-rated completed bookings are dismissed without opening a duplicate form", async () => {
-  const app = actions(() => Response.json({ review: { rating: 4, comment: "Saved" } }));
+  const app = ratingForm(() => Response.json({ review: { rating: 4, comment: "Saved" } }));
   const tree = await app.start();
   assert.equal(app.dismissed(), 1);
-  assert.equal(tree.find(node => node.type === "Dialog").props.open, false);
   assert(!tree.some(node => node.type === "form"));
 });
 
 test("the chosen stars and comment are submitted once even on a double click", async () => {
   let finish;
-  const app = actions((_url, init) => init?.method === "POST" ? new Promise(resolve => { finish = resolve; }) : noReview());
+  const app = ratingForm((_url, init) => init?.method === "POST" ? new Promise(resolve => { finish = resolve; }) : noReview());
   let tree = await app.start();
   tree.find(node => node.props?.["aria-label"] === "4 stars").props.onClick();
   tree.find(node => node.type === "Textarea").props.onChange({ target: { value: "Great trip" } });
@@ -134,12 +130,11 @@ test("the chosen stars and comment are submitted once even on a double click", a
   await first;
   tree = app.render();
   assert(!tree.some(node => node.type === "form"));
-  tree.find(node => node.props?.children === "Done").props.onClick();
   assert.equal(app.dismissed(), 1);
 });
 
 test("failed rating submission preserves the selected stars and comment for retry", async () => {
-  const app = actions((_url, init) => init?.method === "POST" ? Response.json({ error: "Unavailable" }, { status: 503 }) : noReview());
+  const app = ratingForm((_url, init) => init?.method === "POST" ? Response.json({ error: "Unavailable" }, { status: 503 }) : noReview());
   let tree = await app.start();
   tree.find(node => node.props?.["aria-label"] === "2 stars").props.onClick();
   tree.find(node => node.type === "Textarea").props.onChange({ target: { value: "Please improve pickup" } });
@@ -152,10 +147,10 @@ test("failed rating submission preserves the selected stars and comment for retr
 });
 
 test("read-only completed bookings do not request or submit ratings", async () => {
-  const app = actions(noReview, { readOnly: true });
+  const app = ratingForm(noReview, { unavailable: true });
   const tree = await app.start();
   assert.equal(app.requests.length, 0);
-  assert.equal(tree.find(node => node.type === "Dialog").props.open, false);
+  assert(!tree.some(node => node.type === "form"));
 });
 
 class CustomerError extends Error { constructor(message, status) { super(message); this.status = status; } }
@@ -200,20 +195,26 @@ test("the review API rejects invalid stars, other owners, unfinished trips and d
   }
 });
 
-test("automatic rating waits until another dialog closes and cleans up its observer", async () => {
-  let dialogOpen = true, changed, disconnected = false;
-  const app = actions(noReview, { globals: {
-    document: { body: {}, querySelector: () => dialogOpen ? {} : null },
-    MutationObserver: class { constructor(callback) { changed = callback; } observe() {} disconnect() { disconnected = true; } },
-  } });
-  const tree = app.render();
-  const cleanups = app.h.effects();
-  await flush();
-  assert.equal(app.requests.length, 0);
-  assert.equal(tree.find(node => node.type === "Dialog").props.open, false);
-  dialogOpen = false; changed(); await flush();
-  assert.equal(app.requests.length, 1);
-  assert.equal(app.render().find(node => node.type === "Dialog").props.open, true);
-  cleanups.forEach(cleanup => cleanup?.());
-  assert.equal(disconnected, true);
+test("the new-booking gate checks saved ratings before showing the booking form and rechecks after each rating", async () => {
+  const h = hooks();
+  const pending = [{ id: "first", refCode: "FIT-1", type: "DELIVERY" }, { id: "second", refCode: "RIDE-2", type: "RIDE" }, null];
+  const rated = [];
+  const { BookingRatingGate } = load("src/components/fetchit/customer/booking-rating-gate.tsx", {
+    react: h.react, "@/components/ui/button": components, "@/lib/customer-request": customerRequest,
+    "../shared/booking-rating-form": components,
+  }, { fetch: async () => Response.json({ booking: pending.shift() }) });
+  const props = { connected: true, revision: 0, onRated: id => rated.push(id), children: { type: "BookingForm" } };
+  const render = () => { h.reset(); return nodes(BookingRatingGate(props)); };
+  assert(!render().some(node => node.type === "BookingForm"));
+  h.effects(); await flush();
+  for (const id of ["first", "second"]) {
+    const tree = render();
+    assert(!tree.some(node => node.type === "BookingForm"));
+    const form = tree.find(node => node.type === "BookingRatingForm");
+    assert.equal(form.props.bookingId, id);
+    form.props.onRated();
+    render(); h.effects(); await flush();
+  }
+  assert.deepEqual(rated, ["first", "second"]);
+  assert(render().some(node => node.type === "BookingForm"));
 });

@@ -54,6 +54,6 @@ export function ModeSelect() {
       </button>) : <p className="rounded-2xl border bg-card p-4 text-base text-muted-foreground">No active bookings. Choose Ride or Delivery to get started.</p>}
     </section>
     <Button type="button" variant="outline" className="w-full justify-start" onClick={() => useAppStore.getState().setView("onboarding")}><Bookmark />Manage saved places</Button>
-    {ratingBooking && <BookingActions key={"home-rating:" + ratingBooking.id} booking={ratingBooking} ratingPrompt onRatingPromptClosed={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
+    {ratingBooking && <BookingActions key={"home-rating:" + ratingBooking.id} booking={ratingBooking} completionReminder onRated={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
   </CustomerAppShell>;
 }
