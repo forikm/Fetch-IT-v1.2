@@ -47,7 +47,7 @@ async function handlePOST(req: NextRequest, { params }: Params) {
       if (changed.count) {
         const locked = await tx.booking.findUniqueOrThrow({ where: { id } });
         await cancelDemoPayment(tx, locked, session);
-        await recordBookingEvent(tx, id, session, { action: "CANCELLED", fromStatus: booking.status, toStatus: "CANCELLED", riderId: booking.riderId, reason: body.reason.trim() });
+        await recordBookingEvent(tx, id, session, { action: "CANCELLED", fromStatus: booking.status, toStatus: "CANCELLED", riderId: locked.riderId, reason: body.reason.trim() });
       }
       return changed;
     }, { maxWait: 10000, timeout: 20000 });
