@@ -127,6 +127,8 @@ export interface Booking {
   createdAt: string;
   updatedAt: string;
   customerPickupConfirmedAt?: string | null;
+  riderDropoffReportedAt?: string | null;
+  rideDropoffIssueReportedAt?: string | null;
   customerDropoffConfirmedAt?: string | null;
   customer: { id: string; name: string; phone: string | null };
   rider: {
@@ -139,7 +141,7 @@ export interface Booking {
     ratingCount?: number;
     totalDeliveries?: number;
   } | null;
-  trackingUpdates?: { lat: number; lng: number; createdAt: string }[];
+  trackingUpdates?: { lat: number; lng: number; createdAt: string; capturedAt?: string | null }[];
   deliveryProofs: {
     id: string;
     proofType: "SIGNATURE" | "OTP" | "PHOTO";
@@ -333,7 +335,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     setTrackingBooking((previous) => {
       const latest = updated.find((booking) => booking.id === previous?.id);
       // The dialog owns fresh GPS/proof data; list status patches must preserve it.
-      return previous && latest ? mergeBookingUpdate(previous, { status: latest.status, etaMinutes: latest.etaMinutes, riderId: latest.riderId, rider: latest.rider, customerPickupConfirmedAt: latest.customerPickupConfirmedAt, customerDropoffConfirmedAt: latest.customerDropoffConfirmedAt, updatedAt: latest.updatedAt }) : previous;
+      return previous && latest ? mergeBookingUpdate(previous, { status: latest.status, etaMinutes: latest.etaMinutes, riderId: latest.riderId, rider: latest.rider, customerPickupConfirmedAt: latest.customerPickupConfirmedAt, customerDropoffConfirmedAt: latest.customerDropoffConfirmedAt, riderDropoffReportedAt: latest.riderDropoffReportedAt, rideDropoffIssueReportedAt: latest.rideDropoffIssueReportedAt, updatedAt: latest.updatedAt }) : previous;
     });
   });
   return (
@@ -538,6 +540,7 @@ function BookingForm({
   const [submitting, setSubmitting] = useState(false);
   const [locationFeedback, setLocationFeedback] = useState<{target: "pickup" | "dropoff"; message: string} | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [matchingRequest, setMatchingRequest] = useState<{ bookingId?: string; checkoutId?: string; repeatOf: string } | null>(null);
 
   const { area, failed: coverageFailed } = useServiceArea();
   const pickupIssue = useMemo(() => pickupLat && pickupLng ? area?.serviceAreaIssue({ lat: Number(pickupLat), lng: Number(pickupLng) }) : null, [area, pickupLat, pickupLng]);
@@ -779,8 +782,9 @@ function BookingForm({
     }
   }
 
-  async function handleConfirmBooking() {
+  async function handleConfirmBooking(repeatOf?: string) {
     setError(null);
+    setMatchingRequest(null);
     if (submissionRunning.current || attemptRequest.current || needsStatusCheck) return;
     if (!navigator.onLine || offlineAccess) { setError("Your draft is saved. Reconnect to get a current fare and confirm it."); return; }
     if (coverageError) { setError(coverageError); return; }
@@ -811,7 +815,7 @@ function BookingForm({
       setPendingSubmission(submission);
       const res = await fetch("/api/bookings", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": submission.key, ...timing.headers },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": submission.key, ...(repeatOf ? { "X-Repeat-Booking": repeatOf } : {}), ...timing.headers },
         body, signal: AbortSignal.timeout(30000),
       });
       timing.response(res);
@@ -821,6 +825,12 @@ function BookingForm({
           if (!pendingSubmission) setPendingSubmission(null);
           timing.finish("failed");
           onRatingRequired();
+          return;
+        }
+        if (conflict?.code === "RECENT_BOOKING" && typeof conflict.existing?.repeatOf === "string") {
+          setPendingSubmission(null);
+          setMatchingRequest(conflict.existing);
+          timing.finish("failed");
           return;
         }
         if (conflict?.code === "BOOKING_ATTEMPT_CONFLICT") {
@@ -1133,6 +1143,15 @@ function BookingForm({
       <div className="shrink-0 space-y-3 border-t bg-background px-4 py-3 sm:px-6">
       {step < 2 && !(step === 0 ? pickupChosen : dropoffChosen) && <p id="booking-next-hint" className="text-sm text-muted-foreground">Select a {step === 0 ? "pickup" : "drop-off"} address to continue.</p>}
       {step === 3 && error && <p role="alert" className="flex items-start gap-2 text-sm text-destructive"><AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />{error}</p>}
+      {step === 3 && matchingRequest && <section className="space-y-2 rounded-lg border p-3" aria-label="Existing booking">
+        <p role="status" className="text-sm">A matching request was already submitted from your account.</p>
+        <div className="flex flex-wrap gap-2">
+          {matchingRequest.bookingId
+            ? <Button asChild variant="outline"><a href={`/?booking=${encodeURIComponent(matchingRequest.bookingId)}&type=${bookingType}`}>View existing booking</a></Button>
+            : matchingRequest.checkoutId && <Button asChild variant="outline"><a href={`/checkout/${encodeURIComponent(matchingRequest.checkoutId)}`}>Resume existing checkout</a></Button>}
+          <Button type="button" disabled={!connected || submitting || estimating} onClick={() => void handleConfirmBooking(matchingRequest.repeatOf)}>Book another</Button>
+        </div>
+      </section>}
       {step === 3 && !connected && <p id="booking-reconnect-hint" role="status" className="text-sm text-muted-foreground">{needsStatusCheck ? "Connect to check your booking. Your draft is saved." : "Connect to get a fare. Your draft is saved."}</p>}
       {step === 3 && connected && !submitting && attemptCheck && attemptStatus === "missing" && <p role="status" className="text-sm text-muted-foreground">No booking found yet. Confirm again to retry the same request.</p>}
       {step === 3 && connected && attemptStatus === "checking" && <p role="status" className="text-sm text-muted-foreground">Checking whether your booking went through…</p>}
@@ -1162,7 +1181,7 @@ function BookingForm({
             {attemptStatus === "checking" ? <><FetchItLoader className="h-4 w-4" /> Checking status…</> : "Check booking status"}
           </Button>
         ) : (
-          <Button type="button" className="min-h-14 min-w-0 px-3 text-base" onClick={handleConfirmBooking} disabled={!connected || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()} aria-describedby={connected ? undefined : "booking-reconnect-hint"}>
+          <Button type="button" className="min-h-14 min-w-0 px-3 text-base" onClick={() => void handleConfirmBooking()} disabled={!!matchingRequest || !connected || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()} aria-describedby={connected ? undefined : "booking-reconnect-hint"}>
             {submitting ? <FetchItLoader className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             {submitting ? "Submitting…" : paymentMethod === "CASH" ? "Confirm booking" : "Continue to payment"}
           </Button>
@@ -1236,7 +1255,7 @@ function TrackingView({
   const status = booking.status;
   const [riderLat, setRiderLat] = useState<number | null>(booking.trackingUpdates?.[0]?.lat ?? null);
   const [riderLng, setRiderLng] = useState<number | null>(booking.trackingUpdates?.[0]?.lng ?? null);
-  const [lastGpsAt, setLastGpsAt] = useState<string | null>(booking.trackingUpdates?.[0]?.createdAt ?? null);
+  const [lastGpsAt, setLastGpsAt] = useState<string | null>(booking.trackingUpdates?.[0]?.capturedAt ?? null);
   const [eta, setEta] = useState<number | null>(booking.etaMinutes);
 
   const pickup = { lat: booking.pickupLat, lng: booking.pickupLng };
@@ -1275,7 +1294,7 @@ function TrackingView({
     if (updated.etaMinutes !== undefined) setEta(updated.etaMinutes);
     setRiderLat(updated.trackingUpdates?.[0]?.lat ?? null);
     setRiderLng(updated.trackingUpdates?.[0]?.lng ?? null);
-    setLastGpsAt(updated.trackingUpdates?.[0]?.createdAt ?? null);
+    setLastGpsAt(updated.trackingUpdates?.[0]?.capturedAt ?? null);
     onUpdated(updated);
   });
 
@@ -1302,9 +1321,9 @@ function TrackingView({
         />
       </div>
       {!terminal && eta != null && <p className="text-sm text-muted-foreground">Est. delivery duration: about {eta} min</p>}
-      {!terminal && lastGpsAt && (
+      {!terminal && riderLat != null && riderLng != null && (
         <p className="text-xs text-muted-foreground">
-          {locationUpdateLabel(lastGpsAt)}
+          {lastGpsAt ? locationUpdateLabel(lastGpsAt) : 'Location reported. Device capture time unavailable.'}
         </p>
       )}
 

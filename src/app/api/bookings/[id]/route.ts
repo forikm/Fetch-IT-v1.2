@@ -27,7 +27,7 @@ async function get(_req: NextRequest, { params }: Params) {
     include: {
       customer: { select: { id: true, name: true, phone: true, email: true } },
       rider: { select: riderSelect },
-      liveLocation: { select: { lat: true, lng: true, createdAt: true } },
+      liveLocation: { select: { lat: true, lng: true, createdAt: true, capturedAt: true } },
       deliveryProofs: { orderBy: { createdAt: "desc" } },
     },
   }));

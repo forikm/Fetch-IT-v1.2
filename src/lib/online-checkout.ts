@@ -11,6 +11,7 @@ import { generateRefCode } from "./fare";
 import { isDemoPayment } from "./payment-policy";
 import { bookingServiceAreaError } from "./service-area";
 import { requireCompletedBookingRatings } from "./booking-rating";
+import { checkRecentBooking, lockBookingSubmissions, RecentBookingError } from "./recent-booking";
 
 type Actor = { uid: string; name: string; role: string };
 type BookingInput = Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">;
@@ -23,12 +24,23 @@ function fingerprint(body: unknown): string {
   return createHash("sha256").update(JSON.stringify(canonical(stable))).digest("hex");
 }
 
-export async function prepareOnlineCheckout(db: PrismaClient, data: BookingInput, body: unknown) {
+export async function prepareOnlineCheckout(db: PrismaClient, data: BookingInput, body: unknown, repeatOf?: string) {
   const id = data.id ?? `checkout_${randomUUID()}`;
   const requestHash = fingerprint(body);
   return db.$transaction(async tx => {
-    // The unique insert waits for a concurrent request before taking the lock.
-    // An empty Prisma upsert can otherwise race through find-then-create.
+    await lockBookingSubmissions(tx, data.customerId);
+    const ownDraft = await tx.checkoutDraft.findUnique({ where: { id } });
+    if (!ownDraft) {
+      await checkRecentBooking(tx, data, repeatOf);
+      const recent = await tx.checkoutDraft.findFirst({
+        where: { customerId: data.customerId, requestHash, bookingId: null, expiresAt: { gt: new Date() }, checkouts: { some: { status: "PENDING" } } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { id: true, checkouts: { where: { status: "PENDING" }, take: 1, select: { id: true } } },
+      });
+      if (recent && recent.id !== repeatOf && recent.checkouts[0]) {
+        throw new RecentBookingError({ repeatOf: recent.id, checkoutId: recent.checkouts[0].id });
+      }
+    }
     const expiresAt = new Date(Date.now() + 20 * 60_000);
     await tx.$executeRaw`INSERT INTO "CheckoutDraft" ("id", "customerId", "requestHash", "bookingData", "expiresAt")
       VALUES (${id}, ${data.customerId}, ${requestHash}, ${JSON.stringify(data)}::jsonb, ${expiresAt})
@@ -88,7 +100,7 @@ export async function resolveOnlineCheckout(db: PrismaClient, checkoutId: string
     await tx.checkoutDraft.update({ where: { id: draft.id }, data: { bookingId: booking.id } });
     return booking;
   }, { maxWait: 10000, timeout: 20000 }).then(booking => {
-    if (booking?.paymentStatus === "PAID") { scheduleReceiptDelivery(db); schedulePushDelivery(); }
+    if (booking?.paymentStatus === "PAID") { scheduleReceiptDelivery(db); schedulePushDelivery(booking.id); }
     return booking;
   });
 }

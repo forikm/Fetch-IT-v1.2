@@ -28,6 +28,7 @@ import { omitTicket } from "@/lib/ticket";
 import { bookingAttemptId, findBookingAttempt, createBookingWithRetry } from "@/lib/booking-create";
 import { PAYMENT_METHOD_LABEL, isDemoPayment, type PaymentMethod } from "@/lib/payment-policy";
 import { prepareOnlineCheckout } from "@/lib/online-checkout";
+import { RecentBookingError } from "@/lib/recent-booking";
 import { parsePickupSchedule } from "@/lib/pickup-schedule";
 import { platformSettings } from "@/lib/platform-settings";
 import { bookingServiceAreaError } from "@/lib/service-area";
@@ -73,7 +74,7 @@ async function handleGET(req: NextRequest) {
       include: { dispatch: { select: dispatchSelect },
         customer: { select: { id: true, name: true, phone: true } },
         rider: { select: riderSelect },
-        liveLocation: { select: { lat: true, lng: true, createdAt: true } },
+        liveLocation: { select: { lat: true, lng: true, createdAt: true, capturedAt: true } },
         deliveryProofs: true,
       },
       take: pageSize + 1,
@@ -108,6 +109,7 @@ async function handlePOST(req: NextRequest) {
     const paymentMethod = body.paymentMethod ?? "CASH";
     if (typeof paymentMethod !== "string" || !Object.hasOwn(PAYMENT_METHOD_LABEL, paymentMethod)) throw new CustomerError("Choose a valid payment method.", 400);
     const attemptId = bookingAttemptId(session.uid, req.headers.get("Idempotency-Key"));
+    const repeatOf = req.headers.get("X-Repeat-Booking") ?? undefined;
     const [{ settings }, previous] = await Promise.all([
       timeBooking("db.settings", platformSettings),
       timeBooking("db.idempotency", () => findBookingAttempt(db, attemptId, body)),
@@ -116,7 +118,7 @@ async function handlePOST(req: NextRequest) {
     if (previous) { schedulePushDelivery(previous.id); return NextResponse.json({ booking: omitTicket(bookingView(previous)) }); }
     async function submit(type: "RIDE" | "DELIVERY", data: Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">) {
       if (isDemoPayment(paymentMethod)) {
-        const checkout = await timeBooking("db.checkout_prepare", () => prepareOnlineCheckout(db, data, body));
+        const checkout = await timeBooking("db.checkout_prepare", () => prepareOnlineCheckout(db, data, body, repeatOf));
         if (checkout.bookingId) {
           const booking = await findBookingAttempt(db, checkout.bookingId, body);
           if (!booking) throw new CustomerError("Booking unavailable.", 409);
@@ -124,7 +126,7 @@ async function handlePOST(req: NextRequest) {
         }
         return NextResponse.json(checkout);
       }
-      const booking = await createBookingWithRetry(db, type, data, body, settings);
+      const booking = await createBookingWithRetry(db, type, data, body, settings, repeatOf);
       schedulePushDelivery(booking.id);
       return NextResponse.json({ booking: omitTicket(bookingView(booking)) });
     }
@@ -285,6 +287,7 @@ async function handlePOST(req: NextRequest) {
       etaMinutes: eta,
     });
   } catch (err) {
+    if (err instanceof RecentBookingError) return NextResponse.json({ error: err.message, code: err.code, existing: err.existing }, { status: err.status });
     if (err instanceof RoutingError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
     if (err instanceof RateLimitError) throw err;
     if (err instanceof CustomerError) return customerErrorResponse(err);

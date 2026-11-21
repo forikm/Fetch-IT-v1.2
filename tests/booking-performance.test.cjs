@@ -42,6 +42,7 @@ function routeFixture(session = { uid: 'customer', role: 'CUSTOMER', name: 'Cust
     },
     '@/lib/payment-policy': { PAYMENT_METHOD_LABEL: { CASH: 'Cash' }, isDemoPayment: () => false },
     '@/lib/online-checkout': {}, '@/lib/pickup-schedule': { parsePickupSchedule: () => null },
+    '@/lib/recent-booking': load('src/lib/recent-booking.ts', { './customer-access': { CustomerError } }),
     '@/lib/platform-settings': { platformSettings: () => { calls.push('settings'); return config; } },
     '@/lib/service-area': { bookingServiceAreaError: () => null }, '@/lib/push-delivery': { schedulePushDelivery: () => {} },
   });
@@ -104,8 +105,10 @@ function createFixture({ loseResponse = false, failOutbox = false, pendingRating
   let committed = null, staged = null;
   const calls = [];
   const tx = {
+    $queryRaw: async () => [{ id: 'customer' }],
     booking: { findFirst: async ({ where }) => {
       assert.equal(where.customerId, 'customer');
+      if (where.createdAt) return null;
       assert.equal(where.status, 'DELIVERED');
       assert.equal(where.review.is, null);
       return pendingRating ? { id: 'previous-booking' } : null;
@@ -132,6 +135,7 @@ function createFixture({ loseResponse = false, failOutbox = false, pendingRating
     'node:crypto': crypto, './ticket': { generateTicketId: async () => { calls.push('ticket'); return 'D0001'; } },
     './fare': { generateRefCode: () => 'FIT-TEST' }, './db-data': { riderSelect: {} },
     './customer-access': { CustomerError }, './pickup-schedule': { parsePickupSchedule: value => value ? new Date(value) : null },
+    './recent-booking': load('src/lib/recent-booking.ts', { './customer-access': { CustomerError } }),
     './booking-rating': load('src/lib/booking-rating.ts', { './customer-access': { CustomerError } }),
   });
   async function create(enabled, scheduledAt = null, type = 'DELIVERY') {

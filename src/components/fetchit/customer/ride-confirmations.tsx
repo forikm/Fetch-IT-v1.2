@@ -18,6 +18,7 @@ export function CustomerRideConfirmations({ ride, disabled = false, onUpdated }:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [issue, setIssue] = useState<string | null>(null);
   const pending = useRef(false);
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => { request.current?.abort(); }, []);
@@ -64,6 +65,33 @@ export function CustomerRideConfirmations({ ride, disabled = false, onUpdated }:
     }
   }
 
+  async function reportDropoffIssue(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending.current || disabled || issue == null || !navigator.onLine) return;
+    const controller = new AbortController();
+    request.current = controller;
+    pending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/bookings/${encodeURIComponent(ride.id)}/dropoff-issue`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: issue }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
+      });
+      const data = await customerResponse<{ booking: Partial<Booking> }>(response, "Couldn’t send your report. Try again.");
+      if (!controller.signal.aborted) {
+        onUpdated(data.booking);
+        setIssue(null);
+      }
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "Couldn’t send your report. Try again.");
+    } finally {
+      pending.current = false;
+      request.current = null;
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  }
+
   async function refresh() {
     if (pending.current || disabled || !navigator.onLine) return;
     pending.current = true; setBusy(true);
@@ -85,10 +113,12 @@ export function CustomerRideConfirmations({ ride, disabled = false, onUpdated }:
   const arrived = !!ride.customerDropoffConfirmedAt;
   const action: RideConfirmationAction | null = !pickupConfirmed ? "PICKUP" : ride.status === "IN_TRANSIT" && !arrived ? "DROPOFF" : null;
   const stageValid = confirming === "PICKUP" ? !pickupConfirmed : confirming === "DROPOFF" && pickupConfirmed && ride.status === "IN_TRANSIT" && !arrived;
-  const title = !pickupConfirmed ? "Are you on board?" : arrived ? "Arrival confirmed" : ride.status === "PICKED_UP" ? "Pickup confirmed" : "At your drop-off?";
+  const dropoffReported = !!ride.riderDropoffReportedAt;
+  const title = !pickupConfirmed ? "Are you on board?" : arrived ? "Arrival confirmed" : ride.status === "PICKED_UP" ? "Pickup confirmed" : dropoffReported ? "Your driver reported drop-off" : "At your drop-off?";
   const message = !pickupConfirmed ? "Your pickup code was verified. Confirm only after you’re inside the correct vehicle."
     : arrived ? "Your driver can complete the ride after payment is confirmed."
     : ride.status === "PICKED_UP" ? "Your driver can now start the trip."
+    : dropoffReported ? "Confirm if you’ve arrived, or send an issue to support. You can respond even after your driver becomes available again."
     : "Confirm only when you’ve reached your booked drop-off and can safely get out.";
 
   return <section aria-label="Your ride confirmations" className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
@@ -97,6 +127,19 @@ export function CustomerRideConfirmations({ ride, disabled = false, onUpdated }:
     {action && <Button type="button" className="min-h-12 w-full" disabled={disabled || busy} onClick={() => { setConfirming(action); setError(""); setNotice(""); }}>
       {action === "PICKUP" ? "I’m on board" : "I’ve arrived at drop-off"}
     </Button>}
+    {dropoffReported && (ride.rideDropoffIssueReportedAt
+      ? <p role="status" className="text-sm">Drop-off issue sent. <a className="underline" href="/help">View support requests</a></p>
+      : issue === null
+        ? <Button type="button" variant="outline" disabled={disabled || busy} onClick={() => setIssue("")}>Report a drop-off issue</Button>
+        : <form className="space-y-2" onSubmit={reportDropoffIssue}>
+            <label htmlFor={`dropoff-issue-${ride.id}`} className="text-sm font-medium">What happened at drop-off?</label>
+            <textarea id={`dropoff-issue-${ride.id}`} className="w-full rounded-md border bg-background p-2" rows={3}
+              required minLength={10} maxLength={1800} value={issue} onChange={event => setIssue(event.target.value)} disabled={busy} />
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setIssue(null)}>Cancel</Button>
+              <Button type="submit" disabled={disabled || busy || issue.trim().length < 10}>{busy ? "Sending…" : "Send to support"}</Button>
+            </div>
+          </form>)}
     {disabled && action && <p role="status" className="text-sm text-muted-foreground">Reconnect and wait for current ride details before confirming.</p>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
     {error && <div role="alert" className="space-y-2 text-sm text-destructive"><p>{error}</p><Button type="button" variant="outline" className="min-h-12" disabled={disabled || busy} onClick={refresh}>Refresh ride</Button></div>}

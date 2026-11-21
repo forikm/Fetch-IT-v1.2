@@ -31,6 +31,7 @@ function fixture(fetch, pending = null) {
     emptyDraft: { empty: true }, fetch, customerResponse, created: [], error: null, cleared: false,
   };
   context.setError = value => { context.error = value; };
+  context.setMatchingRequest = value => { context.matchingRequest = value; };
   context.setSubmitting = value => { context.submitting = value; };
   context.setAttemptCheck = value => { context.attemptCheck = value; };
   context.setPendingSubmission = value => { context.pendingSubmission = value; };
@@ -41,6 +42,23 @@ function fixture(fetch, pending = null) {
   return context;
 }
 const success = () => Response.json({ booking: { id: "confirmed" } });
+
+test("an existing request requires an explicit second booking action", async () => {
+  const headers = [];
+  const app = fixture(async (_url, options) => {
+    headers.push(options.headers);
+    return headers.length === 1
+      ? Response.json({ code: "RECENT_BOOKING", existing: { bookingId: "first", repeatOf: "first" } }, { status: 409 })
+      : success();
+  });
+  await app.handleConfirmBooking();
+  assert.equal(app.matchingRequest.bookingId, "first");
+  assert.equal(app.pendingSubmission, null);
+  assert.equal(headers[0]["X-Repeat-Booking"], undefined);
+  await app.handleConfirmBooking(app.matchingRequest.repeatOf);
+  assert.equal(headers[1]["X-Repeat-Booking"], "first");
+  assert.equal(app.created[0].id, "confirmed");
+});
 
 test("booking confirmation sends Philippine pickup time as an explicit UTC instant", async () => {
   let body;

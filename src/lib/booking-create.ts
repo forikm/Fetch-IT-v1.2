@@ -10,6 +10,7 @@ import { parsePickupSchedule } from "./pickup-schedule";
 import type { PlatformSettings } from "./platform-policy";
 import { timeBooking } from "./booking-telemetry";
 import { requireCompletedBookingRatings } from "./booking-rating";
+import { checkRecentBooking, lockBookingSubmissions } from "./recent-booking";
 
 export const bookingAttemptInclude = { dispatch: { select: dispatchSelect }, customer: { select: { id: true, name: true, phone: true } }, rider: { select: riderSelect } } as const;
 
@@ -49,11 +50,13 @@ export async function findBookingAttempt(db: PrismaClient, id: string | undefine
 
 export async function createBookingWithRetry(
   db: PrismaClient, type: TicketType, data: Omit<Prisma.BookingUncheckedCreateInput, "refCode" | "ticketId">, body: RequestDetails,
-  settings: Pick<PlatformSettings, "automatchingEnabled">,
+  settings: Pick<PlatformSettings, "automatchingEnabled">, repeatOf?: string,
 ) {
   for (let attempt = 0; ; attempt++) {
     try {
       const booking = await timeBooking("db.transaction", () => db.$transaction(async tx => {
+        await lockBookingSubmissions(tx, data.customerId);
+        await checkRecentBooking(tx, data, repeatOf);
         await requireCompletedBookingRatings(tx, data.customerId);
         const ticketId = await timeBooking("db.ticket_counter", () => generateTicketId(tx, type));
         // Do not load related users while holding the shared counter row lock.

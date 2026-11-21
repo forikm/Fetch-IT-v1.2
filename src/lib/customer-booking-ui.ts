@@ -8,7 +8,8 @@ const stageIndex: Record<BookingStatus, number> = {
 /** Customer presentation only: matching and transit remain distinct backend states. */
 export function customerProgress(status: BookingStatus, type: BookingType, scheduled = false, confirmations: RideConfirmations = {}) {
   const ride = type === "RIDE";
-  const tripStage = ride ? status === "PICKED_UP" ? confirmations.customerPickupConfirmedAt ? "On board" : "Pickup verified" : "Trip" : "Picked up";
+  const dropoffPending = ride && status === "IN_TRANSIT" && !!confirmations.riderDropoffReportedAt && !confirmations.customerDropoffConfirmedAt;
+  const tripStage = ride ? dropoffPending ? "Drop-off reported" : status === "PICKED_UP" ? confirmations.customerPickupConfirmedAt ? "On board" : "Pickup verified" : "Trip" : "Picked up";
   const stages = ["Booked", "Accepted", tripStage, ride ? "Arrived" : "Delivered"];
   const current = stageIndex[status];
   const messages: Record<BookingStatus, string> = {
@@ -18,7 +19,7 @@ export function customerProgress(status: BookingStatus, type: BookingType, sched
     MATCHED: `A ${ride ? "driver" : "rider"} has been assigned. Waiting for acceptance.`,
     ACCEPTED: ride ? "Your driver accepted your booking. Check their location below." : "Your rider accepted your booking. Check their location below.",
     PICKED_UP: ride ? confirmations.customerPickupConfirmedAt ? "You confirmed pickup. Your driver can now start the trip." : "Your pickup code is verified. Confirm you’re on board before your driver starts the trip." : "Your package has been picked up.",
-    IN_TRANSIT: ride ? confirmations.customerDropoffConfirmedAt ? "You confirmed arrival. Waiting for your driver to complete the ride." : "You’re on the way to your drop-off." : "Your package is on the way to drop-off.",
+    IN_TRANSIT: ride ? confirmations.customerDropoffConfirmedAt ? "You confirmed arrival. Waiting for your driver to complete the ride." : dropoffPending ? "Confirm your arrival or report a drop-off issue." : "You’re on the way to your drop-off." : "Your package is on the way to drop-off.",
     DELIVERED: ride ? "You’ve arrived at your drop-off." : "Your package has been delivered.",
     CANCELLED: `Your ${ride ? "ride" : "delivery"} was cancelled.`,
   };

@@ -25,7 +25,8 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
   const status = ride.status;
   const location = ride.trackingUpdates?.[0];
   const active = ["ACCEPTED", "PICKED_UP", "IN_TRANSIT"].includes(status);
-  const { location: customerLocation, message: locationMessage, canRetry: canRetryLocation, retry: retryLocation } = useRideLocation(active);
+  const sharingLocation = active && !ride.riderDropoffReportedAt;
+  const { location: customerLocation, message: locationMessage, canRetry: canRetryLocation, retry: retryLocation } = useRideLocation(sharingLocation);
   useTrackingUpdates<Booking>(ride.id, onUpdated);
   return <div className="space-y-4">
     <DialogHeader className="min-h-12 justify-center"><DialogTitle className="flex items-center gap-2"><Navigation className="h-5 w-5 text-primary" />Your ride · {ride.refCode}</DialogTitle><DialogDescription className="sr-only">Your driver, trip map and safety options.</DialogDescription></DialogHeader>
@@ -37,10 +38,10 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
     </section>}
     <CustomerRideConfirmations key={`confirm:${ride.id}`} ride={ride} disabled={readOnly || updatesPaused} onUpdated={onUpdated} />
     <section aria-label="Trip map" className="space-y-2">
-      <div className="relative h-64 overflow-hidden rounded-2xl border sm:h-80"><LiveTrackingMap showLiveStatus={active} vehicleClass={ride.vehicleClass} key={ride.id} pickup={{lat:ride.pickupLat,lng:ride.pickupLng}} dropoff={{lat:ride.dropoffLat,lng:ride.dropoffLng}} rider={active && location ? {lat:location.lat,lng:location.lng} : null} customer={customerLocation} className="absolute inset-0 h-full w-full border-0 rounded-none" /></div>
-      <p className="text-xs text-muted-foreground">A: Pickup · B: Drop-off{active ? " · Orange arrow: Driver" : ""}{customerLocation ? " · Blue dot: You" : ""}</p>
-      {active && location?.createdAt && <p role="status" className="text-sm text-muted-foreground">{locationUpdateLabel(location.createdAt, Date.now(), "RIDE")}</p>}
-      {active && (readOnly || updatesPaused) && <p role="status" className="text-sm font-medium text-amber-800 dark:text-amber-200">Live updates paused. Locations may be out of date.</p>}
+      <div className="relative h-64 overflow-hidden rounded-2xl border sm:h-80"><LiveTrackingMap showLiveStatus={sharingLocation} vehicleClass={ride.vehicleClass} key={ride.id} pickup={{lat:ride.pickupLat,lng:ride.pickupLng}} dropoff={{lat:ride.dropoffLat,lng:ride.dropoffLng}} rider={sharingLocation && location ? {lat:location.lat,lng:location.lng} : null} customer={customerLocation} className="absolute inset-0 h-full w-full border-0 rounded-none" /></div>
+      <p className="text-xs text-muted-foreground">A: Pickup · B: Drop-off{sharingLocation ? " · Orange arrow: Driver" : ""}{customerLocation ? " · Blue dot: You" : ""}</p>
+      {sharingLocation && location && <p role="status" className="text-sm text-muted-foreground">{location.capturedAt ? locationUpdateLabel(location.capturedAt, Date.now(), "RIDE") : 'Location reported. Device capture time unavailable.'}</p>}
+      {sharingLocation && (readOnly || updatesPaused) && <p role="status" className="text-sm font-medium text-amber-800 dark:text-amber-200">Live updates paused. Locations may be out of date.</p>}
       {locationMessage && <p role="status" className="text-sm text-muted-foreground">{locationMessage}</p>}
       {canRetryLocation && <Button type="button" variant="outline" className="min-h-12" onClick={retryLocation}>Retry my location</Button>}
     </section>

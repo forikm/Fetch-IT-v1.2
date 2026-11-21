@@ -48,10 +48,10 @@ async function get(req: NextRequest) {
       select: { dispatch: { select: dispatchSelect },
         id: true, refCode: true, type: true, status: true, updatedAt: true,
         createdAt: true, cancellationReason: true, scheduledAt: true, dropoffLabel: true, etaMinutes: true, riderId: true,
-        customerPickupConfirmedAt: true, customerDropoffConfirmedAt: true,
+        customerPickupConfirmedAt: true, customerDropoffConfirmedAt: true, riderDropoffReportedAt: true, rideDropoffIssueReportedAt: true,
         rider: { select: riderSelect },
         // Coordinates are needed only while the tracking dialog is open.
-        ...(onlyTracked ? { liveLocation: { select: { lat: true, lng: true, createdAt: true } } } : {}),
+        ...(onlyTracked ? { liveLocation: { select: { lat: true, lng: true, createdAt: true, capturedAt: true } } } : {}),
       },
     }));
     return privateResult({ bookings: bookings.map(bookingView) });

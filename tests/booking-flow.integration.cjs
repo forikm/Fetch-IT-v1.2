@@ -129,7 +129,7 @@ async function main() {
     assert.equal(await db.booking.count({ where: { customerId: { in: customers.map(u => u.id) } } }), 6);
     // A response lost after commit must not create another booking or event.
     for (const type of ['DELIVERY', 'RIDE']) {
-      const keyedPayload = { ...payload, type, ...(type === 'RIDE' ? { passengers: 1 } : {}) };
+      const keyedPayload = { ...payload, type, ...(type === 'RIDE' ? { passengers: 1 } : { cargoNotes: 'Retry recovery fixture' }) };
       const headers = { 'Idempotency-Key': crypto.randomUUID() };
       const before = await db.booking.count();
       const responses = await Promise.all(Array.from({ length: 6 }, () => request('/api/bookings', token, 200, 'POST', keyedPayload, headers)));
@@ -145,8 +145,15 @@ async function main() {
       assert(!('ticketId' in responses[0].booking));
     }
     await request('/api/bookings', token, 400, 'POST', payload, { 'Idempotency-Key': 'invalid' });
-    const ten = await Promise.all(Array.from({ length: 10 }, (_, i) => request('/api/bookings', cookie(customers[i % 6]), 200, 'POST', payload, { 'Idempotency-Key': crypto.randomUUID() })));
+    const ten = await Promise.all(Array.from({ length: 10 }, (_, i) => request('/api/bookings', cookie(customers[i % 6]), 200, 'POST', { ...payload, cargoNotes: 'Parallel delivery ' + i }, { 'Idempotency-Key': crypto.randomUUID() })));
     assert.equal(new Set(ten.map(r => r.booking.id)).size, 10);
+    const repeatedPayload = { ...payload, cargoNotes: 'Parallel delivery 0' };
+    const duplicate = await request('/api/bookings', cookie(customers[0]), 409, 'POST', repeatedPayload, { 'Idempotency-Key': crypto.randomUUID() });
+    assert.equal(duplicate.code, 'RECENT_BOOKING');
+    assert.equal(duplicate.existing.bookingId, ten[0].booking.id);
+    const intentionalRepeat = await request('/api/bookings', cookie(customers[0]), 200, 'POST', repeatedPayload,
+      { 'Idempotency-Key': crypto.randomUUID(), 'X-Repeat-Booking': duplicate.existing.repeatOf });
+    assert.notEqual(intentionalRepeat.booking.id, ten[0].booking.id);
     console.log('PASS: queued simultaneous bookings, ten parallel submissions, retry recovery, same-key races for ride/delivery, customer isolation, and one creation event per booking.');
     console.log("PASS: ride/delivery booking creation and quotes for all three vehicles, passenger/cargo validation, retired vehicle rejection, separate service lists, and historical booking compatibility.");
     if (process.env.BOOKING_PREVIEW === "1") {
