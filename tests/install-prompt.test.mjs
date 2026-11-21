@@ -10,7 +10,8 @@ for (const app of ["fetch-customer", "fetch-rider"]) {
     displayMode.matches = false;
     window.matchMedia = () => displayMode;
     const subscriptions = [];
-    const compiled = ts.transpileModule(readFileSync(new URL(`../../${app}/src/components/fetchit/shared/install-pwa-button.tsx`, import.meta.url), "utf8"), {
+    const appSource = app === "fetch-customer" ? "../src" : "../../fetch-rider/src";
+    const compiled = ts.transpileModule(readFileSync(new URL(`${appSource}/components/fetchit/shared/install-pwa-button.tsx`, import.meta.url), "utf8"), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
     }).outputText;
     const exports = {};
@@ -39,4 +40,15 @@ for (const app of ["fetch-customer", "fetch-rider"]) {
     assert.equal(h.hook().canInstall, false);
     h.subscriptions.forEach(control => control.cleanup());
   });
+  if (app === "fetch-customer") {
+    test("fetch-customer: iPad gets manual install instructions until running as an installed app", () => {
+      const h = harness();
+      h.window.navigator = { userAgent: "Mozilla/5.0 (Macintosh)", platform: "MacIntel", maxTouchPoints: 5, standalone: false };
+      assert.equal(h.hook().showIOSInstructions, true);
+      h.window.navigator.standalone = true;
+      assert.equal(h.hook().showIOSInstructions, false);
+      assert.equal(h.hook().canInstall, false);
+      h.subscriptions.forEach(control => control.cleanup());
+    });
+  }
 }

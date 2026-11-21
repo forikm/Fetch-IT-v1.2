@@ -68,6 +68,38 @@ test('unauthenticated and non-customer sessions cannot start booking work', asyn
   }
 });
 
+test('an attempt status lookup scopes read-only recovery to the signed-in customer', async () => {
+  const key = crypto.randomUUID();
+  const reads = [];
+  let booking = { id: 'attempt', ticketId: 'rider-only' };
+  let draft = null;
+  const route = load('src/app/api/bookings/status/route.ts', {
+    'next/server': { NextResponse: Response }, '@/lib/matching-policy': {}, '@/lib/db-data': { bookingView: value => value },
+    '@/lib/customer-access': { requireCustomer: () => ({ uid: 'customer' }), customerErrorResponse: error => { throw error; } },
+    '@/lib/db': { db: {
+      booking: { findUnique: ({ where }) => { reads.push(where); return booking; } },
+      checkoutDraft: { findUnique: ({ where }) => { reads.push(where); return draft; } },
+    } },
+    '@/lib/booking-status-query': {},
+    '@/lib/dispatch': { expireRiderOffers() { throw Error('Recovery must not mutate bookings'); } },
+    '@/lib/booking-create': { bookingAttemptId: (customer, value) => {
+      assert.equal(customer, 'customer'); assert.equal(value, key); return 'attempt';
+    } },
+    '@/lib/ticket': { omitTicket: ({ ticketId, ...rest }) => rest },
+  });
+  const request = new Request('https://fixture.invalid/api/bookings/status', { headers: { 'Idempotency-Key': key } });
+  const found = await route.GET(request);
+  assert.deepEqual(await found.json(), { booking: { id: 'attempt' } });
+  assert.equal(found.headers.get('Cache-Control'), 'private, no-store');
+  booking = null;
+  draft = { expiresAt: new Date(Date.now() + 60000), checkouts: [{ id: 'checkout1' }] };
+  assert.deepEqual(await (await route.GET(request)).json(), { checkoutUrl: '/checkout/checkout1' });
+  draft = null;
+  assert.deepEqual(await (await route.GET(request)).json(), { pending: true });
+  assert.equal(reads.length, 5);
+  for (const where of reads) assert.deepEqual({ ...where }, { id: 'attempt', customerId: 'customer' });
+});
+
 function createFixture({ loseResponse = false, failOutbox = false, pendingRating = false } = {}) {
   let committed = null, staged = null;
   const calls = [];

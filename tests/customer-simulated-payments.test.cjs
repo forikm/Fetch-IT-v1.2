@@ -18,7 +18,7 @@ test("production ride and delivery forms offer every simulated method and retain
  for(const bookingType of ["RIDE","DELIVERY"])for(const method of ["DEMO_GCASH","DEMO_MAYA","DEMO_BANK"]){
   let selected=method;
   const {BookingForm}=load("src/components/fetchit/customer/customer-dashboard.tsx",{
-   react:{useState:initial=>[initial===0?3:initial,()=>{}],useRef:value=>({current:value}),useEffect(){},useMemo:fn=>fn()},
+   react:{useState:initial=>{const value=typeof initial==="function"?initial():initial;return [value===0?3:value,()=>{}];},useRef:value=>({current:value}),useEffect(){},useMemo:fn=>fn()},
    "@/lib/constants":constants,
    "@/lib/store":{useAppStore:selector=>selector({user:{id:"customer"},offlineAccess:false})},
    "@/hooks/use-toast":{useToast:()=>({toast(){}})},

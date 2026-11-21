@@ -35,7 +35,7 @@ export async function prepareOnlineCheckout(db: PrismaClient, data: BookingInput
       ON CONFLICT ("id") DO NOTHING`;
     await tx.$queryRaw`SELECT "id" FROM "CheckoutDraft" WHERE "id" = ${id} FOR UPDATE`;
     const draft = await tx.checkoutDraft.findUniqueOrThrow({ where: { id } });
-    if (draft.customerId !== data.customerId || draft.requestHash !== requestHash) throw new CustomerError("This checkout request was already used for different details. Start a new request.", 409);
+    if (draft.customerId !== data.customerId || draft.requestHash !== requestHash) throw new CustomerError("This checkout request was already used for different details. Check its status before starting another booking.", 409, "BOOKING_ATTEMPT_CONFLICT");
     if (draft.bookingId) return { bookingId: draft.bookingId };
     await requireCompletedBookingRatings(tx, data.customerId);
     const previousFare = (draft.bookingData as { totalFare?: unknown }).totalFare;

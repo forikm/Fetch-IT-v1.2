@@ -68,7 +68,7 @@ export function NewSupportRequest({ booking, onCreated }: { booking?: SupportBoo
     } catch (e) { setError((e as Error).message); requestAnimationFrame(() => errorRef.current?.focus()); }
     finally { setBusy(false); }
   }}>
-    <div><h2 className="text-lg font-semibold">Get help from Fetch-It</h2><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Choose an issue, add the details, and send your request. You can read and reply to our response here.</p></div>
+    <div><h2 className="text-lg font-semibold">New support request</h2><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Choose an issue. Replies will appear in your requests.</p></div>
 
     <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-3 text-sm font-semibold">1. What’s the issue?</legend>

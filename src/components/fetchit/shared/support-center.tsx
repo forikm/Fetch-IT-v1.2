@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { MessageCircle, ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { useCustomerData } from "@/hooks/use-customer-data";
 import { useAppStore } from "@/lib/store";
@@ -52,12 +52,15 @@ export function SupportCenter({ booking, initialTicketId }: { booking?: Booking;
   if (selected) return <SupportConversation key={selected} id={selected} justCreated={created} onBack={() => { setSelected(""); setCreated(false); void refresh(); }} />;
   const onCreated = (id: string) => { setComposing(false); setCreated(true); setSelected(id); window.dispatchEvent(new Event("fetchit:support-updated")); };
   if (composing) return <div className="space-y-4"><Button variant="ghost" size="sm" onClick={() => setComposing(false)}><ArrowLeft className="h-4 w-4" />All requests</Button><NewSupportRequest booking={booking} onCreated={onCreated} /></div>;
+  if (page?.tickets.length === 0) return <div className="space-y-4">
+    {error && <p role="alert" className="text-sm text-destructive">{error} <Button variant="ghost" onClick={() => void refresh()}>Retry</Button></p>}
+    <NewSupportRequest key={booking?.id ?? "general"} booking={booking} onCreated={onCreated} />
+  </div>;
   return <div className="space-y-6">
     <section aria-label="Your support requests" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your requests</h2><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => void refresh()}>Refresh</Button>{page?.tickets.length !== 0 && <Button size="sm" onClick={() => setComposing(true)}>Get help</Button>}</div></div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!page && !error && <p className="text-sm text-muted-foreground">Loading requests…</p>}
-      {page?.tickets.length === 0 && <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground"><MessageCircle className="mx-auto mb-2 h-6 w-6" />No support requests yet. Choose an issue below to start your first conversation.</div>}
       {page?.tickets.map(ticket => <button key={ticket.id} type="button" className="w-full rounded-xl border p-4 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setCreated(false); setSelected(ticket.id); }}>
         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold">{supportSubject(ticket)} {ticket.unread && <span className="ml-2 rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">New reply</span>}</p><p className="mt-1 text-xs text-muted-foreground">{ticket.booking?.refCode ?? "General support"} · {status(ticket.status)}</p><p className="mt-2 line-clamp-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{ticket.preview}</p></div><ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" /></div>
       </button>)}
@@ -68,7 +71,6 @@ export function SupportCenter({ booking, initialTicketId }: { booking?: Booking;
         } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
       }}>Load older requests</Button>}
     </section>
-    {page?.tickets.length === 0 && <NewSupportRequest key={booking?.id ?? "general"} booking={booking} onCreated={onCreated} />}
   </div>;
 }
 

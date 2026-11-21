@@ -1,5 +1,6 @@
 // Cache public UI only. Private booking data is saved per account by the app.
-const CACHE_VERSION = "fetchit-customer-v10";
+const CACHE_VERSION = "fetchit-customer-v11";
+const CACHED_NAVIGATION_TIMEOUT_MS = 750;
 const APP_SHELL = ["/", "/help", "/manifest.webmanifest", "/pwa-icon-any-v2-192.png", "/pwa-icon-any-v2-512.png", "/pwa-icon-maskable-v2-192.png", "/pwa-icon-maskable-v2-512.png", "/fetch-logo-final.png", "/fetch-loading.webp"];
 
 function staticAssets(text) {
@@ -46,7 +47,7 @@ self.addEventListener("fetch", event => {
       const cache = await caches.open(CACHE_VERSION);
       const saved = await cache.match(url.pathname);
       const controller = new AbortController();
-      const timer = saved ? setTimeout(() => controller.abort(), 5000) : null;
+      const timer = saved ? setTimeout(() => controller.abort(), CACHED_NAVIGATION_TIMEOUT_MS) : null;
       try {
         const response = await fetch(request, { signal: controller.signal });
         if (response.ok && !url.search) await cache.put(url.pathname, response.clone());

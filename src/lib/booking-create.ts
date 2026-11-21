@@ -11,7 +11,7 @@ import type { PlatformSettings } from "./platform-policy";
 import { timeBooking } from "./booking-telemetry";
 import { requireCompletedBookingRatings } from "./booking-rating";
 
-const include = { dispatch: { select: dispatchSelect }, customer: { select: { id: true, name: true, phone: true } }, rider: { select: riderSelect } } as const;
+export const bookingAttemptInclude = { dispatch: { select: dispatchSelect }, customer: { select: { id: true, name: true, phone: true } }, rider: { select: riderSelect } } as const;
 
 // A customer-scoped deterministic primary key makes retries safe across servers
 // without an additional table or a database migration. Old clients may omit it.
@@ -29,7 +29,7 @@ type RequestDetails = {
 
 export async function findBookingAttempt(db: PrismaClient, id: string | undefined, body: RequestDetails) {
   if (!id) return null;
-  const booking = await db.booking.findUnique({ where: { id }, include });
+  const booking = await db.booking.findUnique({ where: { id }, include: bookingAttemptInclude });
   if (!booking) return null;
   const type = body.type ?? "DELIVERY";
   let scheduled: number | null;
@@ -42,7 +42,7 @@ export async function findBookingAttempt(db: PrismaClient, id: string | undefine
       booking.passengers !== (type === "RIDE" ? Number(body.passengers ?? 1) : 1) ||
       booking.cargoNotes !== (type === "RIDE" ? null : body.cargoNotes ?? null) ||
       (booking.scheduledAt?.getTime() ?? null) !== scheduled) {
-    throw new CustomerError("This booking request was already used for different details. Start a new booking.", 409);
+    throw new CustomerError("This booking request was already used for different details. Check its status before starting another booking.", 409, "BOOKING_ATTEMPT_CONFLICT");
   }
   return booking;
 }
@@ -69,7 +69,7 @@ export async function createBookingWithRetry(
       }, { maxWait: 10000, timeout: 15000 }));
       // The create committed. A failed detail read can be recovered with the
       // same request key on the next explicit confirmation.
-      return await timeBooking("db.booking_detail", () => db.booking.findUniqueOrThrow({ where: { id: booking.id }, include }));
+      return await timeBooking("db.booking_detail", () => db.booking.findUniqueOrThrow({ where: { id: booking.id }, include: bookingAttemptInclude }));
     } catch (error) {
       const previous = await findBookingAttempt(db, data.id, body);
       if (previous) return previous;

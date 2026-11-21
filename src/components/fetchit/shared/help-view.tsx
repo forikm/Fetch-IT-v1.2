@@ -9,6 +9,7 @@ import { NotificationInbox } from "./notification-inbox";
 import { SupportCenter } from "./support-center";
 import { SupportContact } from "./support-contact";
 import { Button } from "@/components/ui/button";
+import { CustomerAppShell } from "./customer-app-shell";
 
 const faqs = [
   ["How do I report an issue?", "Under Your requests, select Get help. If you have no requests yet, the form is already open. Choose Issue with Delivery or Issue with the Ride, select what happened, link your booking, and describe the problem. Then select Send support request. For account questions, choose Account or app help."],
@@ -27,13 +28,17 @@ export function HelpView({ ticketId }: { ticketId?: string }) {
   const router = useRouter();
   const { user, bootstrapped, bootstrap, setView } = useAppStore();
   useEffect(() => { if (!bootstrapped) void bootstrap(); }, [bootstrapped, bootstrap]);
-  return <div className="min-h-screen bg-background">
-    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur"><div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6"><BrandNavigation /><div className="flex items-center gap-2">{user && <NotificationInbox onBooking={(id, type) => { useAppStore.getState().openBookingSummary(id, type === "RIDE" ? "ride" : "delivery"); router.push("/"); }} />}<Button asChild variant="outline" size="sm"><Link href="/">{user ? "Dashboard" : "Home"}</Link></Button></div></div></header>
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12"><div className="mb-8"><p className="eyebrow">CUSTOMER CARE</p><h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">How can we help?</h1><p className="mt-3 text-muted-foreground">Get help with a delivery, a ride, or your account. Start a request below or open a conversation to follow up.</p></div>
+  const customer = user?.role === "CUSTOMER";
+  const Heading = customer ? "h2" : "h1";
+  const content = <><div className="mb-6"><Heading className="text-2xl font-semibold tracking-tight sm:text-3xl">How can we help?</Heading><p className="mt-2 text-base text-muted-foreground">Get help with a booking or your account, or follow up on a request.</p></div>
       <div className="grid items-start gap-8 lg:grid-cols-[1.3fr_1fr]">
         <div>{!bootstrapped ? <p className="text-sm text-muted-foreground">Checking your account…</p> : user && (!online || offlineAccess) ? <p className="rounded-xl border bg-muted/30 p-5 text-sm">You can read the FAQ offline. Reconnect to send a request or view support conversations.</p> : user ? <SupportCenter key={`${user.id}:${ticketId ?? ""}`} initialTicketId={ticketId} /> : <section className="rounded-2xl border bg-card p-6"><h2 className="text-lg font-semibold">Your support requests</h2><p className="mt-2 text-sm text-muted-foreground">Sign in to send a request and view your private conversations.</p><Button asChild className="mt-4"><Link href="/" onClick={() => setView("login")}>Sign in for support</Link></Button></section>}</div>
         <aside className="space-y-6"><section id="account-access" aria-labelledby="account-access-title" className="scroll-mt-24 space-y-3 rounded-2xl border bg-card p-5 sm:p-6"><h2 id="account-access-title" className="text-lg font-semibold">Can’t access your account?</h2><ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed"><li>Check that you’re using the email address you registered with.</li><li>On the sign-in screen, enter your email and select <strong>Forgot password?</strong> Check your inbox and spam folder.</li><li>For an account created before email verification was introduced, select <strong>Having trouble signing in?</strong>, then <strong>Try original account sign-in</strong>.</li></ol><Button asChild variant="outline"><a href="/?recover=1">Recover account access</a></Button></section><section className="rounded-2xl border bg-card p-5 sm:p-6"><h2 className="mb-4 text-lg font-semibold">FAQ</h2><div className="divide-y">{faqs.map(([q, a]) => <details key={q} className="py-3"><summary className="cursor-pointer text-sm font-medium">{q}</summary><p className="mt-3 text-sm leading-relaxed text-muted-foreground">{a}</p></details>)}</div></section><SupportContact /></aside>
       </div>
-    </main>
+    </>;
+  if (customer) return <CustomerAppShell selected="profile" title="Support" backToProfile>{content}</CustomerAppShell>;
+  return <div className="min-h-screen bg-background">
+    <header className="sticky top-0 z-30 border-b bg-background"><div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6"><BrandNavigation /><div className="flex items-center gap-2">{user && <NotificationInbox onBooking={(id, type) => { useAppStore.getState().openBookingSummary(id, type === "RIDE" ? "ride" : "delivery"); router.push("/"); }} />}<Button asChild variant="outline" size="sm"><Link href="/">Home</Link></Button></div></div></header>
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">{content}</main>
   </div>;
 }

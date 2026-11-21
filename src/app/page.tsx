@@ -7,13 +7,14 @@ import { useAppStore } from "@/lib/store";
 import { LandingView } from "@/components/fetchit/shared/landing";
 import { FetchItLoadingScreen } from "@/components/fetchit/shared/loading";
 import { setPushAccount } from "@/lib/customer-push";
+import { CustomerAppShell } from "@/components/fetchit/shared/customer-app-shell";
+import { CustomerViewLoading } from "@/components/fetchit/shared/customer-view-loading";
 
 // Load authentication, maps and booking tools only when their view is opened.
 const AuthView = dynamic(() => import("@/components/fetchit/shared/auth-view").then(module => module.AuthView), { loading: FetchItLoadingScreen });
-const CustomerProfile = dynamic(() => import("@/components/fetchit/customer/customer-profile").then(module => module.CustomerProfile), { loading: FetchItLoadingScreen });
-const ModeSelect = dynamic(() => import("@/components/fetchit/customer/mode-select").then(module => module.ModeSelect), { loading: FetchItLoadingScreen });
-const CustomerDashboard = dynamic(() => import("@/components/fetchit/customer/customer-dashboard").then(module => module.CustomerDashboard), { loading: FetchItLoadingScreen });
-const RideDashboard = dynamic(() => import("@/components/fetchit/customer/ride-dashboard").then(module => module.RideDashboard), { loading: FetchItLoadingScreen });
+const CustomerProfile = dynamic(() => import("@/components/fetchit/customer/customer-profile").then(module => module.CustomerProfile), { loading: CustomerViewLoading });
+const ModeSelect = dynamic(() => import("@/components/fetchit/customer/mode-select").then(module => module.ModeSelect), { loading: CustomerViewLoading });
+const CustomerDashboard = dynamic(() => import("@/components/fetchit/customer/customer-dashboard").then(module => module.CustomerDashboard), { loading: CustomerViewLoading });
 const SignupPlaces = dynamic(() => import("@/components/fetchit/shared/signup-places").then(module => module.SignupPlaces), { loading: FetchItLoadingScreen });
 
 export default function Home() {
@@ -67,9 +68,11 @@ export default function Home() {
   if (view === "login") return <AuthView initialMode="login" />;
   if (view === "signup") return <AuthView initialMode="signup" />;
   if (view === "onboarding" && user?.role === "CUSTOMER") return <SignupPlaces key={user.id} />;
-  if (view === "customer-profile" && user?.role === "CUSTOMER") return <CustomerProfile />;
-  if (view === "mode-select") return <ModeSelect />;
-  if (view === "customer-dashboard") return <CustomerDashboard />;
-  if (view === "ride-dashboard") return <RideDashboard />;
+  if (user?.role === "CUSTOMER" && ["customer-profile", "mode-select", "customer-dashboard", "ride-dashboard"].includes(view)) {
+    const selected = view === "customer-profile" ? "profile" : view === "mode-select" ? "home" : "bookings";
+    return <CustomerAppShell selected={selected} title={selected === "profile" ? "Profile" : selected === "home" ? "Home" : "Bookings"}>
+      {view === "customer-profile" ? <CustomerProfile /> : view === "mode-select" ? <ModeSelect /> : <CustomerDashboard key={view} bookingType={view === "ride-dashboard" ? "RIDE" : "DELIVERY"} />}
+    </CustomerAppShell>;
+  }
   return <LandingView />;
 }

@@ -10,11 +10,13 @@ import { BookingWaitStatus } from "./booking-wait-status";
 import { DeliveryReceipt } from "./delivery-receipt";
 import { BookingRatingGate } from "./booking-rating-gate";
 import { isAwaitingAcceptance, mergeBookingUpdate } from "@/lib/booking-wait";
+import { isActiveBooking } from "@/lib/booking-status-query";
 import { BookingSummary } from "../shared/booking-summary";
 import { BookingTimeline } from "../shared/booking-timeline";
 import { CustomerBookingCard } from "./customer-booking-card";
 import { customerStatusLabel, formatPeso, locationUpdateLabel, routeTimeLabel } from "@/lib/customer-booking-ui";
 import { BookingEmptyState } from "./booking-empty-state";
+import { BookingToolbar } from "./booking-toolbar";
 import { SlowRequestFeedback } from "../shared/slow-request-feedback";
 import { HistoryFilters, emptyHistoryFilter } from "../shared/history-filters";
 import { useTrackingUpdates } from "@/hooks/use-tracking-updates";
@@ -40,10 +42,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Package,
   MapPin,
-  Plus,
   Truck,
   Clock,
-  History,
   ShieldCheck,
   PenTool,
   KeyRound,
@@ -80,11 +80,6 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore, type AuthUser } from "@/lib/store";
 import {
@@ -268,17 +263,35 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     const query = queryString();
+    const path = "/api/bookings?" + query;
     const initial = loadedQuery.current !== query;
-    setLoading(initial); setRefreshing(!initial); if (initial) setBookings([]);
+    const saved = readSnapshot<{ bookings: Booking[]; nextCursor: string | null }>(user?.id ?? "", path);
+    const hasSaved = saved && Array.isArray(saved.data.bookings);
+    setLoading(initial && !hasSaved);
+    setRefreshing(!initial || !!hasSaved);
+    if (hasSaved) {
+      setBookings(saved.data.bookings);
+      setNextCursor(saved.data.nextCursor ?? null);
+      setSavedAt(saved.savedAt);
+    } else if (initial) {
+      setBookings([]);
+      setNextCursor(null);
+      setSavedAt(null);
+    }
     setLoadError(null);
     try {
-      const result = await readCustomerBooking<{ bookings: Booking[]; nextCursor: string | null }>(user?.id ?? "", "/api/bookings?" + query);
+      const result = await readCustomerBooking<{ bookings: Booking[]; nextCursor: string | null }>(user?.id ?? "", path);
       const data = result.data;
       if (sequence === loadSequence.current) setSavedAt(result.cached ? result.savedAt : null);
       if (!Array.isArray(data.bookings)) throw new Error("We couldn’t load your bookings. Please try again.");
       if (sequence === loadSequence.current) { loadedQuery.current = query; if (!result.cached) observeRatings(data.bookings); setBookings(data.bookings ?? []); setNextCursor(data.nextCursor ?? null); setMoreError(null); }
     } catch (e) {
-      if (sequence === loadSequence.current) setLoadError(e instanceof Error && e.name !== "TimeoutError" && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
+      if (sequence === loadSequence.current) {
+        setSavedAt(null);
+        setBookings([]);
+        setNextCursor(null);
+        setLoadError(e instanceof Error && e.name !== "TimeoutError" && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check your connection and try again.");
+      }
     } finally {
       if (sequence === loadSequence.current) { setLoading(false); setRefreshing(false); }
     }
@@ -291,19 +304,20 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
     return () => { cancelled = true; window.removeEventListener("online", load); };
   }, [load]);
 
-  function onNewBookingCreated(b: Booking) {
+  function onNewBookingCreated(b: Booking, recovered = false) {
     observeRatings([b]);
     const key = `/api/bookings?filter=active&type=${bookingType}`;
     const saved = readSnapshot<{ bookings: Booking[] }>(user?.id ?? "", key);
     saveSnapshot(user?.id ?? "", `/api/bookings/${b.id}`, { booking: b });
-    saveSnapshot(user?.id ?? "", key, { bookings: [b, ...(saved?.data.bookings ?? bookings).filter(item => item.id !== b.id && !["DELIVERED", "CANCELLED"].includes(item.status))], nextCursor: null });
-    setBookings((prev) => [b, ...prev.filter((x) => x.id !== b.id)]);
+    const active = isActiveBooking(b.status);
+    saveSnapshot(user?.id ?? "", key, { bookings: [...(active ? [b] : []), ...(saved?.data.bookings ?? bookings).filter(item => item.id !== b.id && isActiveBooking(item.status))], nextCursor: null });
+    if (active) setBookings((prev) => [b, ...prev.filter((x) => x.id !== b.id)]);
     setShowNew(false);
-    setTab("active");
+    setTab(active ? "active" : "history");
     setSummaryBooking(b);
     toast({
-      title: "Booking requested",
-      description: b.scheduledAt && new Date(b.scheduledAt) > new Date() ? `${b.refCode} · Scheduled for ${formatPickupSchedule(b.scheduledAt)} Philippine time. Riders will see it when pickup is due.` : `${b.refCode} · ${formatPeso(b.totalFare)} · ${
+      title: recovered ? "Booking found" : "Booking requested",
+      description: recovered ? `${b.refCode} · ${customerStatusLabel(b.status, b.type)}` : b.scheduledAt && new Date(b.scheduledAt) > new Date() ? `${b.refCode} · Scheduled for ${formatPickupSchedule(b.scheduledAt)} Philippine time. Riders will see it when pickup is due.` : `${b.refCode} · ${formatPeso(b.totalFare)} · ${
         b.rider ? (isRide ? "Driver matched!" : "Rider matched!") : (isRide ? "Searching for a driver…" : "Searching for a rider…")
       }`,
     });
@@ -325,22 +339,18 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
   return (
     <CustomerAppShell selected="bookings" title="Bookings">
     <div data-booking-service={isRide ? "ride" : "delivery"} className="min-w-0 space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div role="group" aria-label="Booking service" className="flex gap-2"><Button type="button" variant={isRide ? "default" : "outline"} aria-pressed={isRide} onClick={() => useAppStore.getState().chooseMode("ride")}><Car />Rides</Button><Button type="button" variant={!isRide ? "default" : "outline"} aria-pressed={!isRide} onClick={() => useAppStore.getState().chooseMode("delivery")}><Package />Deliveries</Button></div><Button size="lg" onClick={() => { setRepeatBooking(null); setShowNew(true); }}><Plus />{isRide ? "Book a ride" : "Book a delivery"}</Button></div>
+      <BookingToolbar
+        isRide={isRide} tab={tab} onTab={setTab}
+        onService={service => useAppStore.getState().chooseMode(service)}
+        showBook={loading || !!loadError || bookings.length > 0 || (tab === "history" && Object.values(filters).some(value => value.trim()))}
+        onBook={() => { setRepeatBooking(null); setShowNew(true); }}
+        status={!online || offline || savedAt ? (!online ? "You’re offline. Saved statuses may be out of date." : "Reconnecting… Your saved booking and entered details are kept.") : lastChecked ? "Updated " + lastChecked.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Checking booking updates…"}
+        paused={!online || offline || !!savedAt}
+        refreshing={refreshing} refreshDisabled={loading || refreshing || !online}
+        onRefresh={() => void load()}
+      />
       {savedAt && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">Saved · updated {new Date(savedAt).toLocaleString()}. Statuses and locations may have changed.</p>}
-        {/* Tabs */}
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "history")}>
-          <TabsList>
-            <TabsTrigger value="active" className="gap-1.5">
-              <ServiceIcon className="h-4 w-4" /> Active
-            </TabsTrigger>
-            <TabsTrigger value="history" className="gap-1.5">
-              <History className="h-4 w-4" /> History
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{!online || offline || savedAt ? (!online ? "You’re offline. Saved statuses may be out of date." : "Reconnecting… Your saved booking and entered details are kept.") : lastChecked ? "Updated " + lastChecked.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Checking booking updates…"}</span><Button size="sm" variant="ghost" disabled={loading || refreshing || !online} onClick={() => void load()}>{refreshing ? "Updating…" : "Refresh bookings"}</Button></div>
-        {tab === "history" && <HistoryFilters bookingType={bookingType} value={filters} onChange={setFilters} />}
+        {tab === "history" && (bookings.length > 0 || Object.values(filters).some(value => value.trim())) && <HistoryFilters bookingType={bookingType} value={filters} onChange={setFilters} />}
         {tab === "history" && openingBookingId && <p role="status" className="text-sm text-muted-foreground">Loading delivery proof…</p>}
         {tab === "history" && proofError && <RequestError message={proofError.message} onRetry={() => void openDeliveryProof(proofError.booking)} />}
                 {/* List */}
@@ -378,6 +388,7 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
       {/* New booking modal */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent
+          data-booking-dialog=""
           className="mobile-fullscreen-dialog top-0 left-0 translate-x-0 translate-y-0 sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 flex flex-col overflow-hidden p-0 sm:max-w-2xl sm:p-0"
           onPointerDownOutside={(e) => {
             // Google's address-suggestion dropdown (.pac-container) is
@@ -391,13 +402,11 @@ export function CustomerDashboard({ bookingType = "DELIVERY" }: { bookingType?: 
             }
           }}
         >
-          <DialogHeader className="shrink-0 px-4 pt-5 sm:px-6">
+          <DialogHeader className="shrink-0 px-4 pt-4 sm:px-6">
             <DialogTitle className="flex items-center gap-2">
               <ServiceIcon className="h-5 w-5 text-primary" /> Book a {isRide ? "ride" : "delivery"}
             </DialogTitle>
-            <DialogDescription>
-              Choose a route and review your booking.
-            </DialogDescription>
+            <DialogDescription className="sr-only">Set pickup, drop-off and booking details, then review your fare.</DialogDescription>
           </DialogHeader>
           <BookingRatingGate connected={online && !offlineAccess} revision={ratingCheck} onRated={markRated}>
             <BookingForm
@@ -459,6 +468,9 @@ type BookingFareEstimate = {
   vehicle?: { includedKm: number; perKm?: number; longHaulPerKm?: number };
 };
 
+type BookingSubmissionResult = { booking?: Booking; checkoutUrl?: string; pending?: boolean; expired?: boolean };
+type AttemptCheck = { key: string; status: "checking" | "missing" | "unavailable" };
+
 // ------------------------------ Booking form ------------------------------
 function BookingForm({
   bookingType,
@@ -469,7 +481,7 @@ function BookingForm({
 }: {
   bookingType: BookingType;
   initialBooking: Booking | null;
-  onCreate: (b: Booking) => void;
+  onCreate: (b: Booking, recovered?: boolean) => void;
   onCancel: () => void;
   onRatingRequired: () => void;
 }) {
@@ -483,6 +495,10 @@ function BookingForm({
   const [draft, setDraft] = useCustomerData(userId, isRide ? "ride-booking-draft" : "delivery-draft", emptyDraft, true);
   const [pendingSubmission, setPendingSubmission] = useCustomerData<{ key: string; body: string } | null>(userId, isRide ? "ride-booking-submission" : "delivery-booking-submission", null, true);
   const submissionRunning = useRef(false);
+  const attemptRequest = useRef<AbortController | null>(null);
+  const [attemptCheck, setAttemptCheck] = useState<AttemptCheck | null>(null);
+  const attemptStatus = attemptCheck?.key === pendingSubmission?.key ? attemptCheck?.status : undefined;
+  const needsStatusCheck = !!pendingSubmission && attemptStatus !== "missing";
   const { pickupLabel, pickupLat, pickupLng, dropoffLabel, dropoffLat, dropoffLng, cargoWeightKg, cargoNotes, scheduledAt } = draft;
   // Old drafts and repeat bookings may contain vehicle classes no longer offered.
   const vehicleClass = isBookingVehicle(draft.vehicleClass) ? draft.vehicleClass : "MOTORCYCLE";
@@ -524,18 +540,19 @@ function BookingForm({
   const [error, setError] = useState<string | null>(null);
 
   const { area, failed: coverageFailed } = useServiceArea();
-  const [pickupPinUnavailable, setPickupPinUnavailable] = useState(false);
-  const [dropoffPinUnavailable, setDropoffPinUnavailable] = useState(false);
   const pickupIssue = useMemo(() => pickupLat && pickupLng ? area?.serviceAreaIssue({ lat: Number(pickupLat), lng: Number(pickupLng) }) : null, [area, pickupLat, pickupLng]);
   const dropoffIssue = useMemo(() => dropoffLat && dropoffLng ? area?.serviceAreaIssue({ lat: Number(dropoffLat), lng: Number(dropoffLng) }) : null, [area, dropoffLat, dropoffLng]);
   const coverageError = area ? area.serviceAreaMessage(pickupIssue ?? null, "pickup") ?? area.serviceAreaMessage(dropoffIssue ?? null, "drop-off") : null;
 
   // Keep data entry separate from the final review and payment decision.
-  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(() => pendingSubmission && !initialBooking ? 3 : 0);
   const [reviewDraft, setReviewDraft] = useState<typeof draft | null>(null);
+  const [pinPicker, setPinPicker] = useState<"pickup" | "dropoff" | null>(null);
+  const mapTarget = connected ? pinPicker : null;
   const stepContent = useRef<HTMLDivElement>(null);
   function goToStep(next: 0 | 1 | 2 | 3) {
     setError(null);
+    setPinPicker(null);
     setStep(next);
   }
   function editFromReview(next: 0 | 1 | 2) {
@@ -550,7 +567,34 @@ function BookingForm({
   useEffect(() => {
     stepContent.current?.scrollTo({ top: 0 });
     stepContent.current?.focus({ preventScroll: true });
-  }, [step]);
+  }, [step, mapTarget]);
+  useEffect(() => () => attemptRequest.current?.abort(), []);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const dialog = stepContent.current?.closest<HTMLElement>("[data-booking-dialog]");
+    if (!viewport || !dialog) return;
+    const update = () => {
+      // Safari can shrink only the visual viewport when the keyboard opens.
+      // Leave layout zoom to the browser for users who pinch to magnify.
+      const keyboardOpen = viewport.scale === 1 && window.innerHeight - viewport.height > 80;
+      if (keyboardOpen) {
+        dialog.style.setProperty("--booking-viewport-height", `${viewport.height}px`);
+        dialog.style.setProperty("--booking-viewport-top", `${viewport.offsetTop}px`);
+      } else {
+        dialog.style.removeProperty("--booking-viewport-height");
+        dialog.style.removeProperty("--booking-viewport-top");
+      }
+    };
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    update();
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      dialog.style.removeProperty("--booking-viewport-height");
+      dialog.style.removeProperty("--booking-viewport-top");
+    };
+  }, []);
 
   function fillCurrentLocation(target: "pickup" | "dropoff") {
     setLocationFeedback({target, message: "Finding your location… Allow location access when asked."});
@@ -623,7 +667,6 @@ function BookingForm({
       dropoffLng &&
       area &&
       !coverageError &&
-      !pickupPinUnavailable && !dropoffPinUnavailable &&
       detailsValid
     );
   }
@@ -679,7 +722,7 @@ function BookingForm({
     if (!online || offlineAccess || !canEstimate()) return;
     const t = setTimeout(() => { setFareRetrySeconds(0); void fetchEstimate(); }, 350);
     return () => { clearTimeout(t); fareSequence.current++; fareRequest.current?.abort(); fareRequest.current = null; };
-  }, [area, pickupPinUnavailable, dropoffPinUnavailable, online, offlineAccess, pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, cargoWeightKg, passengers, scheduledAt]);
+  }, [area, online, offlineAccess, pickupLat, pickupLng, dropoffLat, dropoffLng, bookingType, vehicleClass, cargoWeightKg, passengers, scheduledAt]);
 
   useEffect(() => {
     if (!fareRetrySeconds) return;
@@ -687,9 +730,58 @@ function BookingForm({
     return () => clearInterval(timer);
   }, [fareRetryWaiting]);
 
+  function completeSubmission(data: BookingSubmissionResult, recovered = false) {
+    if (data.checkoutUrl && /^\/checkout\/[a-zA-Z0-9_-]+$/.test(data.checkoutUrl)) {
+      window.location.assign(data.checkoutUrl);
+      return "checkout";
+    }
+    if (!data.booking?.id) return null;
+    setDraft(emptyDraft);
+    setPendingSubmission(null);
+    onCreate(data.booking, recovered);
+    return "confirmed";
+  }
+
+  async function handleCheckBooking() {
+    const key = pendingSubmission?.key;
+    if (!key || !connected || attemptRequest.current || submissionRunning.current) return;
+    const controller = new AbortController();
+    attemptRequest.current = controller;
+    setError(null);
+    setAttemptCheck({ key, status: "checking" });
+    try {
+      const response = await fetch("/api/bookings/status", {
+        cache: "no-store",
+        headers: { "Idempotency-Key": key },
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+      });
+      const data = await customerResponse<BookingSubmissionResult>(response, "We couldn’t check your booking. Try again.");
+      if (controller.signal.aborted) return;
+      if (completeSubmission(data, true)) {
+        setAttemptCheck(null);
+        return;
+      }
+      if (data.expired) {
+        setPendingSubmission(null);
+        setAttemptCheck(null);
+        setError("The payment session expired. Review your fare to start a new checkout.");
+      } else if (data.pending) {
+        setAttemptCheck({ key, status: "missing" });
+      } else {
+        throw new Error("We couldn’t check your booking. Try again.");
+      }
+    } catch (failure) {
+      if (controller.signal.aborted) return;
+      setAttemptCheck({ key, status: "unavailable" });
+      setError(failure instanceof Error && failure.message.includes("sign in again") ? failure.message : "We couldn’t check your booking. Your draft is saved. Try checking again.");
+    } finally {
+      if (attemptRequest.current === controller) attemptRequest.current = null;
+    }
+  }
+
   async function handleConfirmBooking() {
     setError(null);
-    if (submissionRunning.current) return;
+    if (submissionRunning.current || attemptRequest.current || needsStatusCheck) return;
     if (!navigator.onLine || offlineAccess) { setError("Your draft is saved. Reconnect to get a current fare and confirm it."); return; }
     if (coverageError) { setError(coverageError); return; }
     if (!canEstimate() || !estimate || estimatedKey !== fareKey) {
@@ -712,10 +804,10 @@ function BookingForm({
           cargoNotes: isRide ? undefined : cargoNotes || undefined,
           scheduledAt: pickupScheduleIso(scheduledAt),
       });
-      // Reuse the key after a lost response, including after reopening this
-      // saved draft. Changed details start a separate explicit request.
-      const sameDetails = (value: string) => { const parsed = JSON.parse(value); delete parsed.routeQuote; return JSON.stringify(parsed); };
-      const submission = { key: pendingSubmission && sameDetails(pendingSubmission.body) === sameDetails(body) ? pendingSubmission.key : crypto.randomUUID(), body };
+      // Keep one key even after editing an interrupted request. If the
+      // original write finishes late, the server returns that result or a conflict.
+      const submission = { key: pendingSubmission?.key ?? crypto.randomUUID(), body };
+      setAttemptCheck(null);
       setPendingSubmission(submission);
       const res = await fetch("/api/bookings", {
         method: "POST",
@@ -726,26 +818,25 @@ function BookingForm({
       if (res.status === 409) {
         const conflict = await res.clone().json().catch(() => null);
         if (conflict?.code === "RATING_REQUIRED") {
+          if (!pendingSubmission) setPendingSubmission(null);
           timing.finish("failed");
           onRatingRequired();
           return;
         }
+        if (conflict?.code === "BOOKING_ATTEMPT_CONFLICT") {
+          throw new Error("The previous request has already been processed. Check its status here.");
+        }
+        setPendingSubmission(null);
+      } else if (res.status >= 400 && res.status < 500 && res.status !== 408 && !pendingSubmission) {
         setPendingSubmission(null);
       }
-      const data = await customerResponse<{ booking?: Booking; checkoutUrl?: string }>(res, "We couldn’t confirm your request. Check Active bookings before trying again. Your details are saved.");
-      if (data.checkoutUrl && /^\/checkout\/[a-zA-Z0-9_-]+$/.test(data.checkoutUrl)) {
-        timing.finish("checkout");
-        window.location.assign(data.checkoutUrl);
-        return;
-      }
-      if (!data.booking?.id) throw new Error("We couldn’t confirm your booking. Check Active bookings before trying again. Your details are saved.");
-      setDraft(emptyDraft);
-      setPendingSubmission(null);
-      onCreate(data.booking);
-      timing.finish("confirmed");
+      const data = await customerResponse<BookingSubmissionResult>(res, "We couldn’t confirm your request. Check its status here. Your details are saved.");
+      const result = completeSubmission(data);
+      if (!result) throw new Error("We couldn’t confirm your booking. Check its status here. Your details are saved.");
+      timing.finish(result);
     } catch (e) {
       timing.finish("failed");
-      setError(e instanceof Error && e.name !== "TimeoutError" && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check Active bookings before trying again. Your details are saved.");
+      setError(e instanceof Error && e.name !== "TimeoutError" && e.name !== "TypeError" && e.message !== "Failed to fetch" ? e.message : "Connection interrupted. Check whether your booking went through. Your details are saved.");
     } finally {
       submissionRunning.current = false;
       setSubmitting(false);
@@ -753,10 +844,10 @@ function BookingForm({
   }
 
   const v = VEHICLES[vehicleClass];
-  const pickupChosen = !!area && !pickupIssue && !pickupPinUnavailable && !!pickupLabel && (!connected || !!(pickupLat && pickupLng));
-  const dropoffChosen = !!area && !dropoffIssue && !dropoffPinUnavailable && !!dropoffLabel && (!connected || !!(dropoffLat && dropoffLng));
-  const [pinPicker, setPinPicker] = useState<"pickup" | "dropoff" | null>(null);
-  const stepLabels = ["Pickup", "Drop-off", "Details", "Review booking"];
+  const pickupChosen = !!area && !pickupIssue && !!pickupLabel && (!connected || !!(pickupLat && pickupLng));
+  const dropoffChosen = !!area && !dropoffIssue && !!dropoffLabel && (!connected || !!(dropoffLat && dropoffLng));
+  const stepLabels = ["Pickup", "Drop-off", "Details", "Review"];
+  const mapIsPickup = mapTarget === "pickup";
 
   return (
     <form
@@ -771,15 +862,15 @@ function BookingForm({
       }}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
-      {locationFeedback && ((step === 0 && locationFeedback.target === "pickup") || (step === 1 && locationFeedback.target === "dropoff")) && <p role="status" className="mx-4 rounded-xl border bg-muted/30 p-3 text-sm sm:mx-6">{locationFeedback.message}</p>}
+      {!mapTarget && locationFeedback && ((step === 0 && locationFeedback.target === "pickup") || (step === 1 && locationFeedback.target === "dropoff")) && <p role="status" className="mx-4 rounded-xl border bg-muted/30 p-3 text-sm sm:mx-6">{locationFeedback.message}</p>}
       {/* Step indicator */}
-      <div aria-label="Booking progress" className="grid shrink-0 grid-cols-4 gap-1 border-b px-4 pb-3 text-xs font-medium text-muted-foreground sm:px-6">
+      <div aria-label="Booking progress" className="grid shrink-0 grid-cols-4 gap-1 border-b px-4 py-3 text-sm font-medium text-muted-foreground sm:px-6">
         {stepLabels.map((label, i) => {
           const complete = i < step || (reviewDraft !== null && i < 3 && i !== step);
           return (
           <div key={label} aria-current={i === step ? "step" : undefined} className="flex justify-center">
             <span
-              className={`flex flex-col items-center gap-1.5 sm:flex-row ${i === step ? "text-foreground" : ""}`}
+              className={`flex flex-col items-center gap-1 whitespace-nowrap sm:flex-row ${i === step ? "text-foreground" : ""}`}
             >
               <span
                 className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${
@@ -799,10 +890,36 @@ function BookingForm({
         })}
       </div>
 
+      {mapTarget ? (
+        <div ref={stepContent} role="region" aria-label={mapIsPickup ? "Pickup map" : "Drop-off map"} tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none">
+          <LocationMap
+            key={mapTarget}
+            restrictToServiceArea
+            lat={Number(mapIsPickup ? pickupLat : dropoffLat) || null}
+            lng={Number(mapIsPickup ? pickupLng : dropoffLng) || null}
+            pinColor={mapIsPickup ? "#16a34a" : "#dc2626"}
+            confirmLabel={mapIsPickup ? "Use this pickup" : "Use this drop-off"}
+            onBackToSearch={() => setPinPicker(null)}
+            onConfirm={(place) => {
+              const location = mapIsPickup
+                ? { pickupLabel: place.label, pickupLat: String(place.lat), pickupLng: String(place.lng) }
+                : { dropoffLabel: place.label, dropoffLat: String(place.lat), dropoffLng: String(place.lng) };
+              setDraft((previous) => ({ ...previous, ...location }));
+              if (reviewDraft) {
+                setReviewDraft(null);
+                goToStep(3);
+              } else {
+                goToStep(mapIsPickup ? 1 : 2);
+              }
+            }}
+          />
+        </div>
+      ) : (
+      <>
       <div ref={stepContent} role="region" aria-label={stepLabels[step]} tabIndex={-1} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 outline-none sm:px-6">
       {reviewDraft && <p role="status" className="text-sm font-medium">Editing {stepLabels[step].toLowerCase()}</p>}
-      {step === 0 && !reviewDraft && <p className="text-xs text-muted-foreground">Pangasinan only · Draft saved on this device.</p>}
-      {!connected && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">You can edit your saved draft offline. Reconnect to get a fare and confirm.</p>}
+      {step === 0 && !reviewDraft && <p className="text-sm text-muted-foreground">Pangasinan only · Draft saved on this device.</p>}
+      {!connected && step < 3 && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">You can edit your saved draft offline.</p>}
       {coverageError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{coverageError}</p>}
       {!area && <p role="status" className="text-sm text-muted-foreground">{coverageFailed ? "Service-area checks couldn’t load. Refresh this page before booking." : "Checking service area…"}</p>}
 
@@ -842,23 +959,7 @@ function BookingForm({
 
           </div>
           <SavedPlaces place={pickupLabel && pickupLat && pickupLng ? { label: pickupLabel, lat: Number(pickupLat), lng: Number(pickupLng) } : null} onSelect={(place) => { setPickupLabel(place.label); setPickupLat(String(place.lat)); setPickupLng(String(place.lng)); }} />
-          {connected && <Button type="button" variant="outline" className="w-full" aria-expanded={pinPicker === "pickup"} onClick={() => { setPickupPinUnavailable(false); setPinPicker(pinPicker === "pickup" ? null : "pickup"); }}><MapPin />{pinPicker === "pickup" ? "Hide map" : "Choose on map"}</Button>}
-          {connected && pinPicker === "pickup" && <LocationMap
-            restrictToServiceArea
-            onAvailabilityChange={setPickupPinUnavailable}
-            lat={pickupLat ? Number(pickupLat) : null}
-            lng={pickupLng ? Number(pickupLng) : null}
-            pinColor="#16a34a"
-            confirmLabel="Use this pickup"
-            mapClassName="h-48 sm:h-64"
-            onConfirm={(place) => {
-              setPinPicker(null);
-              setPickupLabel(place.label);
-              setPickupLat(String(place.lat));
-              setPickupLng(String(place.lng));
-              if (reviewDraft) { setReviewDraft(null); goToStep(3); } else goToStep(1);
-            }}
-          />}
+          {connected && <Button type="button" variant="outline" className="w-full" onClick={() => setPinPicker("pickup")}><MapPin />Choose on map</Button>}
         </div>
       )}
 
@@ -897,23 +998,7 @@ function BookingForm({
 
           </div>
           <SavedPlaces place={dropoffLabel && dropoffLat && dropoffLng ? { label: dropoffLabel, lat: Number(dropoffLat), lng: Number(dropoffLng) } : null} onSelect={(place) => { setDropoffLabel(place.label); setDropoffLat(String(place.lat)); setDropoffLng(String(place.lng)); }} />
-          {connected && <Button type="button" variant="outline" className="w-full" aria-expanded={pinPicker === "dropoff"} onClick={() => { setDropoffPinUnavailable(false); setPinPicker(pinPicker === "dropoff" ? null : "dropoff"); }}><MapPin />{pinPicker === "dropoff" ? "Hide map" : "Choose on map"}</Button>}
-          {connected && pinPicker === "dropoff" && <LocationMap
-            restrictToServiceArea
-            onAvailabilityChange={setDropoffPinUnavailable}
-            lat={dropoffLat ? Number(dropoffLat) : null}
-            lng={dropoffLng ? Number(dropoffLng) : null}
-            pinColor="#dc2626"
-            confirmLabel="Use this drop-off"
-            mapClassName="h-48 sm:h-64"
-            onConfirm={(place) => {
-              setPinPicker(null);
-              setDropoffLabel(place.label);
-              setDropoffLat(String(place.lat));
-              setDropoffLng(String(place.lng));
-              if (reviewDraft) { setReviewDraft(null); goToStep(3); } else goToStep(2);
-            }}
-          />}
+          {connected && <Button type="button" variant="outline" className="w-full" onClick={() => setPinPicker("dropoff")}><MapPin />Choose on map</Button>}
         </div>
       )}
 
@@ -934,7 +1019,7 @@ function BookingForm({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">{isRide ? `Up to ${passengerCapacity} passenger${passengerCapacity === 1 ? "" : "s"}` : `Up to ${v.capacityKg} kg`}</p>
+              <p className="text-sm text-muted-foreground">{isRide ? `Up to ${passengerCapacity} passenger${passengerCapacity === 1 ? "" : "s"}` : `Up to ${v.capacityKg} kg`}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="booking-size">{isRide ? "Passengers" : "Package weight (kg)"}</Label>
@@ -951,12 +1036,12 @@ function BookingForm({
                 onChange={(e) => isRide ? setPassengers(e.target.value) : setCargoWeightKg(e.target.value)}
                 required
               />
-              <p id="booking-size-guidance" className="text-xs text-muted-foreground">{isRide ? "Enter a whole number of passengers, from 1 to " + passengerCapacity + "." : "Enter the package weight in kilograms, up to " + v.capacityKg + " kg. Decimals are allowed."}</p>
+              <p id="booking-size-guidance" className="text-sm text-muted-foreground">{isRide ? "Enter a whole number of passengers, from 1 to " + passengerCapacity + "." : "Enter the package weight in kilograms, up to " + v.capacityKg + " kg. Decimals are allowed."}</p>
               {isRide && (!Number.isInteger(Number(passengers)) || Number(passengers) < 1 || Number(passengers) > passengerCapacity) && (
-                <p className="text-xs text-destructive">Choose 1{passengerCapacity > 1 ? `–${passengerCapacity}` : ""} passenger{passengerCapacity > 1 ? "s" : ""} for {v.label}, or choose a larger vehicle.</p>
+                <p className="text-sm text-destructive">Choose 1{passengerCapacity > 1 ? `–${passengerCapacity}` : ""} passenger{passengerCapacity > 1 ? "s" : ""} for {v.label}, or choose a larger vehicle.</p>
               )}
               {!isRide && v && Number(cargoWeightKg) > v.capacityKg && (
-                <p className="text-xs text-destructive">
+                <p className="text-sm text-destructive">
                   Exceeds {v.label} capacity ({v.capacityKg} kg).
                 </p>
               )}
@@ -973,7 +1058,7 @@ function BookingForm({
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
                 min={pickupScheduleInput(new Date(Date.now() + 60_000))}
-              /><p className="text-xs text-muted-foreground">Riders will see the booking when pickup is due.</p>{!scheduleValid && <p role="alert" className="text-xs text-destructive">Choose a future pickup time or select Now.</p>}</>}
+              /><p className="text-sm text-muted-foreground">Riders will see the booking when pickup is due.</p>{!scheduleValid && <p role="alert" className="text-sm text-destructive">Choose a future pickup time or select Now.</p>}</>}
             </div>
             {!isRide && <details className="space-y-2 sm:col-span-2">
               <summary className="cursor-pointer py-3 text-sm font-medium">Add handling instructions (optional){cargoNotes ? " · Added" : ""}</summary>
@@ -1005,7 +1090,7 @@ function BookingForm({
                   </div>
                 ) : (
                   <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <FetchItLoader className="h-4 w-4" /> Calculating fare…
+                    <FetchItLoader className="h-4 w-4" /> Getting your fare…
                   </div>
                 )}
               </CardContent>
@@ -1017,8 +1102,8 @@ function BookingForm({
               { label: "Drop-off", address: dropoffLabel, editStep: 1, color: "text-rose-600" },
             ] as const).map(place => <div key={place.label} className="flex items-start gap-2">
               <MapPin className={`mt-1 h-4 w-4 shrink-0 ${place.color}`} />
-              <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">{place.label}</p><p className="break-words text-sm [overflow-wrap:anywhere]">{place.address}</p></div>
-              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label={`Edit ${place.label.toLowerCase()}`} onClick={() => editFromReview(place.editStep)} className="min-h-12 px-3 text-sm">Edit</Button>
+              <div className="min-w-0 flex-1"><p className="text-sm text-muted-foreground">{place.label}</p><p className="break-words text-sm [overflow-wrap:anywhere]">{place.address}</p></div>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting || attemptStatus === "checking"} aria-label={`Edit ${place.label.toLowerCase()}`} onClick={() => editFromReview(place.editStep)} className="min-h-12 px-3 text-sm">Edit</Button>
             </div>)}
           </section>
           <section aria-label="Booking details summary" className="rounded-xl bg-muted/30 p-3">
@@ -1029,37 +1114,36 @@ function BookingForm({
                 {!scheduleValid && <p role="alert" className="text-destructive">Pickup time has passed. Edit the details to choose a new time.</p>}
                 {!isRide && cargoNotes && <p className="break-words text-muted-foreground [overflow-wrap:anywhere]">{cargoNotes}</p>}
               </div>
-              <Button type="button" variant="ghost" size="sm" disabled={submitting} aria-label="Edit booking details" onClick={() => editFromReview(2)} className="min-h-12 px-3 text-sm">Edit</Button>
+              <Button type="button" variant="ghost" size="sm" disabled={submitting || attemptStatus === "checking"} aria-label="Edit booking details" onClick={() => editFromReview(2)} className="min-h-12 px-3 text-sm">Edit</Button>
             </div>
           </section>
 
           <div className="space-y-2">
             <Label htmlFor="payment-method">Payment method</Label>
-            <select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your {isRide ? "driver" : "rider"}</option><option value="DEMO_GCASH">GCash (simulated)</option><option value="DEMO_MAYA">Maya (simulated)</option><option value="DEMO_BANK">Bank account (simulated)</option></select>
-            <p className="text-xs text-muted-foreground">{paymentMethod === "CASH" ? isRide ? "Pay your driver directly, then confirm payment in the booking." : "Pay at drop-off, then confirm the cash payment in this booking." : "Complete the simulated payment to confirm your booking. No money is charged."}</p>
+            <select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting || attemptStatus === "checking"} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your {isRide ? "driver" : "rider"}</option><option value="DEMO_GCASH">GCash (simulated)</option><option value="DEMO_MAYA">Maya (simulated)</option><option value="DEMO_BANK">Bank account (simulated)</option></select>
+            <p className="text-sm text-muted-foreground">{paymentMethod === "CASH" ? isRide ? "Pay your driver directly, then confirm payment in the booking." : "Pay at drop-off, then confirm the cash payment in this booking." : "Complete the simulated payment to confirm your booking. No money is charged."}</p>
           </div>
 
-          {error && (
-            <div className="flex items-start gap-2 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> {error}
-            </div>
-          )}
         </div>
       )}
-      <details className="text-xs text-muted-foreground"><summary className="cursor-pointer min-h-12 py-3">Service-area map information</summary><p className="mt-2">Coverage: <a className="underline" href="https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/" target="_blank" rel="noreferrer">geoBoundaries / OCHA</a> · <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a className="underline" href="/service-area-data.json" target="_blank" rel="noreferrer">Data (ODbL)</a></p></details>
+      <details className="text-sm text-muted-foreground"><summary className="cursor-pointer min-h-12 py-3">Service-area map information</summary><p className="mt-2">Coverage: <a className="underline" href="https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/" target="_blank" rel="noreferrer">geoBoundaries / OCHA</a> · <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a className="underline" href="/service-area-data.json" target="_blank" rel="noreferrer">Data (ODbL)</a></p></details>
       </div>
 
       {/* Navigation */}
       <div className="shrink-0 space-y-3 border-t bg-background px-4 py-3 sm:px-6">
+      {step < 2 && !(step === 0 ? pickupChosen : dropoffChosen) && <p id="booking-next-hint" className="text-sm text-muted-foreground">Select a {step === 0 ? "pickup" : "drop-off"} address to continue.</p>}
+      {step === 3 && error && <p role="alert" className="flex items-start gap-2 text-sm text-destructive"><AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />{error}</p>}
+      {step === 3 && !connected && <p id="booking-reconnect-hint" role="status" className="text-sm text-muted-foreground">{needsStatusCheck ? "Connect to check your booking. Your draft is saved." : "Connect to get a fare. Your draft is saved."}</p>}
+      {step === 3 && connected && !submitting && attemptCheck && attemptStatus === "missing" && <p role="status" className="text-sm text-muted-foreground">No booking found yet. Confirm again to retry the same request.</p>}
+      {step === 3 && connected && attemptStatus === "checking" && <p role="status" className="text-sm text-muted-foreground">Checking whether your booking went through…</p>}
       {submitting && <div className="px-4 py-2 sm:px-6"><p role="status" className="text-sm">Sending your booking request…</p><SlowRequestFeedback message="This is taking longer than usual. Keep this page open while we confirm your request; avoid submitting another booking."/></div>}
       {estimating && <div className="px-4 py-2 sm:px-6"><SlowRequestFeedback message="We’re still checking your route and fare. Your booking details are kept here."/></div>}
-      {error && /check active bookings/i.test(error) && <Button type="button" variant="outline" className="mx-4 min-h-12" onClick={() => { useAppStore.getState().setBookingsTab("active"); onCancel(); }}>Check Active bookings</Button>}
       {error && /fare.*refresh|refresh.*fare/i.test(error) && <Button type="button" variant="outline" disabled={estimating || submitting} onClick={()=>void fetchEstimate()}>Refresh fare</Button>}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">
         <Button
           type="button"
           variant="outline"
-          disabled={submitting}
+          disabled={submitting || attemptStatus === "checking"}
           onClick={() => reviewDraft ? returnToReview(false) : step === 0 ? onCancel() : goToStep((step - 1) as 0 | 1 | 2)}
         >
           {reviewDraft ? "Cancel edit" : step === 0 ? "Cancel" : "Back"}
@@ -1067,19 +1151,26 @@ function BookingForm({
         {step < 3 ? (
           <Button
             type="button"
+            aria-describedby={step < 2 && !(step === 0 ? pickupChosen : dropoffChosen) ? "booking-next-hint" : undefined}
             disabled={step === 0 ? !pickupChosen : step === 1 ? !dropoffChosen : !pickupChosen || !dropoffChosen || !detailsValid}
             onClick={() => reviewDraft ? returnToReview(true) : goToStep((step + 1) as 1 | 2 | 3)}
           >
             {reviewDraft ? "Save changes" : step === 2 ? "Review booking" : step === 0 ? "Next: drop-off" : "Next: details"}
           </Button>
+        ) : needsStatusCheck && !submitting ? (
+          <Button type="button" className="min-h-14 min-w-0 px-3 text-base" onClick={() => void handleCheckBooking()} disabled={!connected || attemptStatus === "checking"} aria-describedby={connected ? undefined : "booking-reconnect-hint"}>
+            {attemptStatus === "checking" ? <><FetchItLoader className="h-4 w-4" /> Checking status…</> : "Check booking status"}
+          </Button>
         ) : (
-          <Button type="button" className="min-h-14 min-w-0 px-3 text-base" onClick={handleConfirmBooking} disabled={!online || offlineAccess || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()}>
+          <Button type="button" className="min-h-14 min-w-0 px-3 text-base" onClick={handleConfirmBooking} disabled={!connected || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()} aria-describedby={connected ? undefined : "booking-reconnect-hint"}>
             {submitting ? <FetchItLoader className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             {submitting ? "Submitting…" : paymentMethod === "CASH" ? "Confirm booking" : "Continue to payment"}
           </Button>
         )}
       </DialogFooter>
       </div>
+      </>
+      )}
     </form>
   );
 }

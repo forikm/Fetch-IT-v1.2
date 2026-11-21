@@ -7,6 +7,8 @@ const origin = "https://customer.test";
 function harness() {
   const handlers = {}, buckets = new Map(), removed = [], requested = [];
   let online = true, skipWaitingCalls = 0;
+  let hangNavigation = false;
+  const navigationTimeouts = [];
   const failedPaths = new Set();
   const key = value => new URL(typeof value === "string" ? value : value.url, origin).href;
   const caches = {
@@ -19,23 +21,30 @@ function harness() {
     async delete(name) { removed.push(name); return buckets.delete(name); },
   };
   const self = { location: { origin }, addEventListener(type, callback) { handlers[type] = callback; }, async skipWaiting() { skipWaitingCalls++; }, clients: { async claim() {} } };
-  const fetch = async request => {
+  const fetch = async (request, options) => {
     if (!online) throw new Error("No connection");
     const url = key(request); requested.push(url);
     const path = new URL(url).pathname;
+    if (hangNavigation && request.mode === "navigate") {
+      await new Promise((_, reject) => options.signal.addEventListener("abort", () => reject(new Error("Navigation timed out")), { once: true }));
+    }
     if (failedPaths.has(path)) throw new Error("Resource unavailable");
     const text = path === "/" || path === "/help" ? '<script src="/_next/static/chunks/app.js"></script><link href="/_next/static/chunks/app.css" />'
       : path.endsWith(".css") ? 'body { src: url(/_next/static/media/font.woff2) }' : "public asset";
     const response = new Response(text); Object.defineProperty(response, "type", { value: "basic" }); return response;
   };
-  vm.runInNewContext(source, { self, caches, fetch, URL, Response, AbortController, setTimeout, clearTimeout });
+  const schedule = (callback, ms) => {
+    navigationTimeouts.push(ms);
+    return setTimeout(callback, 0);
+  };
+  vm.runInNewContext(source, { self, caches, fetch, URL, Response, AbortController, setTimeout: schedule, clearTimeout });
   const dispatch = async (type, request) => {
     const waits = []; let result;
     handlers[type]({ request, waitUntil(promise) { waits.push(promise); }, respondWith(promise) { result = promise; } });
     const response = result ? await result : undefined;
     await Promise.all(waits); return response;
   };
-  return { caches, buckets, removed, requested, dispatch, setOnline(value) { online = value; }, failPath(path) { failedPaths.add(path); }, skipWaitingCalls() { return skipWaitingCalls; } };
+  return { caches, buckets, removed, requested, dispatch, navigationTimeouts, hangNavigation() { hangNavigation = true; }, setOnline(value) { online = value; }, failPath(path) { failedPaths.add(path); }, skipWaitingCalls() { return skipWaitingCalls; } };
 }
 test("installation caches the shell and its JS/CSS/fonts before the app is controlled", async () => {
   const h = harness(); await h.dispatch("install");
@@ -67,6 +76,13 @@ test("a first offline visit receives an honest connection-needed response", asyn
   const h = harness(); h.setOnline(false);
   const response = await h.dispatch("fetch", { url: origin + "/", method: "GET", mode: "navigate" });
   assert.equal(response.status, 503); assert.match(await response.text(), /first time/);
+});
+test("a stalled connection has a sub-second budget when a saved shell is available", async () => {
+  const h = harness(); await h.dispatch("install"); h.hangNavigation();
+  const response = await h.dispatch("fetch", { url: origin + "/", method: "GET", mode: "navigate" });
+  assert.match(await response.text(), /app.js/);
+  assert.equal(h.navigationTimeouts.length, 1);
+  assert(h.navigationTimeouts[0] < 1000);
 });
 test("a partial update never replaces the working worker when core resources are missing", async () => {
   for (const missing of ["/", "/_next/static/chunks/app.js"]) {

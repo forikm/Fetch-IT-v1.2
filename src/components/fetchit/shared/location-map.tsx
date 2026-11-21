@@ -7,7 +7,7 @@ import { FetchItLoader } from "@/components/fetchit/shared/loading";
 // "Confirm this location" reverse-geocodes wherever the pin is pointing
 // and reports it back as a real address + coordinates.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
 import { Button } from "@/components/ui/button";
 import { MapZoomControls } from "./map-zoom-controls";
@@ -24,20 +24,18 @@ export function LocationMap({
   onConfirm,
   pinColor = "#dc2626",
   mapClassName = "h-48",
-  className,
   confirmLabel = "Use this location",
   restrictToServiceArea = false,
-  onAvailabilityChange,
+  onBackToSearch,
 }: {
   lat: number | null;
   lng: number | null;
   onConfirm: (place: { lat: number; lng: number; label: string }) => void;
   pinColor?: string;
   mapClassName?: string;
-  className?: string;
   confirmLabel?: string;
   restrictToServiceArea?: boolean;
-  onAvailabilityChange?: (unavailable: boolean) => void;
+  onBackToSearch?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -46,11 +44,10 @@ export function LocationMap({
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [confirming, setConfirming] = useState(false);
+  const confirmationPending = useRef(false);
   const [coverageError, setCoverageError] = useState<string | null>(null);
-  const { area } = useServiceArea(restrictToServiceArea);
-  // The booking form already explains an invalid selected address. Show a
-  // separate message here only when the person drags to an unavailable pin.
-  const selectedCoverageError = useMemo(() => area && lat != null && lng != null ? area.serviceAreaMessage(area.serviceAreaIssue({ lat, lng })) : null, [area, lat, lng]);
+  const { area, failed: coverageFailed } = useServiceArea(restrictToServiceArea);
+  const checkingCoverage = restrictToServiceArea && !area;
 
   // One-time map setup.
   useEffect(() => {
@@ -73,6 +70,9 @@ export function LocationMap({
 
     return () => {
       cancelled = true;
+      mapRef.current = null;
+      geocoderRef.current = null;
+      confirmationPending.current = false;
     };
   }, [attempt]);
 
@@ -83,12 +83,11 @@ export function LocationMap({
       const position = map.getCenter();
       const message = area.serviceAreaMessage(area.serviceAreaIssue({ lat: position.lat(), lng: position.lng() }));
       setCoverageError(message);
-      onAvailabilityChange?.(!!message);
     };
     const listener = map.addListener("idle", checkCenter);
     checkCenter();
     return () => listener.remove();
-  }, [ready, restrictToServiceArea, area, onAvailabilityChange]);
+  }, [ready, restrictToServiceArea, area]);
 
   // Re-center (e.g. after picking an address in the search box above) —
   // the pin visually stays put since it's fixed to the viewport; the map
@@ -102,21 +101,23 @@ export function LocationMap({
   function handleConfirm() {
     const map = mapRef.current;
     const geocoder = geocoderRef.current;
-    if (!map) return;
+    if (!map || confirmationPending.current) return;
     const center = map.getCenter();
     const pos = { lat: center.lat(), lng: center.lng() };
     if (restrictToServiceArea && !area) return;
     const unavailable = restrictToServiceArea && area ? area.serviceAreaMessage(area.serviceAreaIssue(pos)) : null;
     setCoverageError(unavailable);
-    onAvailabilityChange?.(!!unavailable);
     if (unavailable) return;
 
     if (!geocoder) {
       onConfirm({ ...pos, label: `Pinned location (${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)})` });
       return;
     }
+    confirmationPending.current = true;
     setConfirming(true);
     geocoder.geocode({ location: pos }, (results, status) => {
+      if (mapRef.current !== map) return;
+      confirmationPending.current = false;
       setConfirming(false);
       const label =
         status === "OK" && results && results[0]
@@ -126,16 +127,31 @@ export function LocationMap({
     });
   }
 
-  if (failed) return <div role="alert" className="space-y-3 rounded-xl border bg-muted/30 p-4 text-sm"><p>The map couldn’t load. Your address is kept. Try again, or choose a saved place above.</p><Button type="button" variant="outline" className="min-h-12" onClick={() => { setFailed(false); setReady(false); setAttempt(value => value + 1); }}>Retry map</Button></div>;
+  const confirmButton = (
+    <Button
+      type="button"
+      variant={onBackToSearch ? "default" : "outline"}
+      size={onBackToSearch ? "default" : "sm"}
+      onClick={handleConfirm}
+      disabled={failed || !ready || confirming || !!coverageError || checkingCoverage}
+      className={onBackToSearch ? "min-h-12 min-w-0 px-2 text-base" : "mt-2 w-full text-xs"}
+    >
+      {confirming ? <><FetchItLoader className="h-4 w-4" /> Finding your address…</> : confirmLabel}
+    </Button>
+  );
 
-  return (
-    <div className={className ?? ""}>
-      {coverageError && coverageError !== selectedCoverageError && <p role="status" className="mb-2 text-sm text-destructive">{coverageError}</p>}
-      <div className={`relative rounded-md overflow-hidden border ${mapClassName}`}>
+  const map = failed ? (
+    <div className="space-y-3 rounded-xl border bg-muted/30 p-4 text-sm">
+      <p role="alert">The map couldn’t load. Your address is kept.</p>
+      <Button type="button" variant="outline" className="min-h-12" onClick={() => { setFailed(false); setAttempt(value => value + 1); }}>Retry map</Button>
+    </div>
+  ) : (
+      <div className={`relative overflow-hidden rounded-md border ${onBackToSearch ? "min-h-40 flex-1 sm:min-h-72" : mapClassName}`}>
         <div ref={containerRef} className="absolute inset-0" />
         {!ready && (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted/40">
+          <div role="status" className="absolute inset-0 flex items-center justify-center gap-2 bg-muted/40 text-sm text-muted-foreground">
             <FetchItLoader className="h-4 w-4 text-muted-foreground" />
+            Loading map…
           </div>
         )}
         {ready && <MapZoomControls onZoomIn={() => { const map = mapRef.current; if (map) map.setZoom(Math.min(21, (map.getZoom() ?? 13) + 1)); }} onZoomOut={() => { const map = mapRef.current; if (map) map.setZoom(Math.max(3, (map.getZoom() ?? 13) - 1)); }} />}
@@ -146,25 +162,35 @@ export function LocationMap({
           </div>
         )}
       </div>
-      {ready && <p className="mt-2 text-xs text-muted-foreground">Move the map to position the pin, then confirm the location below.</p>}
-      {ready && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleConfirm}
-          disabled={confirming || !!coverageError || (restrictToServiceArea && !area)}
-          className="mt-2 w-full text-xs"
-        >
-          {confirming ? (
-            <>
-              <FetchItLoader className="h-3 w-3 mr-1.5" /> Looking up address…
-            </>
-          ) : (
-            confirmLabel
+  );
+
+  if (onBackToSearch) {
+    return (
+      <>
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6">
+          {!failed && <p className="text-sm text-muted-foreground">Drag the map to position the pin.</p>}
+          {coverageError && <p role="status" className="text-sm text-destructive">{coverageError}</p>}
+          {ready && checkingCoverage && (
+            <p role="status" className={coverageFailed ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
+              {coverageFailed ? "Service-area checks couldn’t load. Refresh the page to try again." : "Checking service area…"}
+            </p>
           )}
-        </Button>
-      )}
+          {map}
+        </div>
+        <div className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)] gap-2 border-t bg-background px-4 py-3 sm:px-6">
+          <Button type="button" variant="outline" className="min-h-12 px-3 text-sm" onClick={onBackToSearch}>Search address</Button>
+          {confirmButton}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div>
+      {coverageError && <p role="status" className="mb-2 text-sm text-destructive">{coverageError}</p>}
+      {map}
+      {ready && <p className="mt-2 text-xs text-muted-foreground">Move the map to position the pin, then confirm the location below.</p>}
+      {ready && confirmButton}
     </div>
   );
 }

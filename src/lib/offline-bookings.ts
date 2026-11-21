@@ -7,7 +7,8 @@ export async function readCustomerBooking<T>(userId: string, path: string, signa
   let response: Response;
   try {
     if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("Offline");
-    response = await fetch(path, { cache: "no-store", signal });
+    const timeout = AbortSignal.timeout(8000);
+    response = await fetch(path, { cache: "no-store", signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
   } catch (error) {
     if (signal?.aborted) throw error;
     const saved = readSnapshot<T>(userId, path);

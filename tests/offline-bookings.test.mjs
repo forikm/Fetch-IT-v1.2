@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 function reader(fetch, online = true) {
   const exports = {};
-  vm.runInNewContext(compiled, { exports, require: name => name === "./offline-data" ? offline : { customerResponse }, fetch, navigator: { onLine: online }, Date, Error });
+  vm.runInNewContext(compiled, { exports, require: name => name === "./offline-data" ? offline : { customerResponse }, fetch, navigator: { onLine: online }, Date, Error, AbortSignal });
   return exports.readCustomerBooking;
 }
 test("successful online reads are stored and a later disconnection uses the timestamped snapshot", async () => {

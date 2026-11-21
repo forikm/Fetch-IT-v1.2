@@ -61,7 +61,7 @@
   --muted-foreground: #58675f;
   --accent: #e7eee7;
   --accent-foreground: #183b33;
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: oklch(0.56 0.22 27.325);
   --success: oklch(0.6 0.18 145);
   --border: #dfe4da;
   --input: #748178;
@@ -116,29 +116,13 @@
   --sidebar-ring: oklch(0.72 0.18 55);
 }
 
-/* Apply the service palette at body level so portaled booking dialogs,
-   selects, menus and alerts inherit the same colors as the dashboard. */
+/* Service accents stay local; shared surfaces and actions use the app palette. */
 body:has([data-booking-service="delivery"]) {
   --service-surface: #f5e8d9;
   --service-border: #e7d6c2;
 }
 
 body:has([data-booking-service="ride"]) {
-  --background: #f2f6f2;
-  --foreground: #163c34;
-  --card-foreground: #163c34;
-  --popover-foreground: #163c34;
-  --primary: #163c34;
-  --primary-foreground: #ffffff;
-  --secondary: #e0ebe3;
-  --secondary-foreground: #163c34;
-  --muted: #eaf0eb;
-  --muted-foreground: #576c61;
-  --accent: #dce8df;
-  --accent-foreground: #163c34;
-  --border: #d2dfd5;
-  --input: #718477;
-  --ring: #244e42;
   --service-surface: #e0ebe3;
   --service-border: #c7d9ce;
 }
@@ -149,23 +133,6 @@ body:has([data-booking-service="ride"]) {
 }
 
 .dark body:has([data-booking-service="ride"]) {
-  --background: #10251e;
-  --foreground: #e6f1e9;
-  --card: #172f26;
-  --card-foreground: #e6f1e9;
-  --popover: #172f26;
-  --popover-foreground: #e6f1e9;
-  --primary: #9ccfb3;
-  --primary-foreground: #10251e;
-  --secondary: #203e30;
-  --secondary-foreground: #e6f1e9;
-  --muted: #20392e;
-  --muted-foreground: #afc5b7;
-  --accent: #2b4d3d;
-  --accent-foreground: #e6f1e9;
-  --border: #345444;
-  --input: #7f9d8c;
-  --ring: #9ccfb3;
   --service-surface: #1c3d2d;
   --service-border: #3b604b;
 }
@@ -269,8 +236,48 @@ body:has([data-connection-banner]) { --connection-height: calc(3.5rem + env(safe
 [data-customer-header] { top: var(--connection-height); }
 summary { min-block-size: 3rem; align-content: center; }
 [data-customer-workspace] { font-size: 1rem; line-height: 1.5; }
+
+/* Customer controls: outlined actions, inset fields and solid cards have distinct jobs.
+   The body scope also covers Radix dialogs portaled outside the workspace. */
+body:has([data-customer-workspace]) [data-slot="button"][data-variant="outline"] {
+  background: transparent;
+  border-color: var(--input);
+  box-shadow: none;
+}
+body:has([data-customer-workspace]) [data-slot="button"][data-variant="outline"]:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--accent);
+}
+body:has([data-customer-workspace]) [data-slot="button"][data-variant="outline"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+body:has([data-customer-workspace]) :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], select) {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--background));
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+body:has([data-customer-workspace]) :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], select):focus-visible {
+  background: var(--background);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 45%, transparent);
+}
+body:has([data-customer-workspace]) :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], select)[aria-invalid="true"]:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 45%, transparent);
+}
 @media (max-width: 639px) {
   .mobile-fullscreen-dialog { --tw-translate-x: 0px !important; --tw-translate-y: 0px !important; top: var(--connection-height) !important; left: 0 !important; width: 100% !important; max-width: 100% !important; height: calc(100dvh - var(--connection-height)) !important; max-height: calc(100dvh - var(--connection-height)) !important; transform: none !important; translate: none !important; border-radius: 0 !important; border: 0; padding-top: var(--app-safe-top) !important; padding-bottom: env(safe-area-inset-bottom) !important; }
+  [data-booking-dialog].mobile-fullscreen-dialog {
+    top: calc(var(--booking-viewport-top, 0px) + var(--connection-height)) !important;
+    height: calc(var(--booking-viewport-height, 100dvh) - var(--connection-height)) !important;
+    max-height: calc(var(--booking-viewport-height, 100dvh) - var(--connection-height)) !important;
+  }
+  body:has([data-booking-dialog]) .pac-container {
+    max-height: min(12rem, 30dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  body:has([data-booking-dialog]) .pac-item {
+    min-height: 3rem;
+    padding-block: 0.5rem;
+  }
   .mobile-fullscreen-dialog [data-slot="dialog-close"] { top: calc(0.5rem + env(safe-area-inset-top)); }
   [data-slot="dialog-content"]:not(.mobile-fullscreen-dialog) { max-height: calc(100dvh - var(--connection-height) - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); top: calc(50% + var(--connection-height) / 2); }
 }

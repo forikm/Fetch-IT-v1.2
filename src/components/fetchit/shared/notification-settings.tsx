@@ -10,9 +10,10 @@ export function NotificationSettings() {
   const [preferences, save] = useCustomerData(id, "notifications", { inApp: true, browser: false }, true);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  return <section className="space-y-3 border-t pt-4">
-    <h3 className="text-sm font-semibold">Notification preferences</h3>
-    <label className="flex min-h-12 cursor-pointer items-center gap-3 text-sm"><input className="h-5 w-5 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="checkbox" checked={preferences.inApp} onChange={(e) => save({ ...preferences, inApp: e.target.checked })} /> Show updates in the app</label>
+  return <section className="space-y-3">
+    <h3 className="text-base font-semibold">Notifications</h3>
+    <label className="flex min-h-12 cursor-pointer items-center gap-3 text-base"><input className="h-5 w-5 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="checkbox" checked={preferences.inApp} onChange={(e) => save({ ...preferences, inApp: e.target.checked })} /> Show updates in the app</label>
+    <p className="text-sm text-muted-foreground">Background alerts notify you when Fetch-It is closed.</p>
     <Button size="sm" type="button" variant="outline" disabled={busy || id === "anonymous"} onClick={async () => {
       setBusy(true); setMessage("");
       try {
@@ -22,7 +23,7 @@ export function NotificationSettings() {
       } catch (error) { setMessage((error as Error).message); }
       finally { setBusy(false); }
     }}>{busy ? "Updating…" : preferences.browser ? "Turn off background alerts" : "Enable background alerts"}</Button>
-    <p className="text-xs text-muted-foreground">Get delivery, ride, and support updates even when Fetch-It isn’t open. Allow notifications when prompted. On iPhone or iPad, open Fetch-It from your Home Screen first.</p>
-    {message && <p role="status" className="text-xs">{message}</p>}
+    <details className="text-sm text-muted-foreground"><summary className="min-h-12 cursor-pointer py-3">Help with background alerts</summary><p>Allow notifications when prompted. On iPhone or iPad, add Fetch-It to your Home Screen, then open it there to enable alerts.</p></details>
+    {message && <p role="status" className="text-sm">{message}</p>}
   </section>;
 }

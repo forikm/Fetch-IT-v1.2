@@ -29,9 +29,10 @@ function harness(options = {}) {
     "@/hooks/use-customer-data": { useCustomerData: (_id, key, initial) => key === "notification-inbox-v2" ? [legacy, update => { legacy = typeof update === "function" ? update(legacy) : update; }] : [initial, () => {}] },
     "@/lib/notification-inbox": grouping,
     "@/hooks/use-visible-poll": { useVisiblePoll(_key, callback) { poll = callback; } },
+    "@/hooks/use-online-status": { useOnlineStatus: () => true },
     "next/navigation": { useRouter: () => ({ push: url => opened.push(url) }) },
     "@/lib/customer-request": { customerResponse: async response => response.json() },
-    globals: { navigator: { onLine: true }, fetch: async (url, options = {}) => {
+    globals: { AbortSignal, navigator: { onLine: true }, fetch: async (url, options = {}) => {
       requests.push({ url, ...options });
       if (options.method === "PATCH") {
         if (patch) await patch();
@@ -87,12 +88,13 @@ test("selecting a support notification opens the specific support conversation",
 
 function deferred() { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 const panel = (h, category = "DELIVERY") => h.render().find(node => node.type === "TabsContent" && node.props.value === category);
-const mark = h => nodes(panel(h)).find(node => node.type === "Button" && node.props.children === "Mark as read").props.onClick();
+const mark = h => nodes(panel(h)).find(node => node.type === "Button" && node.props.children === "Mark all as read").props.onClick();
 
 test("marking read updates the badge immediately without waiting for a slow save or reloading the inbox", async () => {
   const save = deferred(), h = harness({ patch: () => save.promise }); await h.poll();
   mark(h);
   assert.equal(h.render().find(node => node.type === "TabsTrigger" && node.props.value === "DELIVERY").props["aria-label"], "Deliveries");
+  assert(!nodes(panel(h)).some(node => node.props.children === "Mark all as read"), "The bulk action disappears when nothing is unread");
   assert.equal(h.requests.filter(r => r.method === "PATCH").length, 1);
   await h.poll();
   assert.equal(h.requests.length, 2, "polls pause while saving");

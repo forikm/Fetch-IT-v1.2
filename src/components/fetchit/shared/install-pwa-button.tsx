@@ -18,6 +18,7 @@ type BeforeInstallPromptEvent = Event & {
 declare global {
   interface Window {
     __deferredInstallPrompt__?: BeforeInstallPromptEvent;
+    __fetchItInstalled__?: boolean;
   }
 }
 
@@ -26,10 +27,12 @@ declare global {
 function subscribeInstallPrompt(notify: () => void) {
   const onBeforeInstall = (event: Event) => {
     event.preventDefault();
+    window.__fetchItInstalled__ = false;
     window.__deferredInstallPrompt__ = event as BeforeInstallPromptEvent;
     notify();
   };
   const onInstalled = () => {
+    window.__fetchItInstalled__ = true;
     window.__deferredInstallPrompt__ = undefined;
     notify();
   };
@@ -46,50 +49,59 @@ function subscribeInstallPrompt(notify: () => void) {
   };
 }
 
-function readInstallPrompt() {
-  return window.matchMedia("(display-mode: standalone)").matches ? null : window.__deferredInstallPrompt__ ?? null;
+function readInstallOffer() {
+  const device = window.navigator as (Navigator & { standalone?: boolean }) | undefined;
+  if (window.__fetchItInstalled__ || window.matchMedia("(display-mode: standalone)").matches || device?.standalone) return null;
+  if (window.__deferredInstallPrompt__) return window.__deferredInstallPrompt__;
+  if (device && (/iPhone|iPad|iPod/i.test(device.userAgent) || (device.platform === "MacIntel" && device.maxTouchPoints > 1))) return "ios" as const;
+  return null;
 }
 
 export function useInstallPrompt() {
   // All install controls share the browser's one-use prompt, including an
   // event captured before React mounted. Consuming it updates every control.
-  const deferredPrompt = useSyncExternalStore(subscribeInstallPrompt, readInstallPrompt, () => null);
+  const offer = useSyncExternalStore(subscribeInstallPrompt, readInstallOffer, () => null);
+  const deferredPrompt = offer === "ios" ? null : offer;
   const canInstall = !!deferredPrompt;
 
   async function install() {
-    if (!deferredPrompt || readInstallPrompt() !== deferredPrompt) return;
+    if (!deferredPrompt || readInstallOffer() !== deferredPrompt) return;
     // Consume before awaiting to prevent another control prompting twice.
     window.__deferredInstallPrompt__ = undefined;
     window.dispatchEvent(new Event("fetchit:install-ready"));
-    await deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
+    try {
+      await deferredPrompt.prompt();
+      if ((await deferredPrompt.userChoice).outcome === "accepted") {
+        window.__fetchItInstalled__ = true;
+        window.dispatchEvent(new Event("fetchit:install-ready"));
+      }
+    } catch {
+      // The browser may close the prompt as the app or tab changes.
+    }
   }
 
-  return { canInstall, install };
+  return { canInstall, install, showIOSInstructions: offer === "ios" };
 }
 
-export function InstallPwaButton({
-  className,
-  iconOnly = false,
-}: {
-  className?: string;
-  iconOnly?: boolean;
-}) {
-  const { canInstall, install } = useInstallPrompt();
+export function InstallPwaButton() {
+  const { canInstall, install, showIOSInstructions } = useInstallPrompt();
+  if (showIOSInstructions) return (
+    <details className="rounded-xl border bg-card">
+      <summary className="min-h-12 cursor-pointer rounded-xl px-4 py-3 font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">Add Fetch-It to Home Screen</summary>
+      <p className="px-4 pb-3 text-sm text-muted-foreground">Open Fetch-It in Safari, tap Share, then tap Add to Home Screen.</p>
+    </details>
+  );
   if (!canInstall) return null;
 
   return (
     <Button
       type="button"
       variant="outline"
-      size={iconOnly ? "icon" : "sm"}
       onClick={install}
-      className={className}
-      aria-label="Install app"
-      title="Install app"
+      className="min-h-12 w-full justify-start"
     >
       <Download className="h-4 w-4" />
-      {!iconOnly && "Install app"}
+      Add Fetch-It to Home Screen
     </Button>
   );
 }
