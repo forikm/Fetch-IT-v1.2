@@ -13,7 +13,7 @@ export async function legacySupportInbox(db: InboxDb, customerId: string, before
       m."createdAt", COALESCE(m."createdAt" <= t."customerReadAt", FALSE) AS "read"
     FROM "SupportMessage" m JOIN "SupportTicket" t ON t."id" = m."ticketId"
     LEFT JOIN "Booking" b ON b."id" = t."bookingId"
-    WHERE t."customerId" = ${customerId} AND m."createdAt" <= ${before} AND m."authorRole"::text IN ('ADMIN','SUPPORT','SUPPORT_SUPERVISOR','SUPERADMIN')
+    WHERE t."customerId" = ${customerId} AND m."createdAt" <= ${before} AND m."authorRole"::text IN ('ADMIN','SUPPORT','SUPERADMIN')
       AND NOT EXISTS (SELECT 1 FROM "CustomerNotification" n WHERE n."sourceId" = 'support:' || m."id")
     ORDER BY m."createdAt" DESC, m."id" DESC LIMIT 100`;
 }
@@ -56,7 +56,7 @@ export async function updateCustomerInbox(db: PrismaClient, customerId: string, 
         LEFT(m."body", 160), '/help?ticket=' || m."ticketId", m."createdAt", CURRENT_TIMESTAMP
       FROM "SupportMessage" m JOIN "SupportTicket" t ON t."id" = m."ticketId"
       WHERE t."customerId" = ${customerId} AND m."id" = ANY(${selection.supportIds}::text[])
-        AND m."authorRole"::text IN ('ADMIN','SUPPORT','SUPPORT_SUPERVISOR','SUPERADMIN')
+        AND m."authorRole"::text IN ('ADMIN','SUPPORT','SUPERADMIN')
       ON CONFLICT ("sourceId") DO NOTHING`;
     await applySelection(tx, customerId, selection);
   });
