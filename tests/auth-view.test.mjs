@@ -114,7 +114,7 @@ test("verified login with an unfinished profile reveals the phone field and can 
   await app.nodes().find(node => node.type === "form" && node.props.onSubmit).props.onSubmit({ preventDefault() {} }); app.render();
   assert.equal(app.state.user, null);
   const phone = app.nodes().find(node => node.props?.id === "verification-phone"); assert(phone);
-  assert(app.nodes().some(node => node.props?.role === "status" && /Finish setting up/.test(node.props.children)));
+  assert(app.nodes().some(node => node.props?.children === "Finish setting up your account"));
   phone.props.onChange({ target: { value: "09171234567" } }); app.render();
   await app.nodes().find(node => node.type === "Button" && Array.isArray(node.props.children) && node.props.children.includes("Continue")).props.onClick(); app.render();
   assert.equal(app.requests[1].body.phone, "+639171234567"); assert.equal(app.state.user.id, "new-customer");
@@ -136,13 +136,13 @@ test("an expired verification session opens sign-in and preserves signup details
   assert.equal(app.nodes().find(node => node.props?.id === "email").props.value, saved.email);
   assert.equal(app.nodes().find(node => node.props?.id === "password").props.value, "");
   assert.equal(progress.readAuthProgress().phone, saved.phone); assert.equal(progress.readAuthProgress().name, saved.name);
-  assert(app.nodes().some(node => node.props?.role === "status" && /Sign in again with this email/.test(node.props.children)));
+  assert(app.nodes().some(node => node.props?.role === "status" && /Sign in again to verify your email/.test(node.props.children)));
   assert.equal(app.state.user, null);
 });
 
 test("verification has a direct sign-in recovery action without deleting signup progress", async () => {
   progress.saveAuthProgress(saved); const app = harness(firebaseUser(), { codes: true });
-  app.nodes().find(node => node.type === "Button" && node.props.children === "Sign in again to continue").props.onClick(); app.render();
+  app.nodes().find(node => node.type === "Button" && node.props.children === "Sign in again").props.onClick(); app.render();
   assert.equal(app.nodes().some(node => node.type === "EmailCodeForm"), false);
   assert.equal(progress.readAuthProgress().phone, saved.phone); assert.deepEqual(app.requests, []);
 });
@@ -156,7 +156,7 @@ test("email delivery outages keep verification retry available instead of requir
 test("returning from email restores verification details and completes with the verified token", async () => {
   progress.saveAuthProgress(saved);
   const app = harness(firebaseUser());
-  assert.equal(app.nodes().find(node => node.props?.id === "verification-phone").props.value, saved.phone);
+  assert.equal(app.nodes().some(node => node.props?.id === "verification-phone"), false);
   assert(app.poll);
   await app.poll(new AbortController().signal);
   app.render();
@@ -173,7 +173,7 @@ test("verification confirmed on return waits for a missing phone without posting
   app.render();
   assert.equal(app.state.user, null);
   assert.deepEqual(app.requests, []);
-  assert(app.nodes().some(node => node.props?.role === "status" && /Enter your phone number/.test(node.props.children)));
+  assert.equal(app.nodes().find(node => node.props?.id === "verification-phone").props.value, "");
   assert(app.nodes().some(node => node.type === "Button" && node.props.children.includes("Continue")));
 });
 
@@ -181,7 +181,8 @@ test("a different Firebase identity cannot reuse the saved phone or sent-email s
   progress.saveAuthProgress(saved);
   const other = { ...firebaseUser("other-user"), email: "other@example.invalid" };
   const app = harness(other);
-  assert.equal(app.nodes().find(node => node.props?.id === "verification-phone").props.value, "");
+  assert.equal(app.nodes().some(node => node.props?.id === "verification-phone"), false);
+  assert.equal(progress.readAuthProgress().phone, "");
   assert.equal(progress.readAuthProgress().firebaseUid, other.uid);
   assert.equal(progress.readAuthProgress().verificationSent, false);
 });

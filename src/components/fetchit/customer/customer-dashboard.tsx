@@ -493,6 +493,7 @@ function BookingForm({
   const connected = online && !offlineAccess;
   const emptyDraft = { pickupLabel: "", pickupLat: "", pickupLng: "", dropoffLabel: "", dropoffLat: "", dropoffLng: "", vehicleClass: "MOTORCYCLE" as VehicleClass, cargoWeightKg: "2", passengers: "1", cargoNotes: "", scheduledAt: "" };
   const [draft, setDraft] = useCustomerData(userId, isRide ? "ride-booking-draft" : "delivery-draft", emptyDraft, true);
+  const [resumingDraft] = useState(() => !initialBooking && Boolean(draft.pickupLabel || draft.dropoffLabel));
   const [pendingSubmission, setPendingSubmission] = useCustomerData<{ key: string; body: string } | null>(userId, isRide ? "ride-booking-submission" : "delivery-booking-submission", null, true);
   const submissionRunning = useRef(false);
   const attemptRequest = useRef<AbortController | null>(null);
@@ -918,7 +919,7 @@ function BookingForm({
       <>
       <div ref={stepContent} role="region" aria-label={stepLabels[step]} tabIndex={-1} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 outline-none sm:px-6">
       {reviewDraft && <p role="status" className="text-sm font-medium">Editing {stepLabels[step].toLowerCase()}</p>}
-      {step === 0 && !reviewDraft && <p className="text-sm text-muted-foreground">Pangasinan only · Draft saved on this device.</p>}
+      {step === 0 && !reviewDraft && resumingDraft && connected && <p role="status" className="text-sm text-muted-foreground">Draft restored.</p>}
       {!connected && step < 3 && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">You can edit your saved draft offline.</p>}
       {coverageError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{coverageError}</p>}
       {!area && <p role="status" className="text-sm text-muted-foreground">{coverageFailed ? "Service-area checks couldn’t load. Refresh this page before booking." : "Checking service area…"}</p>}
@@ -945,6 +946,7 @@ function BookingForm({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {connected ? <PlaceAutocompleteInput
               id="booking-pickup"
+              guidance={pickupChosen ? null : "Select an address from the list."}
               onTextChange={setPickupLabel}
               placeholder="Search pickup address"
               value={pickupLabel}
@@ -984,6 +986,7 @@ function BookingForm({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {connected ? <PlaceAutocompleteInput
               id="booking-dropoff"
+              guidance={dropoffChosen ? null : "Select an address from the list."}
               onTextChange={setDropoffLabel}
               placeholder="Search drop-off address"
               value={dropoffLabel}
@@ -1005,7 +1008,7 @@ function BookingForm({
       {/* Step 2: Booking details */}
       {step === 2 && (
         <div className="space-y-4">
-          {connected && !coverageError && (!pickupChosen || !dropoffChosen) && <p className="rounded-lg border bg-muted/30 p-3 text-sm">Go back and select your typed addresses from search suggestions or saved places before requesting a fare.</p>}
+          {connected && !coverageError && (!pickupChosen || !dropoffChosen) && <p className="rounded-lg border bg-muted/30 p-3 text-sm">Go back to confirm both addresses.</p>}
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div className="space-y-2">
               <Label htmlFor="vc">Vehicle</Label>
@@ -1077,26 +1080,8 @@ function BookingForm({
 
       {/* Step 3: Review and payment */}
       {step === 3 && (
-        <div className="space-y-4">
-          {online && !offlineAccess && canEstimate() && (
-            <Card className="py-0 shadow-none">
-              <CardContent className="p-3">
-                {estimate ? (
-                  <BookingFareBreakdown estimate={estimate} bookingType={bookingType} pricedPassengers={isRide && vehicleClass === "TRICYCLE" ? Number(passengers) : 1} />
-                ) : estimateError && !estimating ? (
-                  <div className="space-y-3 text-sm text-destructive">
-                    <p role="status" className="flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> {estimateError}</p>
-                    <Button type="button" size="sm" variant="outline" disabled={fareRetrySeconds > 0} onClick={() => void fetchEstimate()}>{fareRetrySeconds > 0 ? `Retry fare in ${fareRetrySeconds}s` : "Retry fare"}</Button>
-                  </div>
-                ) : (
-                  <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <FetchItLoader className="h-4 w-4" /> Getting your fare…
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-          <section aria-label="Route summary" className="rounded-xl border p-3 space-y-3">
+        <div className="space-y-2.5 sm:space-y-4">
+          <section aria-label="Route summary" className="space-y-1 rounded-xl border px-3 py-2 sm:space-y-3 sm:p-3">
             {([
               { label: "Pickup", address: pickupLabel, editStep: 0, color: "text-emerald-600" },
               { label: "Drop-off", address: dropoffLabel, editStep: 1, color: "text-rose-600" },
@@ -1120,24 +1105,30 @@ function BookingForm({
 
           <div className="space-y-2">
             <Label htmlFor="payment-method">Payment method</Label>
-            <select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting || attemptStatus === "checking"} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">Cash — pay your {isRide ? "driver" : "rider"}</option><option value="DEMO_GCASH">GCash (simulated)</option><option value="DEMO_MAYA">Maya (simulated)</option><option value="DEMO_BANK">Bank account (simulated)</option></select>
-            <p className="text-sm text-muted-foreground">{paymentMethod === "CASH" ? isRide ? "Pay your driver directly, then confirm payment in the booking." : "Pay at drop-off, then confirm the cash payment in this booking." : "Complete the simulated payment to confirm your booking. No money is charged."}</p>
+            <select id="payment-method" className="w-full rounded-md border bg-background p-3" value={paymentMethod} disabled={submitting || attemptStatus === "checking"} onChange={event => setPaymentMethod(event.target.value)}><option value="CASH">{isRide ? "Cash — pay your driver" : "Cash — pay at drop-off"}</option><option value="DEMO_GCASH">GCash (simulated)</option><option value="DEMO_MAYA">Maya (simulated)</option><option value="DEMO_BANK">Bank account (simulated)</option></select>
+            {paymentMethod !== "CASH" && <p className="text-sm text-muted-foreground">Simulated payment. No money is charged.</p>}
           </div>
+
+          {estimate && <BookingFareBreakdown estimate={estimate} bookingType={bookingType} pricedPassengers={isRide && vehicleClass === "TRICYCLE" ? Number(passengers) : 1} />}
 
         </div>
       )}
-      <details className="text-sm text-muted-foreground"><summary className="cursor-pointer min-h-12 py-3">Service-area map information</summary><p className="mt-2">Coverage: <a className="underline" href="https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/" target="_blank" rel="noreferrer">geoBoundaries / OCHA</a> · <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a className="underline" href="/service-area-data.json" target="_blank" rel="noreferrer">Data (ODbL)</a></p></details>
+      {coverageError && <details className="text-sm text-muted-foreground"><summary className="min-h-12 cursor-pointer py-3">Service coverage</summary><p>Fetch-It serves supported locations in Pangasinan. Coverage data from <a className="underline" href="https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/" target="_blank" rel="noreferrer">geoBoundaries / OCHA</a> and <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>. <a className="underline" href="/service-area-data.json" target="_blank" rel="noreferrer">Coverage data (ODbL)</a></p></details>}
       </div>
 
       {/* Navigation */}
       <div className="shrink-0 space-y-3 border-t bg-background px-4 py-3 sm:px-6">
-      {step < 2 && !(step === 0 ? pickupChosen : dropoffChosen) && <p id="booking-next-hint" className="text-sm text-muted-foreground">Select a {step === 0 ? "pickup" : "drop-off"} address to continue.</p>}
+      {step === 3 && estimate && <div className="flex items-baseline justify-between gap-2" role="status"><span className="text-sm font-medium">Total fare</span><strong className="text-2xl tabular-nums">{formatPeso(estimate.fare.totalFare)}</strong></div>}
       {step === 3 && error && <p role="alert" className="flex items-start gap-2 text-sm text-destructive"><AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />{error}</p>}
       {step === 3 && !connected && <p id="booking-reconnect-hint" role="status" className="text-sm text-muted-foreground">{needsStatusCheck ? "Connect to check your booking. Your draft is saved." : "Connect to get a fare. Your draft is saved."}</p>}
       {step === 3 && connected && !submitting && attemptCheck && attemptStatus === "missing" && <p role="status" className="text-sm text-muted-foreground">No booking found yet. Confirm again to retry the same request.</p>}
-      {step === 3 && connected && attemptStatus === "checking" && <p role="status" className="text-sm text-muted-foreground">Checking whether your booking went through…</p>}
-      {submitting && <div className="px-4 py-2 sm:px-6"><p role="status" className="text-sm">Sending your booking request…</p><SlowRequestFeedback message="This is taking longer than usual. Keep this page open while we confirm your request; avoid submitting another booking."/></div>}
-      {estimating && <div className="px-4 py-2 sm:px-6"><SlowRequestFeedback message="We’re still checking your route and fare. Your booking details are kept here."/></div>}
+      {submitting && <SlowRequestFeedback message="Still sending your booking. Keep this screen open." />}
+      {step === 3 && connected && !estimate && !error && !submitting && !needsStatusCheck && canEstimate() && (estimateError && !estimating ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p role="status" className="flex items-start gap-2 text-sm text-destructive"><AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />{estimateError}</p>
+          <Button type="button" size="sm" variant="outline" disabled={fareRetrySeconds > 0} onClick={() => void fetchEstimate()}>{fareRetrySeconds > 0 ? `Retry fare in ${fareRetrySeconds}s` : "Retry fare"}</Button>
+        </div>
+      ) : <SlowRequestFeedback initialMessage="Getting your fare…" message="Still getting your fare…" />)}
       {error && /fare.*refresh|refresh.*fare/i.test(error) && <Button type="button" variant="outline" disabled={estimating || submitting} onClick={()=>void fetchEstimate()}>Refresh fare</Button>}
       <DialogFooter className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:flex-row sm:justify-between">
         <Button
@@ -1151,7 +1142,7 @@ function BookingForm({
         {step < 3 ? (
           <Button
             type="button"
-            aria-describedby={step < 2 && !(step === 0 ? pickupChosen : dropoffChosen) ? "booking-next-hint" : undefined}
+            aria-describedby={connected && step < 2 && !(step === 0 ? pickupChosen : dropoffChosen) ? `booking-${step === 0 ? "pickup" : "dropoff"}-guidance` : undefined}
             disabled={step === 0 ? !pickupChosen : step === 1 ? !dropoffChosen : !pickupChosen || !dropoffChosen || !detailsValid}
             onClick={() => reviewDraft ? returnToReview(true) : goToStep((step + 1) as 1 | 2 | 3)}
           >
@@ -1159,7 +1150,7 @@ function BookingForm({
           </Button>
         ) : needsStatusCheck && !submitting ? (
           <Button type="button" className="min-h-14 min-w-0 px-3 text-base" onClick={() => void handleCheckBooking()} disabled={!connected || attemptStatus === "checking"} aria-describedby={connected ? undefined : "booking-reconnect-hint"}>
-            {attemptStatus === "checking" ? <><FetchItLoader className="h-4 w-4" /> Checking status…</> : "Check booking status"}
+            {attemptStatus === "checking" ? <><FetchItLoader className="h-4 w-4" /><span role="status">Checking status…</span></> : "Check booking status"}
           </Button>
         ) : (
           <Button type="button" className="min-h-14 min-w-0 px-3 text-base" onClick={handleConfirmBooking} disabled={!connected || submitting || estimating || !estimate || estimatedKey !== fareKey || !canEstimate()} aria-describedby={connected ? undefined : "booking-reconnect-hint"}>
@@ -1190,15 +1181,13 @@ function BookingFareBreakdown({ estimate, bookingType, pricedPassengers }: {
   const distanceLabel = includedKm > 0 ? `Next ${fare.billableKm} km` : `Distance (${fare.billableKm} km)`;
   const passengerLabel = pricedPassengers > 1 ? ` · ${pricedPassengers} passengers` : "";
 
-  return <section aria-label="Fare breakdown" className="space-y-3">
+  return <details className="rounded-xl border px-3">
+    <summary className="min-h-12 cursor-pointer py-3 text-sm font-medium">Fare breakdown</summary>
+    <div className="space-y-3 pb-3">
     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
       <span>{estimate.distanceKm} km · {estimate.routingSource === "openrouteservice" ? "Road route" : "Estimated distance"}</span>
       <span className="flex items-center gap-1"><Clock aria-hidden="true" className="h-3.5 w-3.5" /> {routeTimeLabel(bookingType)}: about {estimate.etaMinutes} min</span>
     </p>
-    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1" role="status">
-      <h3 className="text-base font-semibold">Total fare</h3>
-      <strong className="text-2xl tabular-nums">{formatPeso(fare.totalFare)}</strong>
-    </div>
     <dl className="space-y-2 border-t pt-3 text-sm">
       <FareLine label={baseLabel + passengerLabel} amount={fare.baseFare} />
       {(fare.billableKm > 0 || fare.distanceFare > 0) && <FareLine label={distanceLabel + distanceRate + passengerLabel} amount={fare.distanceFare} />}
@@ -1208,7 +1197,8 @@ function BookingFareBreakdown({ estimate, bookingType, pricedPassengers }: {
       {!!fare.roundingAdjustment && <FareLine label="Fare rounding" amount={fare.roundingAdjustment} />}
       {!!fare.bookingFee && <FareLine label="Booking fee" amount={fare.bookingFee} />}
     </dl>
-  </section>;
+    </div>
+  </details>;
 }
 
 function FareLine({ label, amount }: { label: string; amount: number }) {
@@ -1288,7 +1278,7 @@ function TrackingView({
   const otpProof = proofs.find((p) => p.proofType === "OTP" && p.verifiedAt);
 
   const terminal = isDelivered || status === "CANCELLED";
-  const routeDetails = <div className="space-y-4">
+  const routeMap = <div className="space-y-2">
       {/* Map */}
       <div className="relative rounded-xl overflow-hidden border bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 dark:from-amber-950/30 dark:via-orange-950/30 dark:to-amber-900/30 aspect-[16/10]">
         <LiveTrackingMap
@@ -1301,13 +1291,14 @@ function TrackingView({
           }
         />
       </div>
-      {!terminal && eta != null && <p className="text-sm text-muted-foreground">Est. delivery duration: about {eta} min</p>}
-      {!terminal && lastGpsAt && (
+      {!terminal && updatesPaused ? <p role="status" className="text-sm font-medium text-amber-800 dark:text-amber-200">Live updates paused. Locations may be out of date.</p> : !terminal && lastGpsAt && (
         <p className="text-xs text-muted-foreground">
           {locationUpdateLabel(lastGpsAt)}
         </p>
       )}
-
+    </div>;
+  const routeDetails = <div className="space-y-4">
+      {!terminal && eta != null && <p className="text-sm text-muted-foreground">{routeTimeLabel("DELIVERY")} · about {eta} min</p>}
       {/* Rider card */}
       {booking.rider && (
         <Card className="border">
@@ -1358,7 +1349,7 @@ function TrackingView({
   return (
     <div className="space-y-4">
       <BookingWaitStatus key={booking.id} booking={{ ...booking, status }} updatesPaused={updatesPaused} onUpdated={onUpdated} />
-      {!isDelivered && <BookingTimeline compact hideStatus={isAwaitingAcceptance(status)} status={status} type="DELIVERY" scheduled={status === "PENDING" && !!booking.scheduledAt && new Date(booking.scheduledAt).getTime() > Date.now()} />}
+      {!isDelivered && !isAwaitingAcceptance(status) && <BookingTimeline compact showStages={false} status={status} type="DELIVERY" />}
       {/* Proof of delivery */}
       {isDelivered && (
         <Card className="border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-50">
@@ -1405,10 +1396,12 @@ function TrackingView({
       {isDelivered && <BookingActions booking={{ ...booking, status }} readOnly={updatesPaused} />}
       {isDelivered ? <details open={routeOpen} onToggle={event => setRouteOpen(event.currentTarget.open)} className="rounded-2xl border bg-card px-4">
         <summary className="min-h-12 cursor-pointer py-3 text-base font-semibold">Delivery details &amp; route</summary>
-        {routeOpen && <div className="space-y-4 pb-4"><BookingTimeline compact status={status} type="DELIVERY" />
-          <p className="text-sm text-muted-foreground">Booking route. Live tracking has ended.</p>{routeDetails}
+        {routeOpen && <div className="space-y-4 pb-4"><BookingTimeline status={status} type="DELIVERY" hideStatus />
+          {routeMap}{routeDetails}
         </div>}
-      </details> : <>{routeDetails}<BookingActions booking={{ ...booking, status }} readOnly={updatesPaused} /></>}
+      </details> : <>{routeMap}<BookingActions booking={{ ...booking, status }} readOnly={updatesPaused} />
+        <details className="rounded-2xl border bg-card px-4"><summary className="min-h-12 cursor-pointer py-3 font-semibold">Delivery details</summary><div className="space-y-4 pb-4">{routeDetails}{status !== "CANCELLED" && <BookingTimeline status={status} type="DELIVERY" hideStatus />}</div></details>
+      </>}
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Back to bookings</Button>
       </div>

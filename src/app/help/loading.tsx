@@ -5,5 +5,6 @@ import { CustomerViewLoading } from "@/components/fetchit/shared/customer-view-l
 
 export default function HelpLoading() {
   const customer = useAppStore(state => state.user?.role === "CUSTOMER");
-  return customer ? <CustomerAppShell selected="profile" title="Support" backToProfile><CustomerViewLoading /></CustomerAppShell> : <div className="mx-auto max-w-5xl p-6"><CustomerViewLoading /></div>;
+  const destination = useAppStore(state => state.view === "mode-select") ? "home" : "profile";
+  return customer ? <CustomerAppShell selected={destination} title="Support" backTo={destination}><CustomerViewLoading /></CustomerAppShell> : <div className="mx-auto max-w-5xl p-6"><CustomerViewLoading /></div>;
 }

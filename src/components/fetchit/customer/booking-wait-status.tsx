@@ -61,14 +61,14 @@ export function BookingWaitStatus({ booking, updatesPaused = false, onUpdated, o
   return <section aria-label="Booking acceptance" className="space-y-3 rounded-xl border border-amber-300/60 bg-amber-50/50 p-3 text-sm dark:bg-amber-950/20">
     <div role="status" aria-live="polite" aria-atomic="true" className="space-y-1">
       <p className="font-semibold">{paused ? "Booking updates paused" : feedback.title}</p>
-      <p className="leading-relaxed text-muted-foreground">{paused ? "Last known status: " + feedback.title + ". Check for an update when connected to see whether your booking has been accepted." : feedback.message}</p>
+      <p className="leading-relaxed text-muted-foreground">{paused ? "Last known status · " + feedback.title : feedback.message}</p>
     </div>
     {!paused && feedback.wait && <p className="text-xs font-medium text-muted-foreground">{feedback.wait}</p>}
-    {feedback.kind !== "scheduled" && <p className="text-xs leading-relaxed text-muted-foreground">{paused ? "Reconnect to check this booking. " : "You can wait until the acceptance window ends. "}Cancel this booking before making another request.</p>}
+    {disconnected && <p className="text-sm text-muted-foreground">Reconnect to check this booking.</p>}
+    {feedback.kind !== "scheduled" && <p className="text-sm text-muted-foreground">Cancel this booking before making another request.</p>}
     <div className="grid gap-2 sm:flex sm:flex-wrap [&>button]:min-h-12"><Button type="button" variant="outline" className="min-h-12 w-full sm:w-auto" disabled={disconnected || busy} onClick={() => void check()}>{busy ? "Checking booking…" : error ? "Retry status check" : "Check for an update"}</Button>
       {onCancelled && <CancelBooking bookingId={booking.id} readOnly={readOnly || offlineAccess} onCancelled={onCancelled} />}
     </div>
-    <p className="text-xs text-muted-foreground">Checking updates uses this same booking.</p>
     {checked && !error && <p role="status" className="text-xs text-muted-foreground">Latest booking status checked.</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
   </section>;

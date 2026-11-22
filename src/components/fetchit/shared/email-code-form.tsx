@@ -39,7 +39,7 @@ export function EmailCodeForm({ purpose, email, initialChallenge, onSend, onConf
   async function send() {
     await run(async () => {
       const next = await onSend(); setChallenge(next); setCode(""); setReadyAt(Date.now() + next.retryAfter * 1000);
-      setNotice("If this email can be used, a new code has been sent. Check your inbox and spam folder. Only the newest code works.");
+      setNotice(purpose === "reset" ? "If this email has an account, check your inbox and spam for the new code." : "Use the newest code. Check spam if it hasn’t arrived.");
     });
   }
   async function submit(e: React.FormEvent) {
@@ -53,12 +53,13 @@ export function EmailCodeForm({ purpose, email, initialChallenge, onSend, onConf
     });
   }
   return <div className="space-y-3">
-    <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">{purpose === "reset" ? `Request a password-reset code for ${email}.` : `Enter the verification code sent to ${email}.`} Codes expire after 10 minutes.</p>
+    {purpose === "verification" && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">{challenge ? `Enter the code sent to ${email || "your email address"}.` : `Send a code to ${email || "your email address"}.`}</p>}
     {challenge && <form onSubmit={submit} className="space-y-3">
       <div className="space-y-2"><Label htmlFor={`${purpose}-code`}>Six-digit code</Label>
         <Input id={`${purpose}-code`} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-          inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required disabled={busy} placeholder="000000" />
-        <p className="text-xs text-muted-foreground" role="status">{expires ? `Code expires in ${Math.floor(expires / 60)}:${String(expires % 60).padStart(2, "0")}.` : "This code has expired. Request a new one."}</p>
+          inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required disabled={busy || !expires} aria-describedby={`${purpose}-code-expiry`} />
+        <p id={`${purpose}-code-expiry`} className="text-xs text-muted-foreground">{expires ? "Codes expire after 10 minutes." : <span role="status">Code expired. Request a new one.</span>}</p>
+        <Button type="button" variant="ghost" size="sm" onClick={send} disabled={busy || wait > 0}>{wait ? `Resend in ${wait}s` : "Resend code"}</Button>
       </div>
       {purpose === "reset" && <>
         <div className="space-y-2"><Label htmlFor="reset-password">New password</Label><PasswordInput visibilityLabel="new password" id="reset-password" autoComplete="new-password" required
@@ -70,6 +71,6 @@ export function EmailCodeForm({ purpose, email, initialChallenge, onSend, onConf
     </form>}
     {error && <p className="text-sm text-destructive [overflow-wrap:anywhere]" role="alert">{error}</p>}
     {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
-    <Button type="button" variant="outline" className="w-full" onClick={send} disabled={busy || wait > 0}>{wait ? `Resend available in ${wait}s` : challenge ? "Resend code" : "Send code"}</Button>
+    {!challenge && <Button type="button" className="w-full" onClick={send} disabled={busy || wait > 0}>{busy ? "Sending…" : wait ? `Send code in ${wait}s` : "Send code"}</Button>}
   </div>;
 }

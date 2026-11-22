@@ -23,8 +23,8 @@ export function useRideLocation(enabled: boolean) {
         if (closed) return;
         setLocation(null);
         setError(failure.code === 1
-          ? "Location access is off. Allow location in your browser settings to see where you are. Pickup and drop-off are still shown."
-          : "Your current location is unavailable. Pickup and drop-off are still shown.");
+          ? "Allow location in your browser settings to see yourself on the map."
+          : "Your location is unavailable.");
       },
       { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 },
     );
@@ -36,7 +36,7 @@ export function useRideLocation(enabled: boolean) {
     canRetry: enabled && !!error,
     retry: () => { setError(''); setLocation(null); setAttempt(value => value + 1); },
     message: !enabled ? "" : typeof navigator !== "undefined" && !navigator.geolocation
-      ? "This browser cannot share your location. Pickup and drop-off are still shown."
-      : error || (location ? "Your current location is marked in blue." : "Allow location access to see where you are on the map. Pickup and drop-off are shown while we locate you."),
+      ? "This browser can’t share your location."
+      : error || (location ? "" : "Allow location access to see yourself on the map."),
   };
 }

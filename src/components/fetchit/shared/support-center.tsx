@@ -26,11 +26,11 @@ export async function markSupportRead(ids: string[]) {
   window.dispatchEvent(new Event("fetchit:support-updated"));
 }
 
-export function SupportCenter({ booking, initialTicketId }: { booking?: Booking; initialTicketId?: string }) {
+export function SupportCenter({ booking, initialTicketId, startComposing = false }: { booking?: Booking; initialTicketId?: string; startComposing?: boolean }) {
   const userId = useAppStore(s => s.user?.id ?? "");
   const [selected, setSelected] = useState(initialTicketId ?? "");
   const [created, setCreated] = useState(false);
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState(startComposing);
   const [page, setPage] = useState<TicketPage | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,15 +52,16 @@ export function SupportCenter({ booking, initialTicketId }: { booking?: Booking;
   if (selected) return <SupportConversation key={selected} id={selected} justCreated={created} onBack={() => { setSelected(""); setCreated(false); void refresh(); }} />;
   const onCreated = (id: string) => { setComposing(false); setCreated(true); setSelected(id); window.dispatchEvent(new Event("fetchit:support-updated")); };
   if (composing) return <div className="space-y-4"><Button variant="ghost" size="sm" onClick={() => setComposing(false)}><ArrowLeft className="h-4 w-4" />All requests</Button><NewSupportRequest booking={booking} onCreated={onCreated} /></div>;
-  if (page?.tickets.length === 0) return <div className="space-y-4">
+  if (page?.tickets.length === 0 && booking) return <div className="space-y-4">
     {error && <p role="alert" className="text-sm text-destructive">{error} <Button variant="ghost" onClick={() => void refresh()}>Retry</Button></p>}
     <NewSupportRequest key={booking?.id ?? "general"} booking={booking} onCreated={onCreated} />
   </div>;
   return <div className="space-y-6">
     <section aria-label="Your support requests" className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your requests</h2><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => void refresh()}>Refresh</Button>{page?.tickets.length !== 0 && <Button size="sm" onClick={() => setComposing(true)}>Get help</Button>}</div></div>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your requests</h2><Button size="sm" className="min-h-12" onClick={() => setComposing(true)}>New request</Button></div>
+      {error && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive"><p>{error}</p><Button size="sm" variant="outline" onClick={() => void refresh()}>Retry</Button></div>}
       {!page && !error && <p className="text-sm text-muted-foreground">Loading requests…</p>}
+      {page?.tickets.length === 0 && !error && <p className="text-sm text-muted-foreground">No support requests yet.</p>}
       {page?.tickets.map(ticket => <button key={ticket.id} type="button" className="w-full rounded-xl border p-4 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setCreated(false); setSelected(ticket.id); }}>
         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold">{supportSubject(ticket)} {ticket.unread && <span className="ml-2 rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">New reply</span>}</p><p className="mt-1 text-xs text-muted-foreground">{ticket.booking?.refCode ?? "General support"} · {status(ticket.status)}</p><p className="mt-2 line-clamp-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{ticket.preview}</p></div><ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" /></div>
       </button>)}
@@ -99,7 +100,7 @@ function SupportConversation({ id, onBack, justCreated = false }: { id: string; 
   }
   useVisiblePoll(userId ? `${userId}:conversation:${id}` : "", refresh, 10000);
   return <section className="space-y-4" aria-label="Support conversation">
-    {justCreated && <p role="status" className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">Your request has been sent. You can add details below. Check this conversation or your notification bell for a reply.</p>}
+    {justCreated && <p role="status" className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">Request sent. Look for replies in Your requests and the notification bell.</p>}
     <div className="flex items-center justify-between gap-2"><Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="h-4 w-4" />All requests</Button><Button size="sm" variant="outline" onClick={() => void refresh()}>Refresh</Button></div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {!data && !error && <p className="text-sm text-muted-foreground">Loading conversation…</p>}
@@ -126,9 +127,9 @@ function SupportConversation({ id, onBack, justCreated = false }: { id: string; 
         } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
       }}>
         {data.ticket.status === "RESOLVED" && <p className="text-sm text-muted-foreground">Still need help? Sending a reply will reopen this request.</p>}
-        <Label htmlFor={`${formId}-reply`}>Your reply</Label><Textarea id={`${formId}-reply`} rows={3} minLength={1} maxLength={2000} required disabled={busy} aria-describedby={`${formId}-reply-hint`} placeholder="Add an update or ask a follow-up question…" value={reply} onChange={e => saveReply(e.target.value)} />
-        <p id={`${formId}-reply-hint`} className="text-xs text-muted-foreground">{reply.length.toLocaleString()} / 2,000 characters · Keep verification codes and payment details private.</p>
-        {notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
+        <Label htmlFor={`${formId}-reply`}>Your reply</Label><Textarea id={`${formId}-reply`} rows={3} minLength={1} maxLength={2000} required disabled={busy} aria-describedby={`${formId}-reply-hint`} value={reply} onChange={e => saveReply(e.target.value)} />
+        <p id={`${formId}-reply-hint`} className="text-xs text-muted-foreground">Leave out verification codes and payment details.{reply.length >= 1850 && ` ${(2000 - reply.length).toLocaleString()} characters left.`}</p>
+        {notice && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>}
         <Button type="submit" className="min-h-12" disabled={busy || !reply.trim()}>{busy ? "Sending…" : data.ticket.status === "RESOLVED" ? "Send reply & reopen request" : "Send reply"}</Button>
       </form>
     </>}

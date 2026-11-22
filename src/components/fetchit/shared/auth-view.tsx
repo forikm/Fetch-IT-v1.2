@@ -95,7 +95,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     setPassword("");
     setMode("login");
     setError(null);
-    setNotice("Sign in again with this email and password to continue verification. Your name and phone number are saved.");
+    setNotice("Sign in again to verify your email. Your details are saved.");
   }
 
   function verificationFailure(error: unknown) {
@@ -170,7 +170,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       if (signal.aborted || !user.emailVerified) return;
       setEmailVerified(true);
       try { normalizePhilippinePhone(phone); }
-      catch { setNotice("Email verified. Enter your phone number below, then continue."); return; }
+      catch { setNotice(null); return; }
       setLoading(true);
       setError(null);
       setNotice("Email verified. Finishing your signup…");
@@ -184,7 +184,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
     if (!refreshed) await reload(user);
     if (!user.emailVerified) {
       setPendingVerification(true);
-      setNotice(EMAIL_CODES_ENABLED ? "Verify your email using a code below." : "Your email is not verified yet. Open the verification link or send another email below.");
+      setNotice(null);
       return;
     }
     setEmailVerified(true);
@@ -215,7 +215,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       if (res.status === 400 && data?.code === "PROFILE_REQUIRED") {
         setFirebaseUid(user.uid);
         setPendingVerification(true);
-        setNotice("Finish setting up your account. Add your phone number so your driver can contact you, then select Continue.");
+        setNotice(null);
         setError(phone.trim() ? data.error || "Enter a valid Philippine phone number." : null);
         return;
       }
@@ -266,7 +266,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
           if (!verificationFailure(result.verificationError)) setError(`Your signup is saved, but the verification email could not be sent. ${customerAuthMessage(result.verificationError)}`);
         } else {
           setVerificationSent(true);
-          setNotice(`${result.recovered ? "Your unfinished signup has been recovered. " : ""}${EMAIL_CODES_ENABLED ? "Verification code sent. Enter it below." : "Verification email sent. Check your inbox and spam folder, open the link, then return here."}${result.profileError ? " Your name will be saved when you finish signing in." : ""}`);
+          setNotice(result.profileError ? "Your name will be saved when you finish signing in." : null);
         }
       }
     } catch (err) {
@@ -328,7 +328,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       if (!user) throw new Error("Sign in again to resend verification.");
       await sendVerificationForUser(user);
       setVerificationSent(true);
-      setNotice("Verification email sent. Check your inbox and spam folder.");
+      setNotice("Check spam if the email hasn’t arrived.");
     } catch (err) {
       if (verificationFailure(err)) return;
       setError(`The verification email could not be sent. ${customerAuthMessage(err)}`);
@@ -377,7 +377,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
       await emailCodeRequest("/api/auth/email-code/verify", { challengeId, code, idToken: await user.getIdToken(true) });
       await reload(user); confirmed = user.emailVerified; setEmailVerified(confirmed);
       try { normalizePhilippinePhone(phone); }
-      catch { setNotice("Email verified. Enter your phone number below, then continue."); return; }
+      catch { setNotice(null); return; }
       await finishSignIn(user, true);
     } catch (err) {
       if (verificationFailure(err)) return;
@@ -423,26 +423,23 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
 
       <main className="flex-1 mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-2 lg:gap-20">
         <aside className="relative hidden min-h-[560px] flex-col justify-between overflow-hidden rounded-[2rem] bg-[#dde9df] p-10 text-[#183b33] lg:flex">
-          <div><p className="text-xs font-semibold tracking-[0.16em] text-[#627069]">YOUR EVERYDAY, ON THE MOVE</p><h1 className="mt-8 text-5xl font-semibold leading-[1.08] tracking-[-0.05em]">A little easier.<br />A little closer.</h1><p className="mt-6 max-w-xs text-base leading-7 text-[#627069]">One account for your deliveries, daily rides and everything in between.</p></div>
-          <div className="relative mt-12"><ArrowUpRight className="absolute -right-3 -top-16 h-40 w-40 stroke-[0.7] text-[#183b33]/15" aria-hidden /><div className="relative space-y-3"><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-[#f5e8d9] text-primary"><Package className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Send something good.</p><p className="mt-1 text-xs text-[#627069]">Parcels, cargo and more</p></div></div><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-[#dce9de]"><Car className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Go somewhere new.</p><p className="mt-1 text-xs text-[#627069]">A ride for every kind of day</p></div></div></div></div>
+          <div><h1 className="text-5xl font-semibold leading-[1.08] tracking-[-0.05em]">Rides and deliveries in Pangasinan</h1></div>
+          <div className="relative mt-12"><ArrowUpRight className="absolute -right-3 -top-16 h-40 w-40 stroke-[0.7] text-[#183b33]/15" aria-hidden /><div className="relative space-y-3"><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-[#f5e8d9] text-primary"><Package className="h-5 w-5" /></span><p className="text-sm font-semibold">Send a package</p></div><div className="flex items-center gap-4 rounded-2xl bg-white/70 p-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-[#dce9de]"><Car className="h-5 w-5" /></span><p className="text-sm font-semibold">Book a ride</p></div></div></div>
         </aside>
         <div className="mx-auto w-full min-w-0 max-w-md">
-          <p className="eyebrow mb-4 px-4 sm:px-6">LET&apos;S GET YOU MOVING</p>
           <Card className="min-w-0 gap-5 border-0 bg-transparent shadow-none">
             <CardHeader className="min-w-0 px-4 sm:px-6">
               <CardTitle className="text-3xl font-semibold tracking-tight">
-                {resetActive ? "Reset your password" : pendingVerification ? emailVerified ? "Email verified" : verificationSent ? "Check your inbox" : "Verify your email" : mode === "login" ? "Welcome back." : "Your next move starts here."}
+                {resetActive ? "Reset your password" : pendingVerification ? emailVerified ? "Finish setting up your account" : "Verify your email" : mode === "login" ? "Sign in" : "Create your account"}
               </CardTitle>
-              {pendingVerification && (
+              {pendingVerification && !emailVerified && !EMAIL_CODES_ENABLED && (
                 <CardDescription className="break-words [overflow-wrap:anywhere]">
-                  {emailVerified ? "Finish your account details to continue." : verificationSent ? `Check the ${EMAIL_CODES_ENABLED ? "code" : "link"} sent to ${email || "your inbox"}.` : `Verify ${email || "your email address"} to finish signing up.`}
+                  {verificationSent ? `Open the link sent to ${email || "your inbox"}, then return here.` : `Send a verification link to ${email || "your email address"}.`}
                 </CardDescription>
               )}
-              {!pendingVerification && !resetActive && <CardDescription className="mt-2 leading-relaxed">{mode === "login" ? "Sign in to book, track and manage your trips." : "Create an account for easier deliveries and rides."}</CardDescription>}
             </CardHeader>
             <CardContent className="min-w-0 px-4 sm:px-6">
               {resetActive ? <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">Enter your account email to recover access. You don’t need to sign in first.</p>
                 <div className="space-y-2"><Label htmlFor="recovery-email">Account email</Label><Input id="recovery-email" type="email" autoComplete="email" value={email} disabled={loading || codeBusy} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></div>
                 {EMAIL_CODES_ENABLED && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && <EmailCodeForm key={email.trim()} purpose="reset" email={email.trim()} onBusyChange={busy => { codePending.current = busy; setCodeBusy(busy); }} onSend={() => emailCodeRequest("/api/auth/password-reset/send", { email: email.trim() })}
                   onConfirm={async (challengeId, code, password) => {
@@ -460,7 +457,6 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                 <Button variant="ghost" className="w-full" disabled={codeBusy || loading} onClick={() => { if (!codePending.current) setResetActive(false); }}>Back to sign in</Button>
               </div> : pendingVerification ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">{emailVerified ? "Your email is verified. Finish setting up your account below." : EMAIL_CODES_ENABLED ? "Your signup is saved. Verify your email with the code below." : verificationSent ? "Open the email link, then return here. We’ll check verification when you return; your progress is saved." : "Your signup is saved. Send a verification email below, then open its link and return here."}</p>
                   {EMAIL_CODES_ENABLED && !emailVerified && <EmailCodeForm key={`${firebaseUid}:${verificationChallenge?.challengeId ?? "new"}`} purpose="verification" email={email} initialChallenge={verificationChallenge}
                     onBusyChange={busy => { codePending.current = busy; setCodeBusy(busy); }}
                     onSend={async () => {
@@ -468,19 +464,19 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                       if (!user) { resumeVerificationSignIn(); throw new Error("Sign in again to verify your email."); }
                       return (await sendVerificationForUser(user))!;
                     }} onConfirm={confirmVerificationCode} />}
-                  <div className="space-y-2">
+                  {emailVerified && <div className="space-y-2">
                     <Label htmlFor="verification-phone">Phone number</Label>
                     <Input id="verification-phone" type="tel" required autoComplete="tel" maxLength={32}
                       value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+63 917 123 4567" />
-                    <p className="text-xs text-muted-foreground">Required to finish creating your account. Local 09 numbers are saved with +63.</p>
-                  </div>
+                    <p className="text-xs text-muted-foreground">Use a Philippine mobile number starting with 09 or +63.</p>
+                  </div>}
                   {error && <p className="text-sm text-destructive [overflow-wrap:anywhere]" role="alert">{error}</p>}
                   {notice && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]" role="status">{notice}</p>}
                   {(!EMAIL_CODES_ENABLED || emailVerified) && <Button className="w-full" onClick={checkVerification} disabled={loading}>
                     {loading && <FetchItLoader className="h-4 w-4" />} {emailVerified ? "Continue" : "I've verified my email"}
                   </Button>}
                   {!EMAIL_CODES_ENABLED && !emailVerified && <Button variant="outline" className="w-full" onClick={resendVerification} disabled={loading}>{verificationSent ? "Resend email" : "Send verification email"}</Button>}
-                  {!emailVerified && <Button variant="outline" className="w-full" onClick={resumeVerificationSignIn} disabled={loading || codeBusy}>Sign in again to continue</Button>}
+                  {!emailVerified && <Button variant="ghost" className="w-full" onClick={resumeVerificationSignIn} disabled={loading || codeBusy}>Sign in again</Button>}
                   <Button variant="ghost" className="w-full" onClick={useDifferentAccount} disabled={loading || codeBusy}>Use a different account</Button>
                 </div>
               ) : <Tabs
@@ -488,7 +484,7 @@ export function AuthView({ initialMode }: { initialMode: "login" | "signup" }) {
                 onValueChange={(v) => { setMode(v as "login" | "signup"); setError(null); setNotice(null); }}
               >
                 <TabsList className="grid grid-cols-2 w-full mb-4">
-                  <TabsTrigger value="login" disabled={loading}>Login</TabsTrigger>
+                  <TabsTrigger value="login" disabled={loading}>Sign in</TabsTrigger>
                   <TabsTrigger value="signup" disabled={loading}>Sign up</TabsTrigger>
                 </TabsList>
 

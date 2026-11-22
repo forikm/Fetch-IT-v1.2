@@ -47,7 +47,7 @@ export function RidePickupOtp({ bookingId }: { bookingId: string }) {
     <Card className="border-primary/30 bg-primary/5 py-0">
       <CardContent className="space-y-3 p-4">
         <p className="flex items-center gap-2 font-medium"><KeyRound className="h-4 w-4" /> Pickup verification code</p>
-        <p className="text-sm text-muted-foreground">Check your driver's name and vehicle. Share this code only when you meet at pickup, before boarding.</p>
+        <p className="text-sm text-muted-foreground">Check the driver’s name and plate before sharing the code in person.</p>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {otp ? <>
           {expiresAt && <PickupQrFallback key={expiresAt}><PickupQrCode bookingId={bookingId} otp={otp} expiresAt={expiresAt} /></PickupQrFallback>}

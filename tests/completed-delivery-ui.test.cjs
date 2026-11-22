@@ -38,6 +38,7 @@ function load(h, overrides = {}) {
     "@/hooks/use-customer-overlay-history": { useCustomerOverlayHistory() {} },
     "@/hooks/use-tracking-updates": { useTrackingUpdates() {} },
     "@/lib/booking-wait": { isAwaitingAcceptance: status => ["PENDING", "MATCHED"].includes(status), mergeBookingUpdate: (a, b) => ({ ...a, ...b }) },
+    "@/lib/offline-data": { readSnapshot: () => null, saveSnapshot() {} },
     "../shared/history-filters": { HistoryFilters: "HistoryFilters", emptyHistoryFilter: { query: "", status: "", from: "", to: "" } },
     "@/lib/customer-booking-ui": { customerStatusLabel: status => status, formatPeso: value => `₱${value}`, locationUpdateLabel: () => "", routeTimeLabel: () => "" },
     "@/lib/constants": { VEHICLES: { MOTORCYCLE: { label: "Motorcycle" } } },
@@ -120,5 +121,7 @@ test("completed proof comes first, defers its map until expanded, and explains m
   h.reset();
   const active = nodes(app.TrackingView({ booking: { ...booking, status: "IN_TRANSIT" }, onClose() {}, onUpdated() {} }));
   assert.equal(active.find(n => n.type === "BookingTimeline").props.compact, true);
+  assert.equal(active.find(n => n.type === "BookingTimeline").props.showStages, false);
+  assert(!active.find(n => n.type === "details").props.open);
   assert.equal(active.find(n => n.type === "LiveTrackingMap").props.showLiveStatus, true);
 });

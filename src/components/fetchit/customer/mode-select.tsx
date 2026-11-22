@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Car, Package } from "lucide-react";
+import { ArrowRight, Car, MessageCircle, Package } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/lib/store";
 import { readCustomerBooking } from "@/lib/offline-bookings";
 import { readSnapshot } from "@/lib/offline-data";
@@ -57,9 +59,10 @@ export function ModeSelect() {
       {loading ? <div role="status" className="animate-pulse rounded-2xl border bg-muted p-5 motion-reduce:animate-none">Loading your bookings…</div> : error ? <RequestError message={error} onRetry={() => void load()} /> : bookings.length ? bookings.slice(0, 3).map(booking => <button key={booking.id} type="button" aria-label={`Open booking ${booking.refCode}`} onClick={() => useAppStore.getState().openBookingSummary(booking.id, booking.type === "RIDE" ? "ride" : "delivery", "tracking")} className="flex w-full min-w-0 items-center gap-3 rounded-2xl border bg-card p-4 text-left focus-visible:outline-2 focus-visible:outline-ring">
         {booking.type === "RIDE" ? <Car className="h-6 w-6 shrink-0 text-primary" /> : <Package className="h-6 w-6 shrink-0 text-primary" />}
         <span className="min-w-0 flex-1 space-y-1"><span className="flex flex-wrap items-center gap-2"><StatusBadge status={booking.status} type={booking.type} /><span className="text-xs text-muted-foreground">{booking.refCode}</span></span><span className="block break-words text-base font-semibold">{booking.dropoffLabel}</span><span className="block text-sm text-muted-foreground">{booking.type === "RIDE" ? "View ride & safety" : "Track delivery"}</span></span><ArrowRight className="h-5 w-5 shrink-0" />
-      </button>) : <p className="rounded-2xl border bg-card p-4 text-base text-muted-foreground">No active bookings. Choose Ride or Delivery to get started.</p>}
+      </button>) : <p className="rounded-2xl border bg-card p-4 text-base text-muted-foreground">No active bookings.</p>}
     </section>;
   return <CustomerAppShell selected="home" title="Home">
+    <div className="space-y-6 pb-16">
     {bookings.length > 0 && activeBookings}
     <section aria-labelledby="services-heading" className="space-y-3">
       <h2 id="services-heading" className="text-xl font-semibold tracking-tight">{bookings.length ? "New booking" : `Where to next, ${user?.name?.split(" ")[0] ?? "there"}?`}</h2>
@@ -69,6 +72,22 @@ export function ModeSelect() {
       </div>
     </section>
     {bookings.length === 0 && activeBookings}
+    </div>
+    <Button
+      asChild
+      size="icon"
+      className="fixed right-[calc(1rem+env(safe-area-inset-right))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-20 size-14 rounded-full border border-primary/20 shadow-lg motion-reduce:transition-none sm:right-[calc(1.5rem+env(safe-area-inset-right))] sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:size-14"
+    >
+      {online ? (
+        <Link href="/help?message=1" aria-label="Message support" title="Message support">
+          <MessageCircle aria-hidden="true" className="size-6" />
+        </Link>
+      ) : (
+        <a href="/help" aria-label="Open offline support" title="Open offline support">
+          <MessageCircle aria-hidden="true" className="size-6" />
+        </a>
+      )}
+    </Button>
     {ratingBooking && <BookingActions key={"home-rating:" + ratingBooking.id} booking={ratingBooking} completionReminder onRated={dismissRating} readOnly={!online || offlineAccess || !!savedAt} />}
   </CustomerAppShell>;
 }

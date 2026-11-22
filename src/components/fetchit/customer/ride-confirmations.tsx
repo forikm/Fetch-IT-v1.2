@@ -85,15 +85,14 @@ export function CustomerRideConfirmations({ ride, disabled = false, onUpdated }:
   const arrived = !!ride.customerDropoffConfirmedAt;
   const action: RideConfirmationAction | null = !pickupConfirmed ? "PICKUP" : ride.status === "IN_TRANSIT" && !arrived ? "DROPOFF" : null;
   const stageValid = confirming === "PICKUP" ? !pickupConfirmed : confirming === "DROPOFF" && pickupConfirmed && ride.status === "IN_TRANSIT" && !arrived;
-  const title = !pickupConfirmed ? "Are you on board?" : arrived ? "Arrival confirmed" : ride.status === "PICKED_UP" ? "Pickup confirmed" : "At your drop-off?";
-  const message = !pickupConfirmed ? "Your pickup code was verified. Confirm only after you’re inside the correct vehicle."
+  const title = !pickupConfirmed ? "Are you on board?" : arrived ? "Arrival confirmed" : ride.status === "PICKED_UP" ? "Pickup confirmed" : "On the way to drop-off";
+  const message = !pickupConfirmed ? "Confirm after boarding the correct vehicle."
     : arrived ? "Your driver can complete the ride after payment is confirmed."
     : ride.status === "PICKED_UP" ? "Your driver can now start the trip."
-    : "Confirm only when you’ve reached your booked drop-off and can safely get out.";
+    : "Confirm when you’ve reached your booked drop-off and can safely get out.";
 
   return <section aria-label="Your ride confirmations" className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
     <div><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{message}</p></div>
-    {pickupConfirmed && <p className="text-sm">✓ You confirmed pickup{arrived ? " and drop-off" : ""}.</p>}
     {action && <Button type="button" className="min-h-12 w-full" disabled={disabled || busy} onClick={() => { setConfirming(action); setError(""); setNotice(""); }}>
       {action === "PICKUP" ? "I’m on board" : "I’ve arrived at drop-off"}
     </Button>}

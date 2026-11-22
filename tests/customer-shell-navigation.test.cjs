@@ -6,7 +6,7 @@ const ts = require('typescript');
 const vm = require('node:vm');
 const jsx = (type, props) => ({ type, props });
 function nodes(tree) { return !tree || typeof tree !== 'object' ? [] : Array.isArray(tree) ? tree.flatMap(nodes) : [tree, ...nodes(tree.props?.children)]; }
-function harness(pathname = '/', nested = false) {
+function harness(pathname = '/', nested = false, backTo = 'profile') {
   const events = [];
   const state = { mode: 'ride', setView: view => events.push(['view', view]), chooseMode: mode => events.push(['mode', mode]), openBookingSummary: (...args) => events.push(['booking', ...args]) };
   const useAppStore = selector => selector(state);
@@ -18,7 +18,7 @@ function harness(pathname = '/', nested = false) {
       : name === 'next/navigation' ? { usePathname: () => pathname, useRouter: () => ({ push: url => events.push(['route', url]) }) }
       : name === '@/lib/store' ? { useAppStore } : new Proxy({}, { get: (_, key) => key }),
   });
-  const tree = nodes(exports.CustomerAppShell({ title: 'Support', selected: 'profile', backToProfile: true, children: { type: 'loading-content', props: {} } }));
+  const tree = nodes(exports.CustomerAppShell({ title: 'Support', selected: backTo, backTo, children: { type: 'loading-content', props: {} } }));
   return { tree, events, find: label => tree.find(n => n.props?.['aria-label'] === label) };
 }
 test('support navigation selects the customer destination before returning to the root route', () => {
@@ -31,6 +31,12 @@ test('support navigation selects the customer destination before returning to th
   h.events.length = 0;
   h.tree.find(n => n.type === 'CustomerBottomNav').props.onBookings();
   assert.deepEqual(h.events, [['mode', 'ride'], ['route', '/']]);
+});
+test('support opened from the Home launcher returns to Home', () => {
+  const h = harness('/help', false, 'home');
+  h.find('Back to home').props.onClick();
+  assert.deepEqual(h.events, [['view', 'mode-select'], ['route', '/']]);
+  assert.equal(h.tree.find(n => n.type === 'CustomerBottomNav').props.selected, 'home');
 });
 test('notification booking links preserve the booking and service from support', () => {
   const h = harness('/help');

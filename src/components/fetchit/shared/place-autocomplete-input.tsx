@@ -24,6 +24,7 @@ export function PlaceAutocompleteInput({
   className,
   id,
   describedBy,
+  guidance = "Choose an address suggestion or select a pin on the map.",
 }: {
   placeholder: string;
   value: string;
@@ -34,6 +35,7 @@ export function PlaceAutocompleteInput({
   className?: string;
   id?: string;
   describedBy?: string;
+  guidance?: string | null;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const onChangeRef = useRef(onChange);
@@ -80,7 +82,7 @@ export function PlaceAutocompleteInput({
       <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
       <Input
         id={id}
-        aria-describedby={[describedBy, id ? id + "-guidance" : undefined].filter(Boolean).join(" ") || undefined}
+        aria-describedby={[describedBy, id && (failed || guidance) ? id + "-guidance" : undefined].filter(Boolean).join(" ") || undefined}
         ref={inputRef}
         placeholder={failed ? "Type an address (autocomplete unavailable)" : placeholder}
         value={value}
@@ -93,7 +95,7 @@ export function PlaceAutocompleteInput({
         <FetchItLoader className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       )}
       </div>
-      {failed ? <div id={id ? id + "-guidance" : undefined} role="alert" className="mt-2 space-y-2 text-sm"><p>Address search couldn’t load. Your text is kept. Retry search or choose a saved place. The map can also be used when available.</p><Button type="button" variant="outline" className="min-h-12" onClick={() => { setFailed(null); setReady(false); setAttempt(value => value + 1); }}>Retry address search</Button></div> : <p id={id ? id + "-guidance" : undefined} className="mt-2 text-sm text-muted-foreground">Choose an address suggestion or select a pin on the map.</p>}
+      {failed ? <div id={id ? id + "-guidance" : undefined} role="alert" className="mt-2 space-y-2 text-sm"><p>Address search couldn’t load. Your text is saved.</p><Button type="button" variant="outline" className="min-h-12" onClick={() => { setFailed(null); setReady(false); setAttempt(value => value + 1); }}>Retry address search</Button></div> : guidance && <p id={id ? id + "-guidance" : undefined} className="mt-2 text-sm text-muted-foreground">{guidance}</p>}
     </div>
   );
 }

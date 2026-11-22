@@ -12,31 +12,51 @@ import { Button } from "@/components/ui/button";
 import { CustomerAppShell } from "./customer-app-shell";
 
 const faqs = [
-  ["How do I report an issue?", "Under Your requests, select Get help. If you have no requests yet, the form is already open. Choose Issue with Delivery or Issue with the Ride, select what happened, link your booking, and describe the problem. Then select Send support request. For account questions, choose Account or app help."],
-  ["How do I report a concern about a rider?", "Choose Issue with Delivery or Issue with the Ride, then Issue with the rider. Select the booking and tell us what happened and when. You can also open a booking and select Get help to link it automatically."],
-  ["How do I track my ride or delivery?", "Open your active booking and select View tracking details when it is available. Location updates appear after the rider accepts and starts sharing their location."],
-  ["How do I cancel or change a booking?", "Open the booking and select Cancel booking when it is available. If you need help, select Get help, choose your ride or delivery, then Cancellation or booking changes. Sending a support request does not cancel or change the booking."],
-  ["How do I question a fare or payment?", "Choose Issue with Delivery or Issue with the Ride, then Fare, payment, or refund. Link the booking and include the amount shown, the amount paid, and your payment method. Keep full card and bank account details private."],
-  ["I left something behind. What should I do?", "Choose Issue with the Ride, then I left an item behind. Select the ride and describe the item, where you last saw it, and when the ride ended so support can review your request."],
-  ["Where do I read and reply to a support message?", "Open Help & Support and select your conversation under Your requests, or select a support reply in the notification bell. Use Your reply to add an update. If the request is resolved, Send reply & reopen request will reopen it."],
-  ["I’m having trouble signing in.", "Check your email address and use Forgot password on the sign-in screen. For an account created before email verification was introduced, open Having trouble signing in? and try original account sign-in."],
+  ["Report a booking issue", "Choose New request, select Ride or Delivery, and link the booking. Choose Account or app for help without a booking."],
+  ["Report a driver or rider concern", "Choose Ride or Delivery, then Issue with the rider. You can also open the booking and select Get help to link it."],
+  ["Track a ride or delivery", "Open the active booking to track it. The map updates once the driver or rider shares their location."],
+  ["Cancel or change a booking", "Use Cancel booking on the booking when available. For help with a change, send a request under Cancellation or booking changes. The request itself leaves the booking in place."],
+  ["Question a fare or payment", "Choose Fare, payment, or refund. Include the fare shown, the amount paid, and how you paid."],
+  ["Find an item left on a ride", "Choose Ride, then I left an item behind. Describe the item and where you last saw it."],
+  ["Read or reply to support", "Open a conversation under Your requests or from the notification bell. Replying to a resolved request reopens it."],
 ];
 
-export function HelpView({ ticketId }: { ticketId?: string }) {
+export function HelpView({ ticketId, startMessage = false }: { ticketId?: string; startMessage?: boolean }) {
   const online = useOnlineStatus();
   const offlineAccess = useAppStore(state => state.offlineAccess);
   const router = useRouter();
   const { user, bootstrapped, bootstrap, setView } = useAppStore();
   useEffect(() => { if (!bootstrapped) void bootstrap(); }, [bootstrapped, bootstrap]);
   const customer = user?.role === "CUSTOMER";
-  const Heading = customer ? "h2" : "h1";
-  const content = <><div className="mb-6"><Heading className="text-2xl font-semibold tracking-tight sm:text-3xl">How can we help?</Heading><p className="mt-2 text-base text-muted-foreground">Get help with a booking or your account, or follow up on a request.</p></div>
+  const recovery = <div className="space-y-3">
+    <p className="text-sm text-muted-foreground">Use the email you signed up with. After requesting a reset, check your inbox and spam folder.</p>
+    <Button asChild variant="outline"><a href="/?recover=1">Recover account access</a></Button>
+    <p className="text-sm text-muted-foreground">For older accounts, choose <strong>Try original account sign-in</strong> under <strong>Having trouble signing in?</strong></p>
+  </div>;
+  const content = <>{!customer && <h1 className="mb-6 text-2xl font-semibold tracking-tight sm:text-3xl">Help &amp; Support</h1>}
       <div className="grid items-start gap-8 lg:grid-cols-[1.3fr_1fr]">
-        <div>{!bootstrapped ? <p className="text-sm text-muted-foreground">Checking your account…</p> : user && (!online || offlineAccess) ? <p className="rounded-xl border bg-muted/30 p-5 text-sm">You can read the FAQ offline. Reconnect to send a request or view support conversations.</p> : user ? <SupportCenter key={`${user.id}:${ticketId ?? ""}`} initialTicketId={ticketId} /> : <section className="rounded-2xl border bg-card p-6"><h2 className="text-lg font-semibold">Your support requests</h2><p className="mt-2 text-sm text-muted-foreground">Sign in to send a request and view your private conversations.</p><Button asChild className="mt-4"><Link href="/" onClick={() => setView("login")}>Sign in for support</Link></Button></section>}</div>
-        <aside className="space-y-6"><section id="account-access" aria-labelledby="account-access-title" className="scroll-mt-24 space-y-3 rounded-2xl border bg-card p-5 sm:p-6"><h2 id="account-access-title" className="text-lg font-semibold">Can’t access your account?</h2><ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed"><li>Check that you’re using the email address you registered with.</li><li>On the sign-in screen, enter your email and select <strong>Forgot password?</strong> Check your inbox and spam folder.</li><li>For an account created before email verification was introduced, select <strong>Having trouble signing in?</strong>, then <strong>Try original account sign-in</strong>.</li></ol><Button asChild variant="outline"><a href="/?recover=1">Recover account access</a></Button></section><section className="rounded-2xl border bg-card p-5 sm:p-6"><h2 className="mb-4 text-lg font-semibold">FAQ</h2><div className="divide-y">{faqs.map(([q, a]) => <details key={q} className="py-3"><summary className="cursor-pointer text-sm font-medium">{q}</summary><p className="mt-3 text-sm leading-relaxed text-muted-foreground">{a}</p></details>)}</div></section><SupportContact /></aside>
+        <div>{!bootstrapped ? <p className="text-sm text-muted-foreground">Checking your account…</p> : user && (!online || offlineAccess) ? <p className="rounded-xl border bg-muted/30 p-5 text-sm">You can read the FAQ offline. Reconnect to send a request or view support conversations.</p> : user ? <SupportCenter key={`${user.id}:${ticketId ?? ""}:${startMessage}`} initialTicketId={ticketId} startComposing={startMessage} /> : <section className="rounded-2xl border bg-card p-6"><h2 className="text-lg font-semibold">Your support requests</h2><p className="mt-2 text-sm text-muted-foreground">Sign in to send a request and view your private conversations.</p><Button asChild className="mt-4"><Link href="/" onClick={() => setView("login")}>Sign in for support</Link></Button></section>}</div>
+        <aside className="space-y-4">
+          {user ? (
+            <details id="account-access" className="scroll-mt-24 rounded-xl border bg-card px-4">
+              <summary className="min-h-12 cursor-pointer py-3 font-medium">Can’t access your account?</summary>
+              <div className="pb-4">{recovery}</div>
+            </details>
+          ) : (
+            <section id="account-access" className="scroll-mt-24 space-y-3 rounded-xl border bg-card p-4" aria-label="Account recovery">
+              <h2 className="font-semibold">Can’t access your account?</h2>
+              {recovery}
+            </section>
+          )}
+          <section className="rounded-xl border bg-card px-4 py-3"><h2 className="mb-2 text-lg font-semibold">FAQ</h2><div className="divide-y">{faqs.map(([q, a]) => <details key={q}><summary className="min-h-12 cursor-pointer py-3 text-sm font-medium">{q}</summary><p className="pb-3 text-sm leading-relaxed text-muted-foreground">{a}</p></details>)}</div></section>
+          <SupportContact />
+        </aside>
       </div>
     </>;
-  if (customer) return <CustomerAppShell selected="profile" title="Support" backToProfile>{content}</CustomerAppShell>;
+  if (customer) {
+    const destination = startMessage ? "home" : "profile";
+    return <CustomerAppShell selected={destination} title="Support" backTo={destination}>{content}</CustomerAppShell>;
+  }
   return <div className="min-h-screen bg-background">
     <header className="sticky top-0 z-30 border-b bg-background"><div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6"><BrandNavigation /><div className="flex items-center gap-2">{user && <NotificationInbox onBooking={(id, type) => { useAppStore.getState().openBookingSummary(id, type === "RIDE" ? "ride" : "delivery"); router.push("/"); }} />}<Button asChild variant="outline" size="sm"><Link href="/">Home</Link></Button></div></div></header>
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">{content}</main>

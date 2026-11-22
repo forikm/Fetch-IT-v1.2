@@ -7,36 +7,36 @@ export const SUPPORT_LABELS: Record<string, string> = {
 
 type SupportIssue = { id: string; label: string; category: typeof SUPPORT_CATEGORIES[number]; prompt: string };
 type SupportTopic = { id: string; label: string; description: string; bookingType?: "DELIVERY" | "RIDE"; issues: SupportIssue[] };
-const riderIssue: SupportIssue = { id: "rider", label: "Issue with the rider", category: "RIDER", prompt: "Tell us what happened with the rider, when it happened, and how you would like us to help." };
-const paymentIssue: SupportIssue = { id: "payment", label: "Fare, payment, or refund", category: "FARE", prompt: "Include the amount shown, the amount paid, your payment method, and what needs to be checked. Do not include card or bank account details." };
-const cancellationIssue: SupportIssue = { id: "cancellation", label: "Cancellation or booking changes", category: "BOOKING", prompt: "Tell us what you need to cancel or change, and what happens when you try. Sending this request does not cancel or change your booking." };
+const riderIssue: SupportIssue = { id: "rider", label: "Issue with the rider", category: "RIDER", prompt: "What happened, and when?" };
+const paymentIssue: SupportIssue = { id: "payment", label: "Fare, payment, or refund", category: "FARE", prompt: "Include the fare shown, the amount paid, and how you paid." };
+const cancellationIssue: SupportIssue = { id: "cancellation", label: "Cancellation or booking changes", category: "BOOKING", prompt: "What do you want to change? Your booking stays in place when you send this request." };
 
 export const SUPPORT_TOPICS: SupportTopic[] = [
   { id: "delivery", label: "Issue with Delivery", description: "Packages, delays, payments, or your rider", bookingType: "DELIVERY", issues: [
     riderIssue,
-    { id: "delay", label: "Delivery is late or has not arrived", category: "BOOKING", prompt: "Tell us when you expected the delivery, its current status, and whether you have heard from the rider." },
-    { id: "missing", label: "Package is missing or marked delivered", category: "BOOKING", prompt: "Describe the package, the delivery location, and the status shown in the app. Tell us who has checked for it." },
-    { id: "damaged", label: "Package is damaged or incorrect", category: "BOOKING", prompt: "Describe what you expected to receive and what arrived. Include any damage or missing contents." },
+    { id: "delay", label: "Delivery is late or has not arrived", category: "BOOKING", prompt: "When was it due, and what status do you see?" },
+    { id: "missing", label: "Package is missing or marked delivered", category: "BOOKING", prompt: "Describe the package and where you checked for it." },
+    { id: "damaged", label: "Package is damaged or incorrect", category: "BOOKING", prompt: "What arrived damaged, wrong, or missing?" },
     paymentIssue, cancellationIssue,
-    { id: "other", label: "Another delivery issue", category: "BOOKING", prompt: "Tell us what happened with the delivery, when it happened, and what help you need." },
+    { id: "other", label: "Another delivery issue", category: "BOOKING", prompt: "What happened with your delivery?" },
   ] },
   { id: "ride", label: "Issue with the Ride", description: "Pickup, trip concerns, lost items, or payments", bookingType: "RIDE", issues: [
     riderIssue,
-    { id: "pickup", label: "Rider is late or did not arrive", category: "BOOKING", prompt: "Include the pickup location, how long you have been waiting, and whether the rider has contacted you." },
-    { id: "route", label: "Route or trip issue", category: "BOOKING", prompt: "Tell us which part of the trip went wrong, where it happened, and what you expected." },
-    { id: "lost-item", label: "I left an item behind", category: "LOST_ITEM", prompt: "Describe the item, where you last saw it, and when your ride ended. Do not include passwords or device unlock codes." },
+    { id: "pickup", label: "Rider is late or did not arrive", category: "BOOKING", prompt: "Where are you waiting, and for how long?" },
+    { id: "route", label: "Route or trip issue", category: "BOOKING", prompt: "What went wrong, and where?" },
+    { id: "lost-item", label: "I left an item behind", category: "LOST_ITEM", prompt: "Describe the item and where you last saw it. Keep device unlock codes private." },
     paymentIssue, cancellationIssue,
-    { id: "other", label: "Another ride issue", category: "BOOKING", prompt: "Tell us what happened during the ride, when it happened, and what help you need." },
+    { id: "other", label: "Another ride issue", category: "BOOKING", prompt: "What happened on your ride?" },
   ] },
   { id: "account", label: "Account or app help", description: "Sign-in, profile details, or app problems", issues: [
-    { id: "sign-in", label: "Trouble signing in", category: "OTHER", prompt: "Tell us which sign-in method you use and the error you see. Never share your password or sign-in code." },
-    { id: "profile", label: "Update my account details", category: "OTHER", prompt: "Tell us which account detail you need help updating and what happens when you try. Do not include identity documents here." },
-    { id: "app", label: "The app is not working", category: "OTHER", prompt: "Describe what you were trying to do, what happened instead, and any error shown. Include your device and browser if you know them." },
-    { id: "other", label: "Another account question", category: "OTHER", prompt: "Tell us what you need help with and what you have already tried." },
+    { id: "sign-in", label: "Trouble signing in", category: "OTHER", prompt: "How did you try to sign in, and what error did you see?" },
+    { id: "profile", label: "Update my account details", category: "OTHER", prompt: "Which account detail do you want to update?" },
+    { id: "app", label: "The app is not working", category: "OTHER", prompt: "What were you trying to do, and what happened?" },
+    { id: "other", label: "Another account question", category: "OTHER", prompt: "What do you need help with?" },
   ] },
   { id: "general", label: "Something else", description: "General questions, suggestions, or feedback", issues: [
-    { id: "question", label: "General question", category: "OTHER", prompt: "Tell us what you would like to know. If this is about a ride or delivery, choose that option above so you can link your booking." },
-    { id: "feedback", label: "Suggestion or feedback", category: "OTHER", prompt: "Tell us about your experience and what you would like us to improve." },
+    { id: "question", label: "General question", category: "OTHER", prompt: "What would you like to know?" },
+    { id: "feedback", label: "Suggestion or feedback", category: "OTHER", prompt: "What could we improve?" },
   ] },
 ];
 
