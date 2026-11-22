@@ -87,6 +87,27 @@ async function main(){
  await new Promise(resolve=>setTimeout(resolve,6000));
  assert.equal(await db.booking.count({where:{id:{in:simultaneous.map(b=>b.id)},status:'CANCELLED'}}),2);
  assert.equal(await db.autoDispatch.count({where:{bookingId:{in:simultaneous.map(b=>b.id)},phase:'DONE'}}),2);pass('cancellation stops both background workers and cannot be overwritten by later assignment');
+ const history = Array.from({length:5}, (_,index)=>({
+  customerId:state.customer.id, riderId:riders[0].user.id, type:index%2?'RIDE':'DELIVERY',
+  refCode:'LOCAL-FAIR-'+tag+'-'+index, vehicleClass:'SEDAN', status:'DELIVERED', deliveredAt:new Date(),
+  pickupLabel:'Local matching test pickup', pickupLat:16.0206, pickupLng:120.2321,
+  dropoffLabel:'Local matching test drop-off', dropoffLat:16.0434, dropoffLng:120.334,
+  distanceKm:12, totalFare:150, baseFare:150,
+ }));
+ await db.booking.createMany({data:history});
+ try {
+  for(const [i,rider]of riders.entries())ok(await rider.http('/api/rider/location',fix(i*2)));
+  const fair=await create();
+  try {
+   const firstOffer=await waitFor(async()=>{const row=await db.booking.findUnique({where:{id:fair.id}});return row.status==='MATCHED'?row:null;},'No first offer for the fairness test');
+   assert.equal(firstOffer.riderId,riders[1].user.id);
+   assert(ok(await riders[1].http('/api/rider/available?includeMatched=true')).jobs.some(booking=>booking.id===fair.id));
+   assert(!ok(await riders[0].http('/api/rider/available?includeMatched=true')).jobs.some(booking=>booking.id===fair.id));
+   pass('zero completed bookings wins the exclusive offer ahead of a closer rider with five completed rides and deliveries');
+  } finally { await cancel(fair); }
+ } finally {
+  await db.booking.deleteMany({where:{customerId:state.customer.id,refCode:{in:history.map(booking=>booking.refCode)}}});
+ }
  ok(await riders[0].http('/api/push/subscription',undefined,'DELETE'));
  assert.equal((await db.riderPresence.findUnique({where:{userId:riders[0].user.id}})).isOnline,false);pass('turning off this device’s notifications also turns its availability off');
  state.integration={passed:passes.length,passes};fs.writeFileSync(stateFile,JSON.stringify(state,null,2));
