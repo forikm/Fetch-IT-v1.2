@@ -22,7 +22,7 @@ function hook(request){
  const mapRef={current:{fitBounds(bounds){fits.push(bounds.points);}}},exports={};
  new Function("exports","require","window",hookSource)(exports,name=>name==="react"?react:{roadRouteKey:(a,b)=>[a.lat,a.lng,b.lat,b.lng].join(","),requestRoadRoute:(...args)=>{requests++;return request(...args);}},
  {google:{maps:{Polyline,LatLngBounds:Bounds}}});
- function render(update={}){props={...props,...update};index=0;tree=exports.useRoadRoute(mapRef,props.ready,props.pickup,props.dropoff,props.extraPoints,props.mapVersion);for(const effect of queue.splice(0))effect();return tree;}
+ function render(update={}){props={...props,...update};index=0;tree=exports.useRoadRoute(mapRef,props.ready,props.pickup,props.dropoff,props.extraPoints,props.mapVersion,undefined,props.manuallyPanned);for(const effect of queue.splice(0))effect();return tree;}
  return{render,lines,fits,mapRef,requests:()=>requests,close(){for(const effect of effects.values())effect.cleanup?.();}};
 }
 test("the rendered line uses every road bend, frames the route, and does not reroute for GPS movement",async()=>{
@@ -44,6 +44,19 @@ test("route errors preserve the map and retry succeeds",async()=>{
 });
 test("closing a map before its route loads attaches no late line",async()=>{
  let release;const app=hook(()=>new Promise(resolve=>{release=resolve;}));app.render();app.close();release({path,warnings:[]});await flush();assert.equal(app.lines.length,0);
+});
+
+test("a route that finishes loading after a drag draws without moving the map", async () => {
+ const manuallyPanned = { current: false };
+ let release;
+ const app = hook(() => new Promise(resolve => { release = resolve; }));
+ app.render({ manuallyPanned });
+ manuallyPanned.current = true;
+ release({ path, warnings: [] });
+ await flush();
+ assert.deepEqual(app.lines[0].options.path, path);
+ assert.equal(app.fits.length, 0);
+ app.close();
 });
 
 test("recreating a map attaches the route to the new map and detaches the old line",async()=>{

@@ -151,15 +151,22 @@ test("device location updates and permission failure clear the marker and stop w
 
 test("the map draws, moves and removes the customer marker alongside booking markers", async () => {
   const states = [], refs = [], markers = [];
-  let index = 0, refIndex = 0, effects = [];
+  let index = 0, refIndex = 0, effects = [], drag, pans = 0, mapOptions;
   class Marker {
     constructor(options) { this.options = options; this.position = options.position; this.map = options.map; markers.push(this); }
     setMap(map) { this.map = map; }
     setPosition(point) { this.position = point; }
   }
   class Map {
+    constructor(_host, options) { mapOptions = options; }
     fitBounds(bounds) { this.bounds = bounds; }
-    getBounds() { return { contains: () => true }; }
+    getBounds() { return { contains: () => false }; }
+    panTo() { pans++; }
+    addListener(event, handler) {
+      assert.equal(event, "dragstart");
+      drag = handler;
+      return { remove() { drag = undefined; } };
+    }
   }
   class LatLngBounds {
     points = [];
@@ -176,11 +183,12 @@ test("the map draws, moves and removes the customer marker alongside booking mar
     globals: { window: { google: { maps: { Marker, Map, LatLngBounds, Polyline: class { setMap() {} }, SymbolPath: { CIRCLE: 0 } } } } },
   });
   const props = { pickup: { lat: 14.6, lng: 120.9 }, dropoff: { lat: 14.7, lng: 121 }, rider: null, customer: { lat: 14.61, lng: 120.91 } };
-  function render() { index = 0; refIndex = 0; effects = []; LiveTrackingMap(props); }
+  function render() { index = 0; refIndex = 0; effects = []; return LiveTrackingMap(props); }
   render();
   refs[0].current = {};
   const cleanup = effects[0]();
   await Promise.resolve();
+  assert.equal(mapOptions.gestureHandling, "greedy");
   render();
   effects[2]();
   const customer = markers.find(marker => marker.options.title === "Your current location");
@@ -190,11 +198,22 @@ test("the map draws, moves and removes the customer marker alongside booking mar
   props.customer = { lat: 14.62, lng: 120.92 };
   render(); effects[2]();
   assert.equal(customer.position, props.customer);
+  assert.equal(pans, 1);
+  drag();
+  props.customer = { lat: 14.63, lng: 120.93 };
+  const tracking = render(); effects[2]();
+  assert.equal(customer.position, props.customer);
+  assert.equal(pans, 1);
+  const controls = tracking.props.children.find(node => node?.type === "MapZoomControls");
+  controls.props.onRecenter();
+  render(); effects[2]();
+  assert.equal(pans, 2);
   assert.equal(markers.length, 3);
   props.customer = null;
   render(); effects[2]();
   assert.equal(customer.map, null);
   cleanup();
+  assert.equal(drag, undefined);
   assert(markers.every(marker => marker.map === null));
 });
 

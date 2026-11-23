@@ -35,6 +35,8 @@ export function LiveTrackingMap({
   const mapRef = useRef<google.maps.Map | null>(null);
   const riderMarkerRef = useRef<google.maps.Marker | null>(null);
   const customerMarkerRef = useRef<google.maps.Marker | null>(null);
+  const manuallyPanned = useRef(false);
+  const [showRecenter, setShowRecenter] = useState(false);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -44,6 +46,7 @@ export function LiveTrackingMap({
     let cancelled = false;
     let pickupMarker: google.maps.Marker | null = null;
     let dropoffMarker: google.maps.Marker | null = null;
+    let dragListener: google.maps.MapsEventListener | undefined;
 
     loadGoogleMaps()
       .then(() => {
@@ -58,6 +61,12 @@ export function LiveTrackingMap({
           gestureHandling: "greedy",
           mapTypeControl: false,
           streetViewControl: false,
+        });
+        manuallyPanned.current = false;
+        setShowRecenter(false);
+        dragListener = map.addListener("dragstart", () => {
+          manuallyPanned.current = true;
+          if (!preview) setShowRecenter(true);
         });
         mapRef.current = map;
         setMapVersion(value => value + 1);
@@ -86,6 +95,7 @@ export function LiveTrackingMap({
 
     return () => {
       cancelled = true;
+      dragListener?.remove();
       pickupMarker?.setMap(null);
       dropoffMarker?.setMap(null);
       riderMarkerRef.current?.setMap(null);
@@ -97,7 +107,17 @@ export function LiveTrackingMap({
     // Pickup/drop-off belong to one booking and do not change while mounted.
   }, [pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, attempt, preview]);
 
-  const road = useRoadRoute(mapRef, ready, pickup, dropoff, [rider, customer], mapVersion, vehicleClass);
+  const road = useRoadRoute(mapRef, ready, pickup, dropoff, [rider, customer], mapVersion, vehicleClass, manuallyPanned);
+
+  function recenterMap() {
+    const map = mapRef.current;
+    if (!map) return;
+    manuallyPanned.current = false;
+    setShowRecenter(false);
+    const bounds = new window.google.maps.LatLngBounds();
+    for (const point of [pickup, dropoff, ...road.path, rider, customer]) if (point) bounds.extend(point);
+    map.fitBounds(bounds, 64);
+  }
 
   useEffect(() => {
     const map = mapRef.current;
@@ -127,6 +147,7 @@ export function LiveTrackingMap({
       riderMarkerRef.current.setPosition(rider);
     }
 
+    if (manuallyPanned.current) return;
     const visible = map.getBounds();
     if (visible && !visible.contains(rider)) map.panTo(rider);
   }, [ready, mapVersion, rider?.lat, rider?.lng]);
@@ -154,15 +175,10 @@ export function LiveTrackingMap({
           scale: 8,
         },
       });
-      const bounds = new window.google.maps.LatLngBounds();
-      bounds.extend(pickup);
-      bounds.extend(dropoff);
-      for (const point of road.path) bounds.extend(point);
-      bounds.extend(customer);
-      if (rider) bounds.extend(rider);
-      map.fitBounds(bounds, 64);
+      if (!manuallyPanned.current) recenterMap();
     } else {
       customerMarkerRef.current.setPosition(customer);
+      if (manuallyPanned.current) return;
       const visible = map.getBounds();
       if (visible && !visible.contains(customer)) map.panTo(customer);
     }
@@ -184,7 +200,7 @@ export function LiveTrackingMap({
           <FetchItLoader className="h-6 w-6 text-primary" />
         </div>
       )}
-      {ready && !preview && <MapZoomControls onZoomIn={() => { const map = mapRef.current; if (map) map.setZoom(Math.min(21, (map.getZoom() ?? 14) + 1)); }} onZoomOut={() => { const map = mapRef.current; if (map) map.setZoom(Math.max(3, (map.getZoom() ?? 14) - 1)); }} />}
+      {ready && !preview && <MapZoomControls onRecenter={showRecenter ? recenterMap : undefined} onZoomIn={() => { const map = mapRef.current; if (map) map.setZoom(Math.min(21, (map.getZoom() ?? 14) + 1)); }} onZoomOut={() => { const map = mapRef.current; if (map) map.setZoom(Math.max(3, (map.getZoom() ?? 14) - 1)); }} />}
       {ready && <RoadRouteStatus loading={road.loading} error={road.error} warnings={road.warnings} onRetry={road.retry} />}
       {ready && !preview && showLiveStatus && !rider && (
         <div className="pointer-events-none absolute bottom-3 left-3 right-20 w-auto rounded-full border bg-card/95 px-3 py-1.5 text-center text-xs font-medium shadow-sm [overflow-wrap:anywhere]">

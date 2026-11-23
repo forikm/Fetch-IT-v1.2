@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { requestRoadRoute, roadRouteKey, type RoadPoint, type RoadRoute } from "@/lib/road-route";
 
-export function useRoadRoute(mapRef: RefObject<google.maps.Map | null>, ready: boolean, pickup: RoadPoint, dropoff: RoadPoint, extraPoints: (RoadPoint | null)[], mapVersion = 0, vehicleClass = 'SEDAN') {
+export function useRoadRoute(mapRef: RefObject<google.maps.Map | null>, ready: boolean, pickup: RoadPoint, dropoff: RoadPoint, extraPoints: (RoadPoint | null)[], mapVersion = 0, vehicleClass = 'SEDAN', manuallyPanned?: RefObject<boolean>) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{ key: string; route?: RoadRoute; error?: string } | null>(null);
   const extras = useRef(extraPoints);
@@ -19,15 +19,17 @@ export function useRoadRoute(mapRef: RefObject<google.maps.Map | null>, ready: b
       line = new window.google.maps.Polyline({
         map, path: route.path, strokeColor: "#ea580c", strokeOpacity: 0.9, strokeWeight: 5,
       });
-      const bounds = new window.google.maps.LatLngBounds();
-      for (const point of [pickup, dropoff, ...route.path, ...extras.current]) if (point) bounds.extend(point);
-      map.fitBounds(bounds, 64);
+      if (!manuallyPanned?.current) {
+        const bounds = new window.google.maps.LatLngBounds();
+        for (const point of [pickup, dropoff, ...route.path, ...extras.current]) if (point) bounds.extend(point);
+        map.fitBounds(bounds, 64);
+      }
       setState({ key, route });
     }).catch(error => {
       if (!cancelled) setState({ key, error: (error instanceof Error ? error.message : "Road route unavailable.") + ' Pickup and drop-off pins are still shown.' });
     });
     return () => { cancelled = true; line?.setMap(null); };
-  }, [mapRef, ready, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, key, vehicleClass]);
+  }, [mapRef, ready, pickup.lat, pickup.lng, dropoff.lat, dropoff.lng, key, vehicleClass, manuallyPanned]);
   const current = state?.key === key ? state : null;
   return {
     loading: ready && !current,
