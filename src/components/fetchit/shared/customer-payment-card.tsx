@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { formatPeso } from "@/lib/customer-booking-ui";
 import { readFareSnapshot } from "@/lib/fare-policy";
 import type { BookingType } from "@/lib/constants";
-import { PAYMENT_METHOD_LABEL, cashConfirmationAvailable, isDemoPayment, type PaymentMethod, type PaymentStatus } from "@/lib/payment-policy";
+import { PAYMENT_METHOD_LABEL, canCorrectCustomerCash, cashConfirmationAvailable, confirmationsMatch, customerPaymentVisible, isDemoPayment, type PaymentMethod, type PaymentStatus } from "@/lib/payment-policy";
 
 type CustomerPayment = {
   fareBreakdown?: unknown;
-  type?: string; dropoffReachedAt?: string | null; paymentMethod: PaymentMethod; paymentStatus: PaymentStatus; status: string; totalFare: number;
+  type?: string; dropoffReachedAt?: string | null; customerDropoffConfirmedAt?: string | null; paymentMethod: PaymentMethod; paymentStatus: PaymentStatus; status: string; totalFare: number;
   customerPaidAmount: number | null; riderReceivedAmount: number | null;
   customerPaidAt: string | null; riderReceivedAt: string | null; paidAt: string | null; paymentReference: string | null;
 };
@@ -20,14 +20,12 @@ type CustomerPayment = {
 export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIVERY", onPaymentStatus }: { bookingId: string; readOnly?: boolean; type?: BookingType; onPaymentStatus?: (status: string) => void }) {
   const person = type === "RIDE" ? "driver" : "rider";
   const [booking, setBooking] = useState<CustomerPayment | null>(null);
-  const [amount, setAmount] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [retry, setRetry] = useState(0);
   const pending = useRef(false);
-  const initialized = useRef(false);
   const version = useRef(0);
 
   useEffect(() => { onPaymentStatus?.(booking?.paymentStatus ?? ""); }, [booking?.paymentStatus, onPaymentStatus]);
@@ -46,7 +44,6 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
         if (!response.ok) throw new Error(data.error || "Payment details unavailable.");
         if (!controller.signal.aborted && !pending.current && requestVersion === version.current) {
           setBooking(data.booking); setError("");
-          if (!initialized.current) { setAmount(Number(data.booking.totalFare).toFixed(2)); initialized.current = true; }
         }
       } catch (failure) { if (!controller.signal.aborted && requestVersion === version.current) setError(failure instanceof Error ? failure.message : "Payment details unavailable."); }
       finally { refreshing = false; }
@@ -58,12 +55,14 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener("online", refresh); window.removeEventListener("focus", refresh); };
   }, [bookingId, readOnly, retry]);
 
+  if (booking && !customerPaymentVisible(booking.type ?? type, booking.status, booking.customerDropoffConfirmedAt)) return null;
   if (readOnly) return <p className="text-sm text-muted-foreground">Reconnect to view payment details.</p>;
   const demo = !!booking && isDemoPayment(booking.paymentMethod);
   const canCheckout = demo && booking && ["PENDING", "MATCHED", "ACCEPTED"].includes(booking.status) && !["PAID", "REFUNDED"].includes(booking.paymentStatus);
   const collectionAvailable = booking && cashConfirmationAvailable(booking.type ?? type, booking.status, booking.dropoffReachedAt);
-  const canConfirm = booking && booking.paymentMethod === "CASH" && collectionAvailable && !booking.customerPaidAt && booking.paymentStatus !== "REFUNDED";
-  const mismatch = booking && booking.customerPaidAmount !== null && booking.riderReceivedAmount !== null && (booking.customerPaidAmount !== booking.riderReceivedAmount || booking.customerPaidAmount !== booking.totalFare);
+  const canCorrect = booking && canCorrectCustomerCash({ ...booking, type: booking.type ?? type });
+  const canConfirm = booking && booking.paymentMethod === "CASH" && collectionAvailable && (!booking.customerPaidAt || canCorrect) && booking.paymentStatus !== "REFUNDED";
+  const mismatch = booking && booking.paymentMethod === "CASH" && booking.paymentStatus === "PENDING" && booking.customerPaidAmount !== null && booking.riderReceivedAmount !== null && !confirmationsMatch(booking.customerPaidAmount, booking.riderReceivedAmount, booking.totalFare);
   const savedFare = booking ? readFareSnapshot(booking.fareBreakdown, booking.totalFare) : null;
   const paymentLabel = !booking ? "Loading…" : booking.paymentStatus === "PAID" ? "Paid" : booking.paymentStatus === "REFUNDED" ? "Refunded" : booking.paymentStatus === "FAILED" ? "Payment failed" : mismatch ? "Needs review" : booking.customerPaidAt ? `You confirmed payment. Waiting for your ${person} to confirm receipt.` : booking.status === "CANCELLED" ? "Booking cancelled" : booking.paymentMethod === "CASH" && type === "DELIVERY" && !collectionAvailable ? "Pay at drop-off. Waiting for the rider to confirm arrival." : booking.paymentStatus === "PENDING" ? "Payment confirmation is pending" : booking.paymentMethod === "CASH" ? `Pay your ${person} in cash` : "Payment needed";
 
@@ -73,10 +72,9 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
     <p className="text-muted-foreground" role="status">{paymentLabel}</p>
     {demo && <p className="text-xs text-muted-foreground">Simulated payment. No money is charged.</p>}
     {booking && !demo && booking.paymentMethod === "CASH" && <dl className="space-y-2 rounded-lg bg-muted/40 p-3"><div className="flex flex-wrap justify-between gap-2"><dt>Your cash confirmation</dt><dd className="font-medium">{booking.customerPaidAt ? formatPeso(Number(booking.customerPaidAmount)) + " confirmed" : "Not confirmed"}</dd></div><div className="flex flex-wrap justify-between gap-2"><dt>{type === "RIDE" ? "Driver" : "Rider"} cash confirmation</dt><dd className="font-medium">{booking.riderReceivedAt ? formatPeso(Number(booking.riderReceivedAmount)) + " received" : "Waiting for confirmation"}</dd></div></dl>}
-    {booking && !["PAID", "REFUNDED"].includes(booking.paymentStatus) && <p className="text-xs text-muted-foreground">{demo ? "Your PDF receipt becomes available after a successful simulated payment." : "Your PDF receipt becomes available after payment is confirmed. Both cash confirmations must match the fare."}</p>}
     {booking?.paidAt && <p className="text-xs text-muted-foreground">Paid {new Date(booking.paidAt).toLocaleString("en-PH", { timeZone: "Asia/Manila" })} (PH time)</p>}
     {booking?.paymentReference && <p className="break-all text-xs text-muted-foreground">Payment reference: {booking.paymentReference}</p>}
-    {mismatch && <p role="alert" className="text-amber-700">The cash confirmations do not match the fare. Contact support for a review.</p>}
+    {mismatch && !canCorrect && <p role="alert" className="text-amber-800 dark:text-amber-200">Cash amounts don’t match. Contact support.</p>}
     {canCheckout && <Button size="sm" disabled={busy} onClick={async () => {
       if (pending.current) return;
       pending.current = true; version.current++; setBusy(true); setError("");
@@ -88,7 +86,7 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
       } catch (failure) { setError(failure instanceof Error ? failure.message : "Reconnect to open payment."); }
       finally { pending.current = false; setBusy(false); }
     }}>{busy ? "Opening…" : "Continue to payment"}</Button>}
-    {canConfirm && !confirmOpen && <Button type="button" variant="outline" size="sm" onClick={() => setConfirmOpen(true)}>Confirm cash payment</Button>}
+    {canConfirm && !confirmOpen && <Button type="button" variant="outline" size="sm" onClick={() => setConfirmOpen(true)}>{canCorrect ? "Correct cash confirmation" : "Confirm cash payment"}</Button>}
     {canConfirm && confirmOpen && <form className="space-y-3 border-t pt-3" onSubmit={async event => {
       event.preventDefault();
       if (pending.current) return;
@@ -98,25 +96,23 @@ export function CustomerPaymentCard({ bookingId, readOnly = false, type = "DELIV
       let outcome: 'confirmed' | 'recovered' | 'failed' | 'uncertain' = 'uncertain';
       let uncertain = true;
       try {
-        const response = await fetch(`/api/bookings/${bookingId}/payment`, { method: "POST", headers: { "Content-Type": "application/json", ...timing.headers }, signal: AbortSignal.timeout(15000), body: JSON.stringify({ amount }) });
+        const response = await fetch(`/api/bookings/${bookingId}/payment`, { method: "POST", headers: { "Content-Type": "application/json", ...timing.headers }, signal: AbortSignal.timeout(15000), body: "{}" });
         timing.response(response); uncertain = response.ok || response.status >= 500;
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Couldn’t confirm payment.");
         if (!data.booking) throw new Error('Couldn’t verify the saved confirmation.');
-        outcome = 'confirmed'; setBooking(data.booking); setConfirmOpen(false); setNotice("Your cash confirmation was saved.");
+        outcome = 'confirmed'; setBooking(data.booking); setConfirmOpen(false);
       } catch (failure) {
         if (uncertain) {
           setNotice('Checking saved payment…');
-          const saved = await savedMutation<{ booking: CustomerPayment }>(`/api/bookings/${bookingId}/payment`, state => !!state.booking?.customerPaidAt && Math.round(Number(state.booking.customerPaidAmount) * 100) === Math.round(Number(amount) * 100));
-          if (saved) { outcome = 'recovered'; setBooking(saved.booking); setConfirmOpen(false); setNotice('Your cash confirmation was saved.'); return; }
+          const saved = await savedMutation<{ booking: CustomerPayment }>(`/api/bookings/${bookingId}/payment`, state => !!state.booking?.customerPaidAt && Math.round(Number(state.booking.customerPaidAmount) * 100) === Math.round(Number(booking.totalFare) * 100));
+          if (saved) { outcome = 'recovered'; setBooking(saved.booking); setConfirmOpen(false); setNotice(""); return; }
         }
-        outcome = uncertain ? 'uncertain' : 'failed'; setNotice(''); setError(uncertain ? 'Couldn’t verify payment. Your entered amount is kept. Check payment details before retrying.' : failure instanceof Error ? failure.message : 'Couldn’t confirm payment.');
+        outcome = uncertain ? 'uncertain' : 'failed'; setNotice(''); setError(uncertain ? 'Couldn’t verify payment. Check again before retrying.' : failure instanceof Error ? failure.message : 'Couldn’t confirm payment.');
       }
       finally { pending.current = false; setBusy(false); timing.finish(outcome); }
     }}>
-      <label className="block">Amount you paid (₱)<input required inputMode="decimal" type="number" min="0.01" step="0.01" max="9999999999.99" value={amount} disabled={busy} onChange={event => setAmount(event.target.value)} className="mt-2 min-h-12 w-full rounded-md border border-input bg-background p-2 text-base md:text-sm focus-visible:outline-2 focus-visible:outline-ring" /></label>
-      <p className="text-xs text-muted-foreground">Confirm after handing the cash to your {person}. They’ll confirm receipt too.</p>
-      <div className="flex flex-wrap gap-2"><Button type="submit" size="sm" disabled={busy || !amount}>{busy ? "Confirming…" : "I paid this amount"}</Button><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmOpen(false)}>Not yet</Button></div>
+      <div className="flex flex-wrap gap-2"><Button type="submit" size="sm" disabled={busy}>{busy ? "Confirming…" : `I paid ${formatPeso(Number(booking.totalFare))}`}</Button><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmOpen(false)}>Not yet</Button></div>
     </form>}
     {notice && <p role="status">{notice}</p>}
     {error && <div className="space-y-2"><p role="alert" className="text-destructive">{error}</p><Button type="button" size="sm" variant="outline" onClick={() => setRetry(previous => previous + 1)}>Retry payment details</Button></div>}

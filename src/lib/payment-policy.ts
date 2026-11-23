@@ -27,6 +27,18 @@ export function cashConfirmationAvailable(type: string, status: string, dropoffR
   return ["ACCEPTED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"].includes(status);
 }
 
+export function customerPaymentVisible(type: string | undefined, status: string, dropoffConfirmedAt?: unknown): boolean {
+  return type !== "RIDE" || status === "DELIVERED" || !!dropoffConfirmedAt;
+}
+
+export function canCorrectCustomerCash(booking: { type: string; paymentStatus: string; totalFare: unknown; customerPaidAt: unknown; riderReceivedAt: unknown; customerPaidAmount: unknown; riderReceivedAmount: unknown }): boolean {
+  // A legacy customer entry is correctable only when the driver's own
+  // recorded confirmation independently agrees with the booked fare.
+  const fare = amountInCents(booking.totalFare);
+  return booking.type === "RIDE" && booking.paymentStatus === "PENDING" && !!booking.customerPaidAt && !!booking.riderReceivedAt && fare !== null &&
+    booking.customerPaidAmount != null && amountInCents(booking.customerPaidAmount) !== fare && amountInCents(booking.riderReceivedAmount) === fare;
+}
+
 type CompletionPayment = { type: string; paymentMethod: string; paymentStatus: string; totalFare: unknown; customerPaidAmount: unknown; riderReceivedAmount: unknown; customerPaidAt: unknown; riderReceivedAt: unknown };
 export function completionPaymentError(booking: CompletionPayment): string | null {
   const service = booking.type === 'RIDE' ? 'ride' : 'delivery';

@@ -25,8 +25,9 @@ async function post(req: NextRequest, { params }: Params) {
     const session = await timeBooking("auth", () => requireCustomer());
     await timeBooking("db.rate_limit", () => limitRequests("customer:payment", session.uid, 30, 60_000));
     const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid payment confirmation." }, { status: 400 });
     const { id } = await params;
-    const booking = await confirmCashPayment(db, id, session, body?.amount);
+    const booking = await confirmCashPayment(db, id, session, body.amount);
     return NextResponse.json({ booking: { ...omitTicket(bookingView(booking)), dropoffReachedAt: booking.dropoffReachedAt } });
   } catch (error) {
     if (!(error instanceof PaymentError) && !(error instanceof RateLimitError)) bookingFailure("payment", error);

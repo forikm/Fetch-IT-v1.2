@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { formatPickupSchedule } from "@/lib/pickup-schedule";
 import { formatPeso } from "@/lib/customer-booking-ui";
 
-export type SummaryBooking = { id: string; refCode: string; type: "DELIVERY" | "RIDE"; status: BookingStatus; pickupLabel: string; dropoffLabel: string; totalFare: number; distanceKm: number; vehicleClass: VehicleClass; createdAt: string; cargoWeightKg?: number; cargoNotes?: string | null; cancellationReason?: string | null; passengers?: number; scheduledAt?: string | null; riderId: string | null; rider: { id?: string; name: string; rating?: number; ratingCount?: number } | null };
+export type SummaryBooking = { id: string; refCode: string; type: "DELIVERY" | "RIDE"; status: BookingStatus; pickupLabel: string; dropoffLabel: string; totalFare: number; distanceKm: number; vehicleClass: VehicleClass; createdAt: string; cargoWeightKg?: number; cargoNotes?: string | null; cancellationReason?: string | null; passengers?: number; scheduledAt?: string | null; customerDropoffConfirmedAt?: string | null; riderId: string | null; rider: { id?: string; name: string; rating?: number; ratingCount?: number } | null };
 export function BookingSummary({ booking, onRepeat, onDetails, onUpdated, onCancelled, updatesPaused = false }: { booking: SummaryBooking; onUpdated: (update: Partial<Booking>) => void; onCancelled: () => void; updatesPaused?: boolean; onRepeat: () => void; onDetails: () => void }) {
   const online = useOnlineStatus();
   const offlineAccess = useAppStore(state => state.offlineAccess);

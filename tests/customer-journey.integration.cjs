@@ -134,6 +134,7 @@ async function main(){
    await request("rider","/api/bookings/"+booking.id,rider,200,"PATCH",{status:"IN_TRANSIT"});
    if(type==="RIDE"){
     await request("rider","/api/bookings/"+booking.id,rider,409,"PATCH",{status:"DELIVERED"});
+    if(paymentMethod==="CASH")await request("customer","/api/bookings/"+booking.id+"/payment",customer,409,"POST",{});
     await request("customer","/api/bookings/"+booking.id+"/ride-confirmation",customer,200,"POST",{action:"DROPOFF"});
     const reopened=(await request("customer","/api/bookings/"+booking.id,customer)).booking;
     assert(reopened.customerDropoffConfirmedAt,"Customer arrival confirmation survives a fresh read");
@@ -141,9 +142,10 @@ async function main(){
    if(type==="DELIVERY"&&paymentMethod==="CASH")await request("rider","/api/bookings/"+booking.id+"/payment",rider,200,"POST",{action:"ARRIVED_AT_DROPOFF"});
    if(paymentMethod==="CASH"){
     const total=Number(booking.totalFare);
-    await request("customer","/api/bookings/"+booking.id+"/payment",customer,200,"POST",{amount:mismatch?total-1:total});
+    if(mismatch)await request("customer","/api/bookings/"+booking.id+"/payment",customer,409,"POST",{amount:total-1});
+    await request("customer","/api/bookings/"+booking.id+"/payment",customer,200,"POST",{});
     await request("customer","/api/bookings/"+booking.id+"/receipt",customer,409);
-    const payment=await request("rider","/api/bookings/"+booking.id+"/payment",rider,200,"POST",{amount:total});
+    const payment=await request("rider","/api/bookings/"+booking.id+"/payment",rider,200,"POST",{amount:mismatch?total-1:total});
     assert.equal(payment.booking.paymentStatus,mismatch?"PENDING":"PAID");
     if(mismatch){await request("rider","/api/bookings/"+booking.id+"/proof",rider,409,"POST",{signatureSvg:'<path d="M20 40L60 70L100 30" />',recipientName:"QA Recipient"});await request("customer","/api/bookings/"+booking.id+"/receipt",customer,409);checks.push(label);console.log("PASS "+label);return;}
    }

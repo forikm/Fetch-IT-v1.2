@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { VEHICLES, type VehicleClass } from "@/lib/constants";
 import { formatPeso, routeTimeLabel } from "@/lib/customer-booking-ui";
 import { formatPickupSchedule } from "@/lib/pickup-schedule";
+import { customerPaymentVisible } from "@/lib/payment-policy";
 import { BookingTimeline } from "../shared/booking-timeline";
 import { BookingActions } from "../shared/booking-actions";
 import { CancelBooking } from "../shared/cancel-booking";
@@ -72,7 +73,7 @@ export function CustomerBookingCard({ booking, readOnly, onTrack, onRefresh, onR
         {finished && <Button size="sm" variant="outline" onClick={onRepeat}>Book again</Button>}
         {delivered && !ride && !readOnly && <Button size="sm" variant="outline" className="flex-1" onClick={onTrack}><ShieldCheck className="h-3.5 w-3.5" />View proof</Button>}
       </div>
-      <details className="border-t pt-2"><summary className="min-h-12 cursor-pointer py-3 text-sm font-medium">Payment &amp; booking help</summary><BookingActions booking={booking} readOnly={readOnly} /></details>
+      <details className="border-t pt-2"><summary className="min-h-12 cursor-pointer py-3 text-sm font-medium">{customerPaymentVisible(booking.type, booking.status, booking.customerDropoffConfirmedAt) ? "Payment & booking help" : "Booking help"}</summary><BookingActions booking={booking} readOnly={readOnly} /></details>
     </CardContent>
   </Card>;
 }

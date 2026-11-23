@@ -10,16 +10,18 @@ import { customerResponse } from "@/lib/customer-request";
 import { BookingRatingForm } from "./booking-rating-form";
 import { SupportCenter } from "./support-center";
 import { CustomerPaymentCard } from "./customer-payment-card";
+import { customerPaymentVisible } from "@/lib/payment-policy";
 
 export function BookingActions({ booking, readOnly = false, completionReminder = false, onRated }: {
   readOnly?: boolean;
   completionReminder?: boolean;
   onRated?: () => void;
-  booking: { id: string; refCode: string; type?: "RIDE" | "DELIVERY"; status: string; riderId: string | null };
+  booking: { id: string; refCode: string; type?: "RIDE" | "DELIVERY"; status: string; riderId: string | null; customerDropoffConfirmedAt?: string | null };
 }) {
   const online = useOnlineStatus();
   const offlineAccess = useAppStore(state => state.offlineAccess);
   const unavailable = readOnly || !online || offlineAccess;
+  const showPayment = customerPaymentVisible(booking.type, booking.status, booking.customerDropoffConfirmedAt);
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [dialog, setDialog] = useState<"review" | "help" | null>(null);
   const [rated, setRated] = useState(false);
@@ -61,9 +63,9 @@ export function BookingActions({ booking, readOnly = false, completionReminder =
         <Button type="button" variant="outline" disabled={unavailable} onClick={() => setDialog("review")}>Rate booking</Button>
       </div>
     </section> : <>
-      <CustomerPaymentCard key={booking.id} bookingId={booking.id} type={booking.type} readOnly={unavailable} onPaymentStatus={setPaymentStatus} />
+      {showPayment && <CustomerPaymentCard key={booking.id} bookingId={booking.id} type={booking.type} readOnly={unavailable} onPaymentStatus={setPaymentStatus} />}
       <div className="flex flex-wrap gap-2 border-t pt-2">
-        {paymentStatus === "PAID" && <Button type="button" size="sm" variant="ghost" disabled={unavailable || downloading} onClick={() => void downloadReceipt()}>
+        {showPayment && paymentStatus === "PAID" && <Button type="button" size="sm" variant="ghost" disabled={unavailable || downloading} onClick={() => void downloadReceipt()}>
           {downloading ? "Downloading receipt…" : receiptError ? "Retry receipt download" : "Download PDF receipt"}
         </Button>}
         {booking.status === "DELIVERED" && booking.riderId && <Button type="button" size="sm" variant="ghost" disabled={unavailable} onClick={() => setDialog("review")}>Rate {booking.type === "RIDE" ? "driver" : "rider"}</Button>}

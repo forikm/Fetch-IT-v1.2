@@ -1,7 +1,7 @@
 import { bookingTransaction } from "./booking-transaction";
 import { scheduleReceiptDelivery } from "./receipt-email";
 import type { PrismaClient, PaymentStatus } from "@prisma/client";
-import { amountInCents, cashConfirmationAvailable, confirmationsMatch, deliveryCashCompletionError, isDemoPayment } from "./payment-policy";
+import { amountInCents, canCorrectCustomerCash, cashConfirmationAvailable, confirmationsMatch, customerPaymentVisible, deliveryCashCompletionError, isDemoPayment } from "./payment-policy";
 
 export class PaymentError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -35,9 +35,7 @@ export async function deliveryPaymentError(db: Pick<PrismaClient, "paymentEvent"
 
 // Lock the booking so concurrent confirmations cannot lose each other or race
 // a cancellation/reassignment. Store every change as an immutable event.
-export async function confirmCashPayment(db: PrismaClient, id: string, actor: Actor, amount: unknown) {
-  const cents = amountInCents(amount);
-  if (cents === null) throw new PaymentError("Enter the cash amount with up to two decimal places.");
+export async function confirmCashPayment(db: PrismaClient, id: string, actor: Actor, amount?: unknown) {
   return bookingTransaction(db, async tx => {
     await tx.$queryRaw`SELECT "id" FROM "Booking" WHERE "id" = ${id} FOR UPDATE`;
     const booking = await tx.booking.findUnique({ where: { id } });
@@ -48,17 +46,26 @@ export async function confirmCashPayment(db: PrismaClient, id: string, actor: Ac
     const withArrival = (value: typeof booking) => ({ ...value, dropoffReachedAt: arrival });
     if (!cashConfirmationAvailable(booking.type, booking.status, arrival)) throw new PaymentError(booking.type === "DELIVERY" ? "Cash confirmation becomes available after the rider confirms arrival at drop-off." : "Cash can be confirmed after a rider accepts this booking.", 409);
     const customer = actor.role === "CUSTOMER";
+    if (customer && !customerPaymentVisible(booking.type, booking.status, booking.customerDropoffConfirmedAt)) throw new PaymentError("Confirm drop-off first.", 409);
+    const fare = booking.totalFare.toString();
+    const fareCents = amountInCents(fare);
     const previous = customer ? booking.customerPaidAmount : booking.riderReceivedAmount;
+    const cents = customer && amount === undefined ? fareCents : amountInCents(amount);
+    if (cents === null) throw new PaymentError(customer ? "Couldn’t confirm the fare." : "Enter the cash amount with up to two decimal places.");
     if (booking.paymentStatus === "REFUNDED" || (booking.paymentStatus === "PAID" && previous !== null)) {
       if (previous !== null && amountInCents(previous.toString()) === cents) return withArrival(booking);
       throw new PaymentError("This payment record is final. Contact support for a correction.", 409);
     }
-    if (booking.paymentStatus === "PAID" && cents !== amountInCents(booking.totalFare.toString())) throw new PaymentError("This payment record is final. Confirm the recorded fare or contact support.", 409);
+    if (booking.paymentStatus === "PAID" && cents !== fareCents) throw new PaymentError("This payment record is final. Confirm the recorded fare or contact support.", 409);
+    if (customer && cents !== fareCents) throw new PaymentError("Confirm the booked fare.", 409);
+    const correcting = customer && amount === undefined && canCorrectCustomerCash({
+      ...booking, totalFare: fare, customerPaidAmount: booking.customerPaidAmount?.toString(), riderReceivedAmount: booking.riderReceivedAmount?.toString(),
+    });
     if (previous !== null) {
       if (amountInCents(previous.toString()) === cents) return withArrival(booking);
-      throw new PaymentError("Your confirmation is already recorded. Contact support to correct it.", 409);
+      if (!correcting) throw new PaymentError("Your confirmation is already recorded. Contact support to correct it.", 409);
     }
-    const customerAmount = customer ? String(amount) : booking.customerPaidAmount?.toString();
+    const customerAmount = customer ? fare : booking.customerPaidAmount?.toString();
     const riderAmount = customer ? booking.riderReceivedAmount?.toString() : String(amount);
     const matched = confirmationsMatch(customerAmount, riderAmount, booking.totalFare.toString());
     const now = new Date();
@@ -69,7 +76,8 @@ export async function confirmCashPayment(db: PrismaClient, id: string, actor: Ac
       paymentStatus: status, ...(matched ? { paidAt: now, receiptEmailQueuedAt: now, receiptEmailNextAttemptAt: now, paymentReference: reference } : {}),
     } });
     await tx.paymentEvent.create({ data: { bookingId: id, actorId: actor.uid, actorName: actor.name, actorRole: actor.role,
-      action: customer ? "CUSTOMER_CONFIRMED" : "RIDER_CONFIRMED", amount: cents / 100, fromStatus: booking.paymentStatus, toStatus: status, reference } });
+      action: customer ? "CUSTOMER_CONFIRMED" : "RIDER_CONFIRMED", amount: cents / 100, fromStatus: booking.paymentStatus, toStatus: status, reference,
+      ...(correcting ? { reason: `Customer corrected their previous cash confirmation of PHP ${previous} to the booked fare.` } : {}) } });
     return withArrival(updated);
   }, { maxWait: 10000, timeout: 20000 }).then(booking => {
     if (booking?.paymentStatus === "PAID") scheduleReceiptDelivery(db);

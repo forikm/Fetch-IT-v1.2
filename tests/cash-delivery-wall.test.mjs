@@ -57,11 +57,39 @@ test("completion waits for both full-fare confirmations, regardless of confirmat
 });
 test("mismatches and missing confirmations cannot complete delivery, prepaid jobs do not need cash", async () => {
   const f = fixture(); await f.confirmDropoffArrival(f.db, "delivery", rider);
-  await f.confirmCashPayment(f.db, "delivery", customer, 90);
-  await f.confirmCashPayment(f.db, "delivery", rider, 100);
+  await assert.rejects(f.confirmCashPayment(f.db, "delivery", customer, 90), /booked fare/);
+  await f.confirmCashPayment(f.db, "delivery", customer);
+  await f.confirmCashPayment(f.db, "delivery", rider, 90);
   assert.match(policy.deliveryCashCompletionError(f.record()), /match the fare/);
   assert.equal(policy.deliveryCashCompletionError({ ...f.record(), paymentMethod: "DEMO_GCASH" }), null);
   assert.equal(policy.deliveryCashCompletionError({ ...f.record(), type: "RIDE" }), null);
+});
+test("customer ride cash confirmation requires saved drop-off and uses the database fare", async () => {
+  const ride = { type: "RIDE", totalFare: 45, riderReceivedAt: new Date(), riderReceivedAmount: 45 };
+  const early = fixture(ride);
+  await assert.rejects(early.confirmCashPayment(early.db, "delivery", customer), /Confirm drop-off first/);
+  assert.equal(early.updates.length, 0);
+  const ready = fixture({ ...ride, customerDropoffConfirmedAt: new Date() });
+  await assert.rejects(ready.confirmCashPayment(ready.db, "delivery", customer, 46), /booked fare/);
+  assert.equal(ready.updates.length, 0);
+  await ready.confirmCashPayment(ready.db, "delivery", customer);
+  await ready.confirmCashPayment(ready.db, "delivery", customer);
+  assert.equal(ready.record().customerPaidAmount, 45);
+  assert.equal(ready.record().paymentStatus, "PAID");
+  assert.equal(ready.events.length, 1);
+});
+test("a matching driver confirmation allows one audited correction of a legacy ride mismatch", async () => {
+  const original = { type: "RIDE", totalFare: 45, paymentStatus: "PENDING", customerDropoffConfirmedAt: new Date(),
+    customerPaidAt: new Date(), customerPaidAmount: 46, riderReceivedAt: new Date(), riderReceivedAmount: 45 };
+  const unknown = fixture({ ...original, riderReceivedAmount: 44 });
+  await assert.rejects(unknown.confirmCashPayment(unknown.db, "delivery", customer), /already recorded/);
+  assert.equal(unknown.updates.length, 0);
+  const matched = fixture(original);
+  await matched.confirmCashPayment(matched.db, "delivery", customer);
+  assert.equal(matched.record().customerPaidAmount, 45);
+  assert.equal(matched.record().riderReceivedAmount, 45);
+  assert.equal(matched.record().paymentStatus, "PAID");
+  assert.match(matched.events[0].reason, /46/);
 });
 test("staff-set Paid can still receive participant acknowledgments without changing the final amount", async () => {
   const f = fixture({ paymentStatus: "PAID" }); await f.confirmDropoffArrival(f.db, "delivery", rider);

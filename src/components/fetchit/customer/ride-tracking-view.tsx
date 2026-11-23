@@ -18,6 +18,7 @@ import { BookingActions } from "../shared/booking-actions";
 import { RidePickupOtp } from "./ride-pickup-otp";
 import { CancelBooking } from "../shared/cancel-booking";
 import { useRideLocation } from "@/hooks/use-ride-location";
+import { customerPaymentVisible } from "@/lib/payment-policy";
 
 export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOnly = false, updatesPaused = false }: {
   ride: Booking; onClose: () => void; onUpdated: (update: Partial<Booking>) => void; onCancelled?: () => void; readOnly?: boolean; updatesPaused?: boolean;
@@ -28,6 +29,7 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
   const paused = readOnly || updatesPaused;
   const awaitingAcceptance = isAwaitingAcceptance(status);
   const showConfirmation = status === "PICKED_UP" || status === "IN_TRANSIT";
+  const showPayment = customerPaymentVisible(ride.type, status, ride.customerDropoffConfirmedAt);
   const { location: customerLocation, message: locationMessage, canRetry: canRetryLocation, retry: retryLocation } = useRideLocation(active);
   useTrackingUpdates<Booking>(ride.id, onUpdated);
   return <div className="space-y-4">
@@ -39,6 +41,10 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
       <div className="min-w-0 flex-1"><RiderProfile bookingId={ride.id} {...ride.rider} type="RIDE" /><dl className="mt-1 flex flex-wrap gap-x-2 text-sm"><div className="flex gap-1"><dt className="sr-only">Vehicle</dt><dd>{VEHICLES[ride.vehicleClass]?.label ?? ride.vehicleClass}</dd></div><div className="flex gap-1"><dt className="sr-only">Plate number</dt><dd className="break-all font-semibold">{ride.rider.vehiclePlate || "Not available"}</dd></div></dl></div>
     </section>}
     <CustomerRideConfirmations key={`confirm:${ride.id}`} ride={ride} disabled={readOnly || updatesPaused} onUpdated={onUpdated} />
+    <details key={showPayment ? "payment" : "help"} open={showPayment && status === "IN_TRANSIT"} className="rounded-2xl border bg-card px-4">
+      <summary className="min-h-12 cursor-pointer py-3 text-base font-semibold">{showPayment ? "Payment, receipt & help" : "Help"}</summary>
+      <div className="pb-4"><BookingActions booking={ride} readOnly={readOnly} /></div>
+    </details>
     {status === "ACCEPTED" && ride.rider && !readOnly && <RidePickupOtp key={`${ride.id}:${ride.riderId}`} bookingId={ride.id} />}
     <section aria-label="Trip map" className="space-y-2">
       <div className="relative h-64 overflow-hidden rounded-2xl border sm:h-80"><LiveTrackingMap showLiveStatus={active} vehicleClass={ride.vehicleClass} key={ride.id} pickup={{lat:ride.pickupLat,lng:ride.pickupLng}} dropoff={{lat:ride.dropoffLat,lng:ride.dropoffLng}} rider={active && location ? {lat:location.lat,lng:location.lng} : null} customer={customerLocation} className="absolute inset-0 h-full w-full border-0 rounded-none" /></div>
@@ -54,7 +60,6 @@ export function RideTrackingView({ ride, onClose, onUpdated, onCancelled, readOn
       {["PENDING","MATCHED","ACCEPTED"].includes(status) && <CancelBooking bookingId={ride.id} readOnly={readOnly} onCancelled={() => { onUpdated({status:"CANCELLED"}); onCancelled?.(); }} />}
       <Button variant="outline" className="w-full" onClick={onClose}>Back to bookings</Button></div>
     </details>
-    <details className="rounded-2xl border bg-card px-4"><summary className="min-h-12 cursor-pointer py-3 text-base font-semibold">Payment, receipt &amp; help</summary><div className="pb-4"><BookingActions booking={ride} readOnly={readOnly} /></div></details>
     <div className="sticky bottom-0 z-20 -mx-4 space-y-2 border-t bg-background/95 px-4 py-3 backdrop-blur">
       <div className="flex gap-3">{ride.rider?.phone && <Button asChild variant="outline" className="min-h-14 flex-1"><a href={`tel:${ride.rider.phone}`} aria-label={`Call ${ride.rider.name}`}><Phone />Call driver</a></Button>}<Button asChild variant="destructive" className="min-h-14 flex-1"><a href="tel:911"><Phone />Dial 911</a></Button></div>
       {active && <RideSosButton key={ride.id} bookingId={ride.id} disabled={readOnly} />}

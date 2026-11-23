@@ -49,17 +49,19 @@ test("customer payment display omits earnings and keeps cash entry behind an exp
   assert(c.find("form"));
 });
 
-test("cash confirmation sends the entered amount once and waits for server confirmation", async () => {
+test("cash confirmation displays a fixed fare and sends the confirmation once", async () => {
   const h = harness(); await h.ready();
   h.find("button", "Confirm cash payment").props.onClick();
   let finish;
   h.setPost(() => new Promise(resolve => { finish = resolve; }));
   const form = h.find("form");
+  assert.equal(h.find("input"), undefined);
+  assert(h.find("button", "I paid ₱89"));
   const first = form.props.onSubmit({ preventDefault() {} });
   const second = form.props.onSubmit({ preventDefault() {} });
   await flush();
   assert.equal(h.requests.filter(r => r.method === "POST").length, 1);
-  assert.deepEqual(JSON.parse(h.requests.at(-1).body), { amount: "89.00" });
+  assert.deepEqual(JSON.parse(h.requests.at(-1).body), {});
   finish(Response.json({ booking: { ...cash, customerPaidAt: new Date().toISOString(), customerPaidAmount: 89, paymentStatus: "PENDING" } }));
   await Promise.all([first, second]);
   assert.match(text(h.render()), /Waiting for your rider to confirm receipt/);
@@ -80,12 +82,26 @@ test("a delayed pre-confirmation poll cannot overwrite a newer cash confirmation
 });
 
 test("ride payments use driver wording and cancelled unpaid bookings do not request payment", async () => {
-  const ride = harness(cash, "RIDE"); await ride.ready();
+  const ride = harness({ ...cash, customerDropoffConfirmedAt: "2026-10-29T01:00:00Z" }, "RIDE"); await ride.ready();
   assert.match(text(ride.render()), /Pay your driver in cash/);
   const cancelled = harness({ ...cash, status: "CANCELLED" }); await cancelled.ready();
   assert.match(text(cancelled.render()), /Booking cancelled/);
   assert.equal(cancelled.find("button", "Confirm cash payment"), undefined);
   assert.doesNotMatch(text(cancelled.render()), /Pay your rider/);
+});
+
+test("ride payment stays hidden until drop-off is saved and offers a fixed-fare correction for a legacy mismatch", async () => {
+  const ride = harness(cash, "RIDE"); await ride.ready();
+  assert.equal(ride.render(), null);
+  ride.setGet(() => Response.json({ booking: {
+    ...cash, customerDropoffConfirmedAt: "2026-10-29T01:00:00Z", paymentStatus: "PENDING",
+    customerPaidAt: "2026-10-29T01:01:00Z", riderReceivedAt: "2026-10-29T01:02:00Z",
+    customerPaidAmount: 90, riderReceivedAmount: 89,
+  } }));
+  await ride.handlers.online();
+  ride.find("button", "Correct cash confirmation").props.onClick();
+  assert(ride.find("button", "I paid ₱89"));
+  assert.equal(ride.find("input"), undefined);
 });
 
 test("delivery cash controls remain hidden before drop-off arrival", async () => {
@@ -101,7 +117,7 @@ test("cash mismatches remain under review and matching confirmations show paid",
   const mismatch = harness({ ...cash, paymentStatus: "PENDING", customerPaidAt: "2026-10-30T01:00:00Z", riderReceivedAt: "2026-10-30T01:01:00Z", customerPaidAmount: 80, riderReceivedAmount: 89 });
   await mismatch.ready();
   assert.match(text(mismatch.render()), /Needs review/);
-  assert.match(text(mismatch.render()), /do not match the fare/);
+  assert.match(text(mismatch.render()), /Cash amounts don’t match/);
   assert.equal(mismatch.find("button", "Confirm cash payment"), undefined);
   const paid = harness({ ...cash, paymentStatus: "PAID", customerPaidAt: "2026-10-30T01:00:00Z", riderReceivedAt: "2026-10-30T01:01:00Z", customerPaidAmount: 89, riderReceivedAmount: 89, paidAt: "2026-10-30T01:01:00Z" });
   await paid.ready();
@@ -110,4 +126,4 @@ test("cash mismatches remain under review and matching confirmations show paid",
   assert.equal(paid.find("button", "Confirm cash payment"), undefined);
 });
 
- test("a lost payment acknowledgement checks saved state and never resubmits cash", async () => { const h = harness(); await h.ready(); h.find("button", "Confirm cash payment").props.onClick(); const form = h.find("form"); h.setPost(() => { throw Error("Lost response"); }); h.setGet(() => Response.json({ booking: { ...cash, customerPaidAt: new Date().toISOString(), customerPaidAmount: 89, paymentStatus: "PENDING" } })); await form.props.onSubmit({ preventDefault() {} }); assert.equal(h.requests.filter(r => r.method === "POST").length, 1); assert.equal(h.find("form"), undefined); assert.match(text(h.render()), /saved/); });
+ test("a lost payment acknowledgement checks saved state and never resubmits cash", async () => { const h = harness(); await h.ready(); h.find("button", "Confirm cash payment").props.onClick(); const form = h.find("form"); h.setPost(() => { throw Error("Lost response"); }); h.setGet(() => Response.json({ booking: { ...cash, customerPaidAt: new Date().toISOString(), customerPaidAmount: 89, paymentStatus: "PENDING" } })); await form.props.onSubmit({ preventDefault() {} }); assert.equal(h.requests.filter(r => r.method === "POST").length, 1); assert.equal(h.find("form"), undefined); assert.match(text(h.render()), /You confirmed payment/); });

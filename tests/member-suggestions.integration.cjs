@@ -92,10 +92,10 @@ async function main() {
     await assert.rejects(reviewPayment(db, cash.id, actor(admin), { status: 'PAID', reason: 'Replay' }), /final/);
 
     const discrepancy = await booking({ riderId: riders[0].id, status: 'DELIVERED' });
-    await confirmCashPayment(db, discrepancy.id, actor(customer), 90);
-    await confirmCashPayment(db, discrepancy.id, actor(riders[0]), 100);
+    await confirmCashPayment(db, discrepancy.id, actor(customer));
+    await confirmCashPayment(db, discrepancy.id, actor(riders[0]), 90);
     assert.equal((await db.booking.findUnique({ where: { id: discrepancy.id } })).paymentStatus, 'PENDING');
-    await assert.rejects(confirmCashPayment(db, discrepancy.id, actor(customer), 100), /already recorded/);
+    await assert.rejects(confirmCashPayment(db, discrepancy.id, actor(riders[0]), 100), /already recorded/);
     await reviewPayment(db, discrepancy.id, actor(admin), { status: 'PAID', reason: 'Verified remaining 10 pesos collected', reference: 'Manual-verified' });
     assert.equal(await db.adminAudit.count({ where: { action: 'PAYMENT_UPDATED' } }), 2);
     await assert.rejects(reviewPayment(db, discrepancy.id, actor(customer), { status: 'UNPAID', reason: 'Unauthorized' }), /Admin/);
