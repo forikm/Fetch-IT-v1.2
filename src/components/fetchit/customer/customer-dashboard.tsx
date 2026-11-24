@@ -1194,7 +1194,6 @@ function BookingFareBreakdown({ estimate, bookingType, pricedPassengers }: {
       {bookingType === "DELIVERY" && fare.chargeableKg > 0 && <FareLine label={`Extra weight (${fare.chargeableKg} kg)`} amount={fare.weightFare} />}
       {fare.surgeFare > 0 && <FareLine label="Busy-period charge" amount={fare.surgeFare} />}
       {fare.minimumAdjustment > 0 && <FareLine label="Minimum fare adjustment" amount={fare.minimumAdjustment} />}
-      {!!fare.roundingAdjustment && <FareLine label="Fare rounding" amount={fare.roundingAdjustment} />}
       {!!fare.bookingFee && <FareLine label="Booking fee" amount={fare.bookingFee} />}
     </dl>
     </div>

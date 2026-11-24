@@ -11,8 +11,7 @@ import { planningTravelSeconds } from "./eta-policy";
 //   surgeFare     = (surge - 1) * (base + distance + weight)
 //   totalFare     = the above, raised to the vehicle's minimumFare if short
 //
-// Every component is rounded to whole pesos, and the components always add up
-// to totalFare, so a receipt never looks off by a centavo.
+// Calculate and add monetary components in centavos so the fare reconciles.
 
 import {
   VEHICLES,
@@ -64,7 +63,6 @@ export interface FareInput {
   vehicle: VehicleMeta;
   passengers?: number;
   bookingFee?: number;
-  roundingIncrement?: number;
 }
 
 export interface FareBreakdown {
@@ -81,7 +79,6 @@ export interface FareBreakdown {
   chargeableKg: number;
   currency: string;
   pricingVersion?: string;
-  roundingAdjustment: number;
   transportFare: number;
   bookingFee: number;
 }
@@ -99,50 +96,43 @@ export function computeFare(input: FareInput): FareBreakdown {
   const cityKmCap = Math.max(0, LONG_HAUL_THRESHOLD_KM - v.includedKm);
   const cityKm = Math.min(billableKm, cityKmCap);
   const longHaulKm = billableKm - cityKm;
-  const distanceFare = roundPeso(
+  const distanceCents = roundToCentavos(
     (cityKm * v.perKm + longHaulKm * v.longHaulPerKm) * passengers,
   );
 
   // Weight: free allowance, then a flat rate per extra kg.
   const chargeableKg = Math.max(0, weightKg - v.freeWeightKg);
-  const weightFare = roundPeso(chargeableKg * v.perKgOverFree);
+  const weightCents = roundToCentavos(chargeableKg * v.perKgOverFree);
 
-  const baseFare = roundPeso(v.baseFare * passengers);
-  const subtotal = baseFare + distanceFare + weightFare;
-
+  const baseCents = roundToCentavos(v.baseFare * passengers);
+  const subtotalCents = baseCents + distanceCents + weightCents;
   const surge = Math.max(1, input.surgeMultiplier);
-  const surgeFare = roundPeso(subtotal * (surge - 1));
-  const afterSurge = subtotal + surgeFare;
+  const surgeCents = roundToCentavos(subtotalCents / 100 * (surge - 1));
+  const afterSurgeCents = subtotalCents + surgeCents;
 
-  const minimumAdjustment = Math.max(0, roundPeso(v.minimumFare * passengers) - afterSurge);
-  const increment = input.roundingIncrement ?? 1;
-  const transportFare = Math.max(
-    Math.ceil(v.minimumFare * passengers / increment) * increment,
-    Math.round((afterSurge + minimumAdjustment) / increment) * increment,
-  );
-  const roundingAdjustment = transportFare - afterSurge - minimumAdjustment;
-  const bookingFee = input.bookingFee ?? 0;
-  const totalFare = transportFare + bookingFee;
+  const minimumCents = roundToCentavos(v.minimumFare * passengers);
+  const transportCents = Math.max(minimumCents, afterSurgeCents);
+  const bookingFeeCents = roundToCentavos(input.bookingFee ?? 0);
 
   return {
-    baseFare,
-    distanceFare,
-    weightFare,
-    surgeFare,
-    minimumAdjustment,
-    totalFare,
-    transportFare,
-    roundingAdjustment,
-    bookingFee,
-    ...(input.roundingIncrement ? { pricingVersion: FARE_POLICY_VERSION } : {}),
+    baseFare: baseCents / 100,
+    distanceFare: distanceCents / 100,
+    weightFare: weightCents / 100,
+    surgeFare: surgeCents / 100,
+    minimumAdjustment: (transportCents - afterSurgeCents) / 100,
+    totalFare: (transportCents + bookingFeeCents) / 100,
+    transportFare: transportCents / 100,
+    bookingFee: bookingFeeCents / 100,
+    ...(input.bookingFee === undefined ? {} : { pricingVersion: FARE_POLICY_VERSION }),
     billableKm: round2(billableKm),
     chargeableKg: round2(chargeableKg),
     currency: CURRENCY,
   };
 }
 
-function roundPeso(n: number): number {
-  return Math.round(n);
+function roundToCentavos(pesos: number): number {
+  // Compensate for floating-point error at half-centavo boundaries.
+  return Math.round((pesos + pesos * Number.EPSILON) * 100);
 }
 
 function round2(n: number): number {
@@ -193,8 +183,7 @@ export function quoteFare(params: {
     cargoWeightKg: params.cargoWeightKg,
     surgeMultiplier,
     vehicle,
-    bookingFee: BOOKING_FEES[params.vehicleClass] ?? 0,
-    roundingIncrement: BOOKING_FEES[params.vehicleClass] !== undefined ? 5 : undefined,
+    bookingFee: BOOKING_FEES[params.vehicleClass],
   });
 
   return {
@@ -242,7 +231,6 @@ export function quoteRideFare(params: {
     vehicle,
     passengers: params.vehicleClass === "TRICYCLE" ? params.passengers ?? 1 : 1,
     bookingFee: BOOKING_FEES[params.vehicleClass] ?? 0,
-    roundingIncrement: 5,
   });
 
   return {

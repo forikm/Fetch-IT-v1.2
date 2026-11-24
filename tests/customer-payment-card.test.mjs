@@ -49,20 +49,21 @@ test("customer payment display omits earnings and keeps cash entry behind an exp
   assert(c.find("form"));
 });
 
-test("cash confirmation displays a fixed fare and sends the confirmation once", async () => {
-  const h = harness(); await h.ready();
+test("cash confirmation displays the exact fare in centavos and sends the confirmation once", async () => {
+  const record = { ...cash, totalFare: 89.5 };
+  const h = harness(record); await h.ready();
   h.find("button", "Confirm cash payment").props.onClick();
   let finish;
   h.setPost(() => new Promise(resolve => { finish = resolve; }));
   const form = h.find("form");
   assert.equal(h.find("input"), undefined);
-  assert(h.find("button", "I paid ₱89"));
+  assert(h.find("button", "I paid ₱89.50"));
   const first = form.props.onSubmit({ preventDefault() {} });
   const second = form.props.onSubmit({ preventDefault() {} });
   await flush();
   assert.equal(h.requests.filter(r => r.method === "POST").length, 1);
   assert.deepEqual(JSON.parse(h.requests.at(-1).body), {});
-  finish(Response.json({ booking: { ...cash, customerPaidAt: new Date().toISOString(), customerPaidAmount: 89, paymentStatus: "PENDING" } }));
+  finish(Response.json({ booking: { ...record, customerPaidAt: new Date().toISOString(), customerPaidAmount: 89.5, paymentStatus: "PENDING" } }));
   await Promise.all([first, second]);
   assert.match(text(h.render()), /Waiting for your rider to confirm receipt/);
   assert.doesNotMatch(text(h.render()), /You confirmed.*Paid/);
